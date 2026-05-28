@@ -39,10 +39,11 @@ public class AuthService {
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
                 .nombre(request.nombre())
-                .telefono(request.telefono())
+                .telefono(null)
                 .rol(Role.PLAYER)
                 .isActive(true)
                 .emailVerified(false)
+                .telefonoVerificado(false)
                 .build();
 
         usuarioRepository.save(usuario);
@@ -59,10 +60,11 @@ public class AuthService {
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
                 .nombre(request.nombre())
-                .telefono(request.telefono())
+                .telefono(null)
                 .rol(Role.OWNER)
                 .isActive(true)
                 .emailVerified(false)
+                .telefonoVerificado(false)
                 .fechaFinPrueba(LocalDateTime.now().plusMonths(1))
                 .build();
 

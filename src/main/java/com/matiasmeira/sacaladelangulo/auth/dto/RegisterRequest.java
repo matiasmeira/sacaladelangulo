@@ -15,8 +15,6 @@ public record RegisterRequest(
         String password,
 
         @NotBlank(message = "El nombre es obligatorio")
-        String nombre,
-
-        String telefono
+        String nombre
 ) {
 }

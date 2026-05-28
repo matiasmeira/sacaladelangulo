@@ -50,6 +50,9 @@ public class Usuario {
     @Column(name = "fecha_fin_prueba")
     private LocalDateTime fechaFinPrueba;
 
+    @Column(name = "telefono_verificado", nullable = false)
+    private Boolean telefonoVerificado;
+
     @PrePersist
     public void prePersist() {
         if (fechaCreacion == null) {
@@ -60,6 +63,9 @@ public class Usuario {
         }
         if (emailVerified == null) {
             emailVerified = false;
+        }
+        if (telefonoVerificado == null) {
+            telefonoVerificado = false;
         }
     }
 }

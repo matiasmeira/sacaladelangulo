@@ -4,6 +4,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.CodigoVerificacion;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.CodigoVerificacionRepository;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +17,7 @@ import java.util.Random;
  */
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;

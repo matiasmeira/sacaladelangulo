@@ -20,9 +20,15 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody @Valid RegisterRequest request) {
-        AuthResponse response = authService.register(request);
+    @PostMapping("/register/player")
+    public ResponseEntity<AuthResponse> registerPlayer(@RequestBody @Valid RegisterRequest request) {
+        AuthResponse response = authService.registerPlayer(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/register/owner")
+    public ResponseEntity<AuthResponse> registerOwner(@RequestBody @Valid RegisterRequest request) {
+        AuthResponse response = authService.registerOwner(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

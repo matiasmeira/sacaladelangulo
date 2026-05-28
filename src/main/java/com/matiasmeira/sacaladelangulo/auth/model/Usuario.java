@@ -1,0 +1,65 @@
+package com.matiasmeira.sacaladelangulo.auth.model;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import java.time.LocalDateTime;
+
+/**
+ * Entidad Usuario para persistir los datos de autenticación y perfil.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "usuarios", uniqueConstraints = @UniqueConstraint(columnNames = "email"))
+public class Usuario {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, unique = true)
+    private String email;
+
+    @Column(nullable = false)
+    private String password;
+
+    @Column(nullable = false)
+    private String nombre;
+
+    @Column(nullable = true)
+    private String telefono;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Role rol;
+
+    @Column(name = "fecha_creacion", nullable = false)
+    private LocalDateTime fechaCreacion;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive;
+
+    @Column(name = "email_verified", nullable = false)
+    private Boolean emailVerified;
+
+    @Column(name = "fecha_fin_prueba")
+    private LocalDateTime fechaFinPrueba;
+
+    @PrePersist
+    public void prePersist() {
+        if (fechaCreacion == null) {
+            fechaCreacion = LocalDateTime.now();
+        }
+        if (isActive == null) {
+            isActive = true;
+        }
+        if (emailVerified == null) {
+            emailVerified = false;
+        }
+    }
+}

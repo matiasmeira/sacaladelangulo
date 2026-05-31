@@ -36,6 +36,9 @@ public class Cancha {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
+    @Column(name = "canchas_necesarias")
+    private Integer canchasNecesarias;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "establecimiento_id", nullable = false)
     private Establecimiento establecimiento;

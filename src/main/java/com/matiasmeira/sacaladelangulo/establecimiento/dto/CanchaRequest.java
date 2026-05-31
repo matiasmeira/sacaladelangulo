@@ -18,6 +18,8 @@ public record CanchaRequest(
         @NotNull(message = "La capacidad es obligatoria")
         Integer capacidad,
 
-        List<Long> canchasFisicasIds
+        List<Long> canchasFisicasIds,
+
+        Integer cantidadCanchasNecesarias
 ) {
 }

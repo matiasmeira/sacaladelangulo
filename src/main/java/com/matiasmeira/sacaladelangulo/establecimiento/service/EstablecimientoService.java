@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRequest;
@@ -7,6 +8,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRespon
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,8 +58,11 @@ public class EstablecimientoService {
         Establecimiento establecimiento = establecimientoRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Establecimiento no encontrado"));
 
-        if (!establecimiento.getDueno().getEmail().equals(email)) {
-            throw new IllegalArgumentException("No autorizado para actualizar este establecimiento");
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (usuarioAutenticado.getRol() != Role.ADMIN && !establecimiento.getDueno().getEmail().equals(email)) {
+            throw new AccessDeniedException("No autorizado para modificar este establecimiento");
         }
 
         establecimiento.setNombre(request.nombre());

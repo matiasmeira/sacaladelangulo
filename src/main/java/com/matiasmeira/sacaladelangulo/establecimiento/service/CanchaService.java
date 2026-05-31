@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaRequest;
@@ -9,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,11 +34,11 @@ public class CanchaService {
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new IllegalArgumentException("Establecimiento no encontrado"));
 
-        Usuario dueno = usuarioRepository.findByEmail(email)
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
-        if (!establecimiento.getDueno().getId().equals(dueno.getId())) {
-            throw new IllegalArgumentException("No autorizado para crear canchas en este establecimiento");
+        if (usuarioAutenticado.getRol() != Role.ADMIN && !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
+            throw new AccessDeniedException("No autorizado en este establecimiento");
         }
 
         // Validar y procesar el campo canchasNecesarias
@@ -83,11 +85,11 @@ public class CanchaService {
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new IllegalArgumentException("Establecimiento no encontrado"));
 
-        Usuario dueno = usuarioRepository.findByEmail(email)
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
-        if (!establecimiento.getDueno().getId().equals(dueno.getId())) {
-            throw new IllegalArgumentException("No autorizado para ver las canchas de este establecimiento");
+        if (usuarioAutenticado.getRol() != Role.ADMIN && !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
+            throw new AccessDeniedException("No autorizado en este establecimiento");
         }
 
         return canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId).stream()
@@ -99,11 +101,11 @@ public class CanchaService {
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new IllegalArgumentException("Establecimiento no encontrado"));
 
-        Usuario dueno = usuarioRepository.findByEmail(email)
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
-        if (!establecimiento.getDueno().getId().equals(dueno.getId())) {
-            throw new IllegalArgumentException("No autorizado para actualizar canchas en este establecimiento");
+        if (usuarioAutenticado.getRol() != Role.ADMIN && !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
+            throw new AccessDeniedException("No autorizado en este establecimiento");
         }
 
         Cancha cancha = canchaRepository.findById(canchaId)

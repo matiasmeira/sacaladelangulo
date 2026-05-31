@@ -10,6 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 /**
  * Servicio de negocio para establecimientos.
  */
@@ -37,15 +40,46 @@ public class EstablecimientoService {
 
         Establecimiento establecimientoGuardado = establecimientoRepository.save(establecimiento);
 
+        return mapToResponse(establecimientoGuardado);
+    }
+
+    public List<EstablecimientoResponse> obtenerMisEstablecimientos(String email) {
+        Usuario dueno = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        return establecimientoRepository.findByDuenoIdAndIsActiveTrue(dueno.getId()).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public EstablecimientoResponse actualizarEstablecimiento(Long id, EstablecimientoRequest request, String email) {
+        Establecimiento establecimiento = establecimientoRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Establecimiento no encontrado"));
+
+        if (!establecimiento.getDueno().getEmail().equals(email)) {
+            throw new IllegalArgumentException("No autorizado para actualizar este establecimiento");
+        }
+
+        establecimiento.setNombre(request.nombre());
+        establecimiento.setDireccion(request.direccion());
+        establecimiento.setLatitud(request.latitud());
+        establecimiento.setLongitud(request.longitud());
+        establecimiento.setRequiereSena(request.requiereSena());
+
+        Establecimiento establecimientoActualizado = establecimientoRepository.save(establecimiento);
+        return mapToResponse(establecimientoActualizado);
+    }
+
+    private EstablecimientoResponse mapToResponse(Establecimiento establecimiento) {
         return new EstablecimientoResponse(
-                establecimientoGuardado.getId(),
-                establecimientoGuardado.getNombre(),
-                establecimientoGuardado.getDireccion(),
-                establecimientoGuardado.getLatitud(),
-                establecimientoGuardado.getLongitud(),
-                establecimientoGuardado.getRequiereSena(),
-                establecimientoGuardado.getIsActive(),
-                establecimientoGuardado.getDueno().getId()
+                establecimiento.getId(),
+                establecimiento.getNombre(),
+                establecimiento.getDireccion(),
+                establecimiento.getLatitud(),
+                establecimiento.getLongitud(),
+                establecimiento.getRequiereSena(),
+                establecimiento.getIsActive(),
+                establecimiento.getDueno().getId()
         );
     }
 }

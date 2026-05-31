@@ -11,6 +11,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * Controlador REST para canchas.
  */
@@ -28,5 +30,23 @@ public class CanchaController {
             @RequestBody @Valid CanchaRequest request) {
         CanchaResponse cancha = canchaService.crearCancha(establecimientoId, request, userDetails.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED).body(cancha);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<CanchaResponse>> obtenerCanchasPorEstablecimiento(
+            @PathVariable Long establecimientoId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        List<CanchaResponse> canchas = canchaService.obtenerCanchasPorEstablecimiento(establecimientoId, userDetails.getUsername());
+        return ResponseEntity.ok(canchas);
+    }
+
+    @PutMapping("/{canchaId}")
+    public ResponseEntity<CanchaResponse> actualizarCancha(
+            @PathVariable Long establecimientoId,
+            @PathVariable Long canchaId,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid CanchaRequest request) {
+        CanchaResponse cancha = canchaService.actualizarCancha(establecimientoId, canchaId, request, userDetails.getUsername());
+        return ResponseEntity.ok(cancha);
     }
 }

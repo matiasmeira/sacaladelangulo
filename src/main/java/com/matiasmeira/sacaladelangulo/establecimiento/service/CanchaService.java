@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Servicio de negocio para canchas.
@@ -45,7 +46,6 @@ public class CanchaService {
             int totalCanchasSeleccionadas = request.canchasFisicasIds().size();
 
             if (cantidadSolicitada == null || cantidadSolicitada < 1) {
-                // Asignar por defecto el tamaño de la lista de IDs
                 canchasNecesarias = totalCanchasSeleccionadas;
             } else if (cantidadSolicitada > totalCanchasSeleccionadas) {
                 throw new IllegalArgumentException("Las canchas necesarias no pueden superar el total de canchas seleccionadas");
@@ -76,15 +76,88 @@ public class CanchaService {
 
         Cancha canchaGuardada = canchaRepository.save(cancha);
 
+        return mapToResponse(canchaGuardada);
+    }
+
+    public List<CanchaResponse> obtenerCanchasPorEstablecimiento(Long establecimientoId, String email) {
+        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
+                .orElseThrow(() -> new IllegalArgumentException("Establecimiento no encontrado"));
+
+        Usuario dueno = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (!establecimiento.getDueno().getId().equals(dueno.getId())) {
+            throw new IllegalArgumentException("No autorizado para ver las canchas de este establecimiento");
+        }
+
+        return canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public CanchaResponse actualizarCancha(Long establecimientoId, Long canchaId, CanchaRequest request, String email) {
+        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
+                .orElseThrow(() -> new IllegalArgumentException("Establecimiento no encontrado"));
+
+        Usuario dueno = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (!establecimiento.getDueno().getId().equals(dueno.getId())) {
+            throw new IllegalArgumentException("No autorizado para actualizar canchas en este establecimiento");
+        }
+
+        Cancha cancha = canchaRepository.findById(canchaId)
+                .orElseThrow(() -> new IllegalArgumentException("Cancha no encontrada"));
+
+        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
+            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
+        }
+
+        cancha.setNombre(request.nombre());
+        cancha.setDeporte(request.deporte());
+        cancha.setCapacidad(request.capacidad());
+
+        Integer canchasNecesarias = null;
+        if (request.canchasFisicasIds() != null && !request.canchasFisicasIds().isEmpty()) {
+            int totalCanchasSeleccionadas = request.canchasFisicasIds().size();
+            Integer cantidadSolicitada = request.cantidadCanchasNecesarias();
+
+            if (cantidadSolicitada == null || cantidadSolicitada < 1) {
+                canchasNecesarias = totalCanchasSeleccionadas;
+            } else if (cantidadSolicitada > totalCanchasSeleccionadas) {
+                throw new IllegalArgumentException("Las canchas necesarias no pueden superar el total de canchas seleccionadas");
+            } else {
+                canchasNecesarias = cantidadSolicitada;
+            }
+
+            List<Cancha> canchasFisicas = new ArrayList<>();
+            canchaRepository.findAllById(request.canchasFisicasIds()).forEach(canchasFisicas::add);
+
+            if (canchasFisicas.size() != request.canchasFisicasIds().size()) {
+                throw new IllegalArgumentException("Algunas canchas físicas no existen");
+            }
+
+            cancha.setCanchasFisicas(canchasFisicas);
+        } else {
+            cancha.setCanchasFisicas(new ArrayList<>());
+        }
+
+        cancha.setCanchasNecesarias(canchasNecesarias);
+
+        Cancha canchaGuardada = canchaRepository.save(cancha);
+        return mapToResponse(canchaGuardada);
+    }
+
+    private CanchaResponse mapToResponse(Cancha cancha) {
         return new CanchaResponse(
-                canchaGuardada.getId(),
-                canchaGuardada.getNombre(),
-                canchaGuardada.getDeporte(),
-                canchaGuardada.getCapacidad(),
-                canchaGuardada.getIsActive(),
-                canchaGuardada.getEstablecimiento().getId(),
-                canchaGuardada.getCanchasFisicas().stream().map(Cancha::getId).toList(),
-                canchaGuardada.getCanchasNecesarias()
+                cancha.getId(),
+                cancha.getNombre(),
+                cancha.getDeporte(),
+                cancha.getCapacidad(),
+                cancha.getIsActive(),
+                cancha.getEstablecimiento().getId(),
+                cancha.getCanchasFisicas().stream().map(Cancha::getId).toList(),
+                cancha.getCanchasNecesarias()
         );
     }
 }

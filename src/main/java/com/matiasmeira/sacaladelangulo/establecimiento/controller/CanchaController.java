@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,7 @@ public class CanchaController {
     private final CanchaService canchaService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<CanchaResponse> crearCancha(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails,
@@ -33,6 +35,7 @@ public class CanchaController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<List<CanchaResponse>> obtenerCanchasPorEstablecimiento(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -41,6 +44,7 @@ public class CanchaController {
     }
 
     @PutMapping("/{canchaId}")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<CanchaResponse> actualizarCancha(
             @PathVariable Long establecimientoId,
             @PathVariable Long canchaId,

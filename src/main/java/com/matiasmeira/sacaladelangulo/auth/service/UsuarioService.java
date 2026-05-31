@@ -8,9 +8,9 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.Random;
 
 /**
  * Servicio de negocio para gestión de verificación de teléfono mediante OTP.
@@ -22,7 +22,7 @@ public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
     private final CodigoVerificacionRepository codigoVerificacionRepository;
-    private final Random random = new Random();
+    private final SecureRandom random = new SecureRandom();
 
     /**
      * Solicita un código OTP para verificar un número de teléfono.

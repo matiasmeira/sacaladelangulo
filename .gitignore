@@ -34,3 +34,5 @@ build/
 
 # Local environment variables
 .env
+
+logs/

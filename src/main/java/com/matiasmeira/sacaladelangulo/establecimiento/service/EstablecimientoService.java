@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
@@ -30,12 +31,15 @@ public class EstablecimientoService {
         Usuario dueno = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
+        boolean requiereSenaForzada = dueno.getPlanSuscripcion() == PlanSuscripcion.TRIAL ||
+                dueno.getPlanSuscripcion() == PlanSuscripcion.FREE;
+
         Establecimiento establecimiento = Establecimiento.builder()
                 .nombre(request.nombre())
                 .direccion(request.direccion())
                 .latitud(request.latitud())
                 .longitud(request.longitud())
-                .requiereSena(request.requiereSena())
+                .requiereSena(requiereSenaForzada || request.requiereSena())
                 .isActive(true)
                 .dueno(dueno)
                 .build();
@@ -69,7 +73,9 @@ public class EstablecimientoService {
         establecimiento.setDireccion(request.direccion());
         establecimiento.setLatitud(request.latitud());
         establecimiento.setLongitud(request.longitud());
-        establecimiento.setRequiereSena(request.requiereSena());
+        establecimiento.setRequiereSena(usuarioAutenticado.getPlanSuscripcion() == PlanSuscripcion.TRIAL ||
+                usuarioAutenticado.getPlanSuscripcion() == PlanSuscripcion.FREE ||
+                request.requiereSena());
 
         Establecimiento establecimientoActualizado = establecimientoRepository.save(establecimiento);
         return mapToResponse(establecimientoActualizado);

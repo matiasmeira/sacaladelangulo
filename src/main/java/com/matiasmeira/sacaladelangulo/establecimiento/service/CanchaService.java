@@ -1,12 +1,15 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaResponse;
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.TarifaDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +17,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,6 +45,18 @@ public class CanchaService {
             throw new AccessDeniedException("No autorizado en este establecimiento");
         }
 
+        BigDecimal montoSena = request.montoSena();
+        if (usuarioAutenticado.getPlanSuscripcion() == PlanSuscripcion.TRIAL ||
+                usuarioAutenticado.getPlanSuscripcion() == PlanSuscripcion.FREE) {
+            if (montoSena == null || montoSena.compareTo(BigDecimal.valueOf(500)) < 0) {
+                throw new IllegalArgumentException("El plan actual requiere configurar una seña obligatoria de mínimo $500");
+            }
+        } else {
+            if (montoSena == null || montoSena.compareTo(BigDecimal.ZERO) < 0) {
+                montoSena = BigDecimal.ZERO;
+            }
+        }
+
         // Validar y procesar el campo canchasNecesarias
         Integer canchasNecesarias = null;
         if (request.canchasFisicasIds() != null && !request.canchasFisicasIds().isEmpty()) {
@@ -60,6 +76,8 @@ public class CanchaService {
                 .nombre(request.nombre())
                 .deporte(request.deporte())
                 .capacidad(request.capacidad())
+                .precioBase(request.precioBase())
+                .montoSena(montoSena)
                 .isActive(true)
                 .establecimiento(establecimiento)
                 .canchasNecesarias(canchasNecesarias)
@@ -74,6 +92,19 @@ public class CanchaService {
             }
 
             cancha.setCanchasFisicas(canchasFisicas);
+        }
+
+        if (request.tarifas() != null && !request.tarifas().isEmpty()) {
+            List<Tarifa> tarifas = request.tarifas().stream()
+                    .map(dto -> Tarifa.builder()
+                            .cancha(cancha)
+                            .diaSemana(dto.diaSemana())
+                            .horaInicio(dto.horaInicio())
+                            .horaFin(dto.horaFin())
+                            .precio(dto.precio())
+                            .build())
+                    .collect(Collectors.toList());
+            cancha.setTarifas(tarifas);
         }
 
         Cancha canchaGuardada = canchaRepository.save(cancha);
@@ -115,9 +146,23 @@ public class CanchaService {
             throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
         }
 
+        BigDecimal montoSena = request.montoSena();
+        if (usuarioAutenticado.getPlanSuscripcion() == PlanSuscripcion.TRIAL ||
+                usuarioAutenticado.getPlanSuscripcion() == PlanSuscripcion.FREE) {
+            if (montoSena == null || montoSena.compareTo(BigDecimal.valueOf(500)) < 0) {
+                throw new IllegalArgumentException("El plan actual requiere configurar una seña obligatoria de mínimo $500");
+            }
+        } else {
+            if (montoSena == null || montoSena.compareTo(BigDecimal.ZERO) < 0) {
+                montoSena = BigDecimal.ZERO;
+            }
+        }
+
         cancha.setNombre(request.nombre());
         cancha.setDeporte(request.deporte());
         cancha.setCapacidad(request.capacidad());
+        cancha.setPrecioBase(request.precioBase());
+        cancha.setMontoSena(montoSena);
 
         Integer canchasNecesarias = null;
         if (request.canchasFisicasIds() != null && !request.canchasFisicasIds().isEmpty()) {
@@ -146,8 +191,30 @@ public class CanchaService {
 
         cancha.setCanchasNecesarias(canchasNecesarias);
 
+        if (request.tarifas() != null) {
+            cancha.getTarifas().clear();
+            cancha.setTarifas(request.tarifas().stream()
+                    .map(dto -> Tarifa.builder()
+                            .cancha(cancha)
+                            .diaSemana(dto.diaSemana())
+                            .horaInicio(dto.horaInicio())
+                            .horaFin(dto.horaFin())
+                            .precio(dto.precio())
+                            .build())
+                    .collect(Collectors.toList()));
+        }
+
         Cancha canchaGuardada = canchaRepository.save(cancha);
         return mapToResponse(canchaGuardada);
+    }
+
+    private TarifaDto mapToTarifaDto(Tarifa tarifa) {
+        return new TarifaDto(
+                tarifa.getDiaSemana(),
+                tarifa.getHoraInicio(),
+                tarifa.getHoraFin(),
+                tarifa.getPrecio()
+        );
     }
 
     private CanchaResponse mapToResponse(Cancha cancha) {
@@ -158,6 +225,9 @@ public class CanchaService {
                 cancha.getCapacidad(),
                 cancha.getIsActive(),
                 cancha.getEstablecimiento().getId(),
+                cancha.getPrecioBase(),
+                cancha.getMontoSena(),
+                cancha.getTarifas().stream().map(this::mapToTarifaDto).collect(Collectors.toList()),
                 cancha.getCanchasFisicas().stream().map(Cancha::getId).toList(),
                 cancha.getCanchasNecesarias()
         );

@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.model;
 
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,6 +43,12 @@ public class Cancha {
     @Column(name = "canchas_necesarias")
     private Integer canchasNecesarias;
 
+    @Column(name = "precio_base", nullable = false)
+    private BigDecimal precioBase;
+
+    @Column(name = "monto_sena", nullable = false)
+    private BigDecimal montoSena;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "establecimiento_id", nullable = false)
     private Establecimiento establecimiento;
@@ -53,4 +61,8 @@ public class Cancha {
     )
     @Builder.Default
     private List<Cancha> canchasFisicas = new ArrayList<>();
+
+    @OneToMany(mappedBy = "cancha", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Tarifa> tarifas = new ArrayList<>();
 }

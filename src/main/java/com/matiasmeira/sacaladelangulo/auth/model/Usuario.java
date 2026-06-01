@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.auth.model;
 
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,6 +40,10 @@ public class Usuario {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role rol;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan_suscripcion")
+    private PlanSuscripcion planSuscripcion;
 
     @Column(name = "fecha_creacion", nullable = false)
     private LocalDateTime fechaCreacion;

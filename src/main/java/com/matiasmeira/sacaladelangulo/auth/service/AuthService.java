@@ -3,6 +3,7 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.RegisterRequest;
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
@@ -41,6 +42,7 @@ public class AuthService {
                 .nombre(request.nombre())
                 .telefono(null)
                 .rol(Role.PLAYER)
+                .planSuscripcion(PlanSuscripcion.FREE)
                 .isActive(true)
                 .emailVerified(false)
                 .telefonoVerificado(false)
@@ -62,6 +64,7 @@ public class AuthService {
                 .nombre(request.nombre())
                 .telefono(null)
                 .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
                 .isActive(true)
                 .emailVerified(false)
                 .telefonoVerificado(false)

@@ -72,12 +72,18 @@ public class CanchaService {
             }
         }
 
+        List<Integer> duracionesPermitidas = request.duracionesPermitidas();
+        if (duracionesPermitidas == null || duracionesPermitidas.isEmpty()) {
+            duracionesPermitidas = List.of(60, 90, 120);
+        }
+
         Cancha cancha = Cancha.builder()
                 .nombre(request.nombre())
                 .deporte(request.deporte())
                 .capacidad(request.capacidad())
                 .precioBase(request.precioBase())
                 .montoSena(montoSena)
+                .duracionesPermitidas(duracionesPermitidas)
                 .isActive(true)
                 .establecimiento(establecimiento)
                 .canchasNecesarias(canchasNecesarias)
@@ -163,6 +169,9 @@ public class CanchaService {
         cancha.setCapacidad(request.capacidad());
         cancha.setPrecioBase(request.precioBase());
         cancha.setMontoSena(montoSena);
+        cancha.setDuracionesPermitidas(request.duracionesPermitidas() == null || request.duracionesPermitidas().isEmpty()
+                ? List.of(60, 90, 120)
+                : request.duracionesPermitidas());
 
         Integer canchasNecesarias = null;
         if (request.canchasFisicasIds() != null && !request.canchasFisicasIds().isEmpty()) {
@@ -227,6 +236,7 @@ public class CanchaService {
                 cancha.getEstablecimiento().getId(),
                 cancha.getPrecioBase(),
                 cancha.getMontoSena(),
+                cancha.getDuracionesPermitidas(),
                 cancha.getTarifas().stream().map(this::mapToTarifaDto).collect(Collectors.toList()),
                 cancha.getCanchasFisicas().stream().map(Cancha::getId).toList(),
                 cancha.getCanchasNecesarias()

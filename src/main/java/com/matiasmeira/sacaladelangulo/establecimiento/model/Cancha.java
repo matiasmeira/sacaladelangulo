@@ -65,4 +65,10 @@ public class Cancha {
     @OneToMany(mappedBy = "cancha", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Tarifa> tarifas = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "cancha_duraciones", joinColumns = @JoinColumn(name = "cancha_id"))
+    @Column(name = "duracion_minutos")
+    @Builder.Default
+    private List<Integer> duracionesPermitidas = new ArrayList<>();
 }

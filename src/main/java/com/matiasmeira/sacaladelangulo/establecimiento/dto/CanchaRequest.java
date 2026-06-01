@@ -26,6 +26,8 @@ public record CanchaRequest(
 
         BigDecimal montoSena,
 
+        List<Integer> duracionesPermitidas,
+
         List<TarifaDto> tarifas,
 
         List<Long> canchasFisicasIds,

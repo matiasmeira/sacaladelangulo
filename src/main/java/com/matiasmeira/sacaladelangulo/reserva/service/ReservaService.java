@@ -68,6 +68,18 @@ public class ReservaService {
             throw new IllegalArgumentException("No se pueden crear reservas en el pasado");
         }
 
+        int minutoInicio = request.fechaHoraInicio().getMinute();
+        if (minutoInicio != 0 && minutoInicio != 30) {
+            log.warn("Inicio de reserva inválido: {}", request.fechaHoraInicio());
+            throw new IllegalArgumentException("Las reservas solo pueden iniciar en punto (:00) o y media (:30)");
+        }
+
+        long duracionMinutos = java.time.Duration.between(request.fechaHoraInicio(), request.fechaHoraFin()).toMinutes();
+        if (!cancha.getDuracionesPermitidas().contains((int) duracionMinutos)) {
+            log.warn("Duración no permitida: {} minutos", duracionMinutos);
+            throw new IllegalArgumentException("Duración no permitida. Opciones válidas: " + cancha.getDuracionesPermitidas() + " minutos");
+        }
+
         // Buscar todas las reservas solapadas del establecimiento
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(
                 cancha.getEstablecimiento().getId(),
@@ -90,6 +102,19 @@ public class ReservaService {
         validarPoolCanchas(cancha, solapadas);
         log.debug("Validación de pool de canchas: OK");
 
+        BigDecimal duracionHoras = BigDecimal.valueOf(duracionMinutos)
+                .divide(BigDecimal.valueOf(60), 2, java.math.RoundingMode.HALF_UP);
+        BigDecimal precioPorHora = cancha.getPrecioBase();
+        for (var tarifa : cancha.getTarifas()) {
+            if (tarifa.getDiaSemana() == request.fechaHoraInicio().getDayOfWeek() &&
+                    !request.fechaHoraInicio().toLocalTime().isBefore(tarifa.getHoraInicio()) &&
+                    request.fechaHoraInicio().toLocalTime().isBefore(tarifa.getHoraFin())) {
+                precioPorHora = tarifa.getPrecio();
+                break;
+            }
+        }
+        BigDecimal precioCalculado = precioPorHora.multiply(duracionHoras);
+
         // Crear la reserva
         Reserva reserva = Reserva.builder()
                 .jugador(jugador)
@@ -97,7 +122,7 @@ public class ReservaService {
                 .fechaHoraInicio(request.fechaHoraInicio())
                 .fechaHoraFin(request.fechaHoraFin())
                 .estado(EstadoReserva.PENDIENTE_SENA)
-                .precioTotal(BigDecimal.ZERO)
+                .precioTotal(precioCalculado)
                 .senaPagada(BigDecimal.ZERO)
                 .build();
 

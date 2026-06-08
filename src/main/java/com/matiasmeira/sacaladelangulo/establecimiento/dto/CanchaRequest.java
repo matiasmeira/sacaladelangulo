@@ -28,6 +28,8 @@ public record CanchaRequest(
 
         List<Integer> duracionesPermitidas,
 
+        Boolean permiteInicioMediaHora,
+
         List<TarifaDto> tarifas,
 
         List<Long> canchasFisicasIds,

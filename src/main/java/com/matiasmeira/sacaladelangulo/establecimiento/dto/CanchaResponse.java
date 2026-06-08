@@ -18,6 +18,7 @@ public record CanchaResponse(
         BigDecimal precioBase,
         BigDecimal montoSena,
         List<Integer> duracionesPermitidas,
+        Boolean permiteInicioMediaHora,
         List<TarifaDto> tarifas,
         List<Long> canchasFisicasIds,
         Integer cantidadCanchasNecesarias

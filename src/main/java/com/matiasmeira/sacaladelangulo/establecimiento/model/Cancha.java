@@ -71,4 +71,8 @@ public class Cancha {
     @Column(name = "duracion_minutos")
     @Builder.Default
     private List<Integer> duracionesPermitidas = new ArrayList<>();
+
+    @Column(name = "permite_inicio_media_hora")
+    @Builder.Default
+    private Boolean permiteInicioMediaHora = true;
 }

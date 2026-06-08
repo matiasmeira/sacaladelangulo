@@ -73,6 +73,10 @@ public class ReservaService {
             log.warn("Inicio de reserva inválido: {}", request.fechaHoraInicio());
             throw new IllegalArgumentException("Las reservas solo pueden iniciar en punto (:00) o y media (:30)");
         }
+        if (Boolean.FALSE.equals(cancha.getPermiteInicioMediaHora()) && minutoInicio != 0) {
+            log.warn("Cancha no permite inicio a media hora: {}", request.fechaHoraInicio());
+            throw new IllegalArgumentException("Esta cancha solo permite iniciar reservas en horas en punto exactas (:00)");
+        }
 
         long duracionMinutos = java.time.Duration.between(request.fechaHoraInicio(), request.fechaHoraFin()).toMinutes();
         if (!cancha.getDuracionesPermitidas().contains((int) duracionMinutos)) {
@@ -243,6 +247,15 @@ public class ReservaService {
      * @param reserva Entidad de reserva
      * @return ReservaResponse
      */
+    public List<ReservaResponse> obtenerReservasPorCanchaYFecha(Long canchaId, java.time.LocalDate fecha) {
+        java.time.LocalDateTime inicioDia = fecha.atStartOfDay();
+        java.time.LocalDateTime finDia = fecha.atTime(23, 59, 59);
+        return reservaRepository.findByCanchaIdAndFechaHoraInicioBetweenAndEstadoNot(canchaId, inicioDia, finDia, EstadoReserva.CANCELADA)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     private ReservaResponse mapToResponse(Reserva reserva) {
         return new ReservaResponse(
                 reserva.getId(),

@@ -84,6 +84,7 @@ public class CanchaService {
                 .precioBase(request.precioBase())
                 .montoSena(montoSena)
                 .duracionesPermitidas(duracionesPermitidas)
+                .permiteInicioMediaHora(request.permiteInicioMediaHora() != null ? request.permiteInicioMediaHora() : true)
                 .isActive(true)
                 .establecimiento(establecimiento)
                 .canchasNecesarias(canchasNecesarias)
@@ -172,6 +173,7 @@ public class CanchaService {
         cancha.setDuracionesPermitidas(request.duracionesPermitidas() == null || request.duracionesPermitidas().isEmpty()
                 ? List.of(60, 90, 120)
                 : request.duracionesPermitidas());
+        cancha.setPermiteInicioMediaHora(request.permiteInicioMediaHora() != null ? request.permiteInicioMediaHora() : true);
 
         Integer canchasNecesarias = null;
         if (request.canchasFisicasIds() != null && !request.canchasFisicasIds().isEmpty()) {
@@ -202,7 +204,7 @@ public class CanchaService {
 
         if (request.tarifas() != null) {
             cancha.getTarifas().clear();
-            cancha.setTarifas(request.tarifas().stream()
+            cancha.getTarifas().addAll(request.tarifas().stream()
                     .map(dto -> Tarifa.builder()
                             .cancha(cancha)
                             .diaSemana(dto.diaSemana())
@@ -237,6 +239,7 @@ public class CanchaService {
                 cancha.getPrecioBase(),
                 cancha.getMontoSena(),
                 cancha.getDuracionesPermitidas(),
+                cancha.getPermiteInicioMediaHora(),
                 cancha.getTarifas().stream().map(this::mapToTarifaDto).collect(Collectors.toList()),
                 cancha.getCanchasFisicas().stream().map(Cancha::getId).toList(),
                 cancha.getCanchasNecesarias()

@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.service.ReservaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -54,5 +55,13 @@ public class ReservaController {
             @AuthenticationPrincipal UserDetails userDetails) {
         ReservaResponse reserva = reservaService.confirmarReserva(id, userDetails.getUsername());
         return ResponseEntity.ok(reserva);
+    }
+
+    @GetMapping("/cancha/{canchaId}")
+    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
+    public ResponseEntity<List<ReservaResponse>> obtenerReservas(
+            @PathVariable Long canchaId,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha) {
+        return ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha));
     }
 }

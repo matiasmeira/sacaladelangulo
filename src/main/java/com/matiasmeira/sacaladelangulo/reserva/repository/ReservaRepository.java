@@ -60,4 +60,11 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             LocalDateTime fin,
             com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado
     );
-}
+
+    List<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
+            Long estId,
+            LocalDateTime inicio,
+            LocalDateTime fin,
+            com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado
+    );
+ }

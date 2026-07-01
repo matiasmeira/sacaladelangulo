@@ -1,4 +1,4 @@
-package com.matiasmeira.sacaladelangulo.auth.config;
+package com.matiasmeira.sacaladelangulo.core.config.security;
 
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.auth.service.JwtService;

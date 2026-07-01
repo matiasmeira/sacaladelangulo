@@ -64,4 +64,12 @@ public class ReservaController {
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha) {
         return ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha));
     }
+
+    @GetMapping("/establecimiento/{estId}")
+    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
+    public ResponseEntity<List<ReservaResponse>> obtenerReservasPorEstablecimiento(
+            @PathVariable Long estId,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha) {
+        return ResponseEntity.ok(reservaService.obtenerReservasPorEstablecimientoYFecha(estId, fecha));
+    }
 }

@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.reserva.dto;
 
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 
@@ -11,9 +12,11 @@ public record ReservaRequest(
         Long canchaId,
 
         @NotNull(message = "La fecha y hora de inicio es obligatoria")
+        @FutureOrPresent(message = "La fecha y hora de inicio debe ser en el presente o futuro")
         LocalDateTime fechaHoraInicio,
 
         @NotNull(message = "La fecha y hora de fin es obligatoria")
+        @FutureOrPresent(message = "La fecha y hora de fin debe ser en el presente o futuro")
         LocalDateTime fechaHoraFin
 ) {
 }

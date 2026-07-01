@@ -256,6 +256,15 @@ public class ReservaService {
                 .collect(java.util.stream.Collectors.toList());
     }
 
+    public List<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, java.time.LocalDate fecha) {
+        java.time.LocalDateTime inicioDia = fecha.atStartOfDay();
+        java.time.LocalDateTime finDia = fecha.atTime(23, 59, 59);
+        return reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(estId, inicioDia, finDia, EstadoReserva.CANCELADA)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     private ReservaResponse mapToResponse(Reserva reserva) {
         return new ReservaResponse(
                 reserva.getId(),

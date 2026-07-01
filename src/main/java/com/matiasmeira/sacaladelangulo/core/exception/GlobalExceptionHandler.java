@@ -1,4 +1,4 @@
-package com.matiasmeira.sacaladelangulo.auth.exception;
+package com.matiasmeira.sacaladelangulo.core.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

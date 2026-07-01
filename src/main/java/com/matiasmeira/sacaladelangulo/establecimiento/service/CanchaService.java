@@ -35,6 +35,8 @@ public class CanchaService {
     private final UsuarioRepository usuarioRepository;
 
     public CanchaResponse crearCancha(Long establecimientoId, CanchaRequest request, String email) {
+        validarSolapamientoTarifas(request.tarifas());
+        
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new IllegalArgumentException("Establecimiento no encontrado"));
 
@@ -136,6 +138,8 @@ public class CanchaService {
     }
 
     public CanchaResponse actualizarCancha(Long establecimientoId, Long canchaId, CanchaRequest request, String email) {
+        validarSolapamientoTarifas(request.tarifas());
+        
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new IllegalArgumentException("Establecimiento no encontrado"));
 
@@ -244,5 +248,34 @@ public class CanchaService {
                 cancha.getCanchasFisicas().stream().map(Cancha::getId).toList(),
                 cancha.getCanchasNecesarias()
         );
+    }
+
+    private void validarSolapamientoTarifas(List<TarifaDto> tarifasDto) {
+        if (tarifasDto == null || tarifasDto.isEmpty()) return;
+
+        for (int i = 0; i < tarifasDto.size(); i++) {
+            var tA = tarifasDto.get(i);
+            
+            // Validación básica: inicio menor que fin
+            if (!tA.horaInicio().isBefore(tA.horaFin())) {
+                throw new IllegalArgumentException("La hora de inicio de la tarifa debe ser anterior a la de fin para el día " + tA.diaSemana());
+            }
+
+            // Comparar contra todas las demás tarifas de la lista entrante
+            for (int j = i + 1; j < tarifasDto.size(); j++) {
+                var tB = tarifasDto.get(j);
+
+                // Si coinciden en el mismo día de la semana, verificamos cruce de horarios
+                if (tA.diaSemana() == tB.diaSemana()) {
+                    boolean seSolapan = tA.horaInicio().isBefore(tB.horaFin()) && tA.horaFin().isAfter(tB.horaInicio());
+                    if (seSolapan) {
+                        throw new IllegalArgumentException(String.format(
+                            "Conflictos de configuración: Se detectaron tarifas variables solapadas para el día %s en los rangos (%s - %s) y (%s - %s)",
+                            tA.diaSemana(), tA.horaInicio(), tA.horaFin(), tB.horaInicio(), tB.horaFin()
+                        ));
+                    }
+                }
+            }
+        }
     }
 }

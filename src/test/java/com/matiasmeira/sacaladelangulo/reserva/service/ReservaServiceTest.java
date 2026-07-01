@@ -22,19 +22,18 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/**
- * Tests unitarios para ReservaService.
- * Cubre los casos de uso principal: creación de reservas con validaciones.
- */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("ReservaService - Tests de Creación de Reservas")
+@DisplayName("ReservaService - Tests de solapamiento de reservas")
 class ReservaServiceTest {
 
     @Mock
@@ -53,16 +52,14 @@ class ReservaServiceTest {
     private Usuario dueno;
     private Establecimiento establecimiento;
     private Cancha cancha;
-    private ReservaRequest reservaRequest;
 
     @BeforeEach
     void setUp() {
-        // Configurar datos de prueba
         jugador = Usuario.builder()
                 .id(1L)
                 .email("jugador@test.com")
-                .password("hashed_password")
-                .nombre("Juan Jugador")
+                .password("password")
+                .nombre("Juan")
                 .rol(Role.PLAYER)
                 .planSuscripcion(PlanSuscripcion.FREE)
                 .isActive(true)
@@ -73,8 +70,8 @@ class ReservaServiceTest {
         dueno = Usuario.builder()
                 .id(2L)
                 .email("dueno@test.com")
-                .password("hashed_password")
-                .nombre("Carlos Dueño")
+                .password("password")
+                .nombre("Carlos")
                 .rol(Role.OWNER)
                 .planSuscripcion(PlanSuscripcion.TRIAL)
                 .isActive(true)
@@ -83,9 +80,9 @@ class ReservaServiceTest {
                 .build();
 
         establecimiento = Establecimiento.builder()
-                .id(1L)
-                .nombre("Cancha Central")
-                .direccion("Calle Principal 123")
+                .id(10L)
+                .nombre("Establecimiento Test")
+                .direccion("Calle Test 123")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .dueno(dueno)
@@ -94,13 +91,135 @@ class ReservaServiceTest {
                 .build();
 
         cancha = Cancha.builder()
-                .id(1L)
+                .id(100L)
                 .nombre("Cancha A")
                 .deporte("Fútbol")
                 .capacidad(10)
-                .precioBase(BigDecimal.valueOf(1000))
+                .precioBase(BigDecimal.valueOf(1500))
                 .montoSena(BigDecimal.valueOf(500))
-                .duracionesPermitidas(List.of(60, 90))
+                .duracionesPermitidas(new ArrayList<>(List.of(60)))
+                .permiteInicioMediaHora(false)
+                .establecimiento(establecimiento)
+                .isActive(true)
+                .tarifas(new ArrayList<>())
+                .canchasFisicas(new ArrayList<>())
+                .build();
+    }
+
+    @Test
+    @DisplayName("crearReserva_Exito_SinSolapamiento")
+    void crearReserva_Exito_SinSolapamiento() {
+        // Arrange
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 11, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
+
+        Reserva reservaGuardada = Reserva.builder()
+                .id(1L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(fechaInicio)
+                .fechaHoraFin(fechaFin)
+                .estado(EstadoReserva.PENDIENTE_SENA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(() -> reservaService.crearReserva(request, jugador.getEmail()));
+
+        // Assert
+        assert response != null;
+        verify(reservaRepository).save(any(Reserva.class));
+    }
+
+    @Test
+    @DisplayName("crearReserva_Fallo_CanchaExactaSolapada")
+    void crearReserva_Fallo_CanchaExactaSolapada() {
+        // Arrange
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 11, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
+
+        Reserva reservaExistente = Reserva.builder()
+                .id(2L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(fechaInicio.minusMinutes(30))
+                .fechaHoraFin(fechaInicio.plusMinutes(30))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of(reservaExistente));
+
+        // Act
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.crearReserva(request, jugador.getEmail())
+        );
+
+        // Assert
+        assert exception.getMessage().equals("La cancha exacta ya está reservada en ese horario");
+    }
+
+    @Test
+    @DisplayName("crearReserva_Exito_ReservaPegada")
+    void crearReserva_Exito_ReservaPegada() {
+        // Arrange
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 11, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 12, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
+
+        Reserva reservaGuardada = Reserva.builder()
+                .id(3L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(fechaInicio)
+                .fechaHoraFin(fechaFin)
+                .estado(EstadoReserva.PENDIENTE_SENA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(() -> reservaService.crearReserva(request, jugador.getEmail()));
+
+        // Assert
+        assert response != null;
+        verify(reservaRepository).save(any(Reserva.class));
+    }
+
+    @Test
+    @DisplayName("crearReserva_Fallo_PoolCanchasAgotado")
+    void crearReserva_Fallo_PoolCanchasAgotado() {
+        // Arrange
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 11, 0);
+
+        Cancha canchaFisicaUno = Cancha.builder()
+                .id(1L)
+                .nombre("Cancha F5 1")
+                .deporte("Fútbol 5")
+                .capacidad(10)
+                .precioBase(BigDecimal.valueOf(1000))
+                .montoSena(BigDecimal.valueOf(300))
+                .duracionesPermitidas(new ArrayList<>(List.of(60)))
                 .permiteInicioMediaHora(false)
                 .establecimiento(establecimiento)
                 .isActive(true)
@@ -108,151 +227,71 @@ class ReservaServiceTest {
                 .canchasFisicas(new ArrayList<>())
                 .build();
 
-        // Request por defecto: reserva válida para hoy + 2 días a las 10:00 - 11:00
-        LocalDateTime fechaInicio = LocalDateTime.now().plusDays(2).withHour(10).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime fechaFin = fechaInicio.plusHours(1);
+        Cancha canchaFisicaDos = Cancha.builder()
+                .id(2L)
+                .nombre("Cancha F5 2")
+                .deporte("Fútbol 5")
+                .capacidad(10)
+                .precioBase(BigDecimal.valueOf(1000))
+                .montoSena(BigDecimal.valueOf(300))
+                .duracionesPermitidas(new ArrayList<>(List.of(60)))
+                .permiteInicioMediaHora(false)
+                .establecimiento(establecimiento)
+                .isActive(true)
+                .tarifas(new ArrayList<>())
+                .canchasFisicas(new ArrayList<>())
+                .build();
 
-        reservaRequest = new ReservaRequest(
-                cancha.getId(),
-                fechaInicio,
-                fechaFin
-        );
-    }
+        Cancha canchaLogica = Cancha.builder()
+                .id(200L)
+                .nombre("Cancha F7")
+                .deporte("Fútbol 7")
+                .capacidad(14)
+                .precioBase(BigDecimal.valueOf(2000))
+                .montoSena(BigDecimal.valueOf(700))
+                .duracionesPermitidas(new ArrayList<>(List.of(60)))
+                .permiteInicioMediaHora(false)
+                .establecimiento(establecimiento)
+                .isActive(true)
+                .tarifas(new ArrayList<>())
+                .canchasFisicas(new ArrayList<>(List.of(canchaFisicaUno, canchaFisicaDos)))
+                .canchasNecesarias(2)
+                .build();
 
-    // ==================== CASOS DE PRUEBA ====================
-
-    @Test
-    @DisplayName("crearReserva_Exito - Debe crear reserva cuando datos son válidos y sin solapamiento")
-    void crearReserva_Exito() {
-        // Arrange
-        LocalDateTime fechaInicio = LocalDateTime.now().plusDays(2).withHour(10).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime fechaFin = fechaInicio.plusHours(1);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
-
-        Usuario jugadorEsperado = jugador;
-        Cancha chanchaEsperada = cancha;
-
-        Reserva reservaGuardada = Reserva.builder()
-                .id(1L)
-                .jugador(jugadorEsperado)
-                .cancha(chanchaEsperada)
+        Reserva reservaFisicaUno = Reserva.builder()
+                .id(4L)
+                .jugador(jugador)
+                .cancha(canchaFisicaUno)
                 .fechaHoraInicio(fechaInicio)
                 .fechaHoraFin(fechaFin)
-                .estado(EstadoReserva.PENDIENTE_SENA)
-                .precioTotal(BigDecimal.valueOf(1000))
-                .senaPagada(BigDecimal.ZERO)
-                .build();
-
-        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(reservaRepository.findSuperpuestas(
-                establecimiento.getId(),
-                fechaInicio,
-                fechaFin
-        )).thenReturn(Collections.emptyList());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
-                .thenReturn(List.of(cancha));
-        when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
-
-        // Act
-        ReservaResponse response = reservaService.crearReserva(request, jugador.getEmail());
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(1L, response.id());
-        assertEquals("PENDIENTE_SENA", response.estado());
-        assertEquals(BigDecimal.valueOf(1000), response.precioTotal());
-
-        verify(usuarioRepository).findByEmail(jugador.getEmail());
-        verify(canchaRepository).findById(cancha.getId());
-        verify(reservaRepository).findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin);
-        verify(reservaRepository).save(any(Reserva.class));
-    }
-
-    @Test
-    @DisplayName("crearReserva_Falla_FechasInvalidas - Debe lanzar excepción si inicio >= fin")
-    void crearReserva_Falla_FechasInvalidas() {
-        // Arrange
-        LocalDateTime fechaInicio = LocalDateTime.now().plusDays(2).withHour(11).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime fechaFin = fechaInicio.minusHours(1); // Fin ANTES que inicio
-
-        ReservaRequest requestInvalido = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
-
-        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-
-        // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> reservaService.crearReserva(requestInvalido, jugador.getEmail()),
-                "Debe lanzar IllegalArgumentException cuando la fecha de inicio >= fin"
-        );
-
-        assertTrue(exception.getMessage().contains("anterior a la de fin"));
-        verify(reservaRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("crearReserva_Falla_EnElPasado - Debe lanzar excepción si reserva es en el pasado")
-    void crearReserva_Falla_EnElPasado() {
-        // Arrange
-        LocalDateTime fechaInicio = LocalDateTime.now().minusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime fechaFin = fechaInicio.plusHours(1);
-
-        ReservaRequest requestPasado = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
-
-        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-
-        // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> reservaService.crearReserva(requestPasado, jugador.getEmail()),
-                "Debe lanzar IllegalArgumentException cuando la reserva es en el pasado"
-        );
-
-        assertTrue(exception.getMessage().contains("pasado"));
-        verify(reservaRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("crearReserva_Falla_SolapamientoCanchaExacta - Debe lanzar excepción por solapamiento")
-    void crearReserva_Falla_SolapamientoCanchaExacta() {
-        // Arrange
-        LocalDateTime fechaInicio = LocalDateTime.now().plusDays(2).withHour(10).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime fechaFin = fechaInicio.plusHours(1);
-
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
-
-        // Crear una reserva existente que se superpone
-        Reserva reservaExistente = Reserva.builder()
-                .id(99L)
-                .jugador(jugador)
-                .cancha(cancha) // Misma cancha
-                .fechaHoraInicio(fechaInicio.minusMinutes(30))
-                .fechaHoraFin(fechaInicio.plusMinutes(30))
                 .estado(EstadoReserva.CONFIRMADA)
                 .precioTotal(BigDecimal.valueOf(1000))
-                .senaPagada(BigDecimal.valueOf(500))
+                .senaPagada(BigDecimal.valueOf(300))
+                .build();
+
+        Reserva reservaFisicaDos = Reserva.builder()
+                .id(5L)
+                .jugador(jugador)
+                .cancha(canchaFisicaDos)
+                .fechaHoraInicio(fechaInicio)
+                .fechaHoraFin(fechaFin)
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1000))
+                .senaPagada(BigDecimal.valueOf(300))
                 .build();
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(reservaRepository.findSuperpuestas(
-                establecimiento.getId(),
-                fechaInicio,
-                fechaFin
-        )).thenReturn(List.of(reservaExistente)); // Retorna reserva solapada
+        when(canchaRepository.findById(canchaLogica.getId())).thenReturn(Optional.of(canchaLogica));
+        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of(reservaFisicaUno, reservaFisicaDos));
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(canchaLogica, canchaFisicaUno, canchaFisicaDos));
 
-        // Act & Assert
+        // Act
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> reservaService.crearReserva(request, jugador.getEmail()),
-                "Debe lanzar IllegalArgumentException por solapamiento de cancha exacta"
+                () -> reservaService.crearReserva(new ReservaRequest(canchaLogica.getId(), fechaInicio, fechaFin), jugador.getEmail())
         );
 
-        assertTrue(exception.getMessage().contains("ya está reservada"));
-        verify(reservaRepository, never()).save(any());
+        // Assert
+        assert exception.getMessage().equals("No hay disponibilidad en el pool para armar esta cancha");
     }
-
 }

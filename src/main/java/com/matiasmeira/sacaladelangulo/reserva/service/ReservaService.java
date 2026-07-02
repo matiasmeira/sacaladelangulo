@@ -247,22 +247,18 @@ public class ReservaService {
      * @param reserva Entidad de reserva
      * @return ReservaResponse
      */
-    public List<ReservaResponse> obtenerReservasPorCanchaYFecha(Long canchaId, java.time.LocalDate fecha) {
+    public org.springframework.data.domain.Page<ReservaResponse> obtenerReservasPorCanchaYFecha(Long canchaId, java.time.LocalDate fecha, org.springframework.data.domain.Pageable pageable) {
         java.time.LocalDateTime inicioDia = fecha.atStartOfDay();
         java.time.LocalDateTime finDia = fecha.atTime(23, 59, 59);
-        return reservaRepository.findByCanchaIdAndFechaHoraInicioBetweenAndEstadoNot(canchaId, inicioDia, finDia, EstadoReserva.CANCELADA)
-                .stream()
-                .map(this::mapToResponse)
-                .collect(java.util.stream.Collectors.toList());
+        return reservaRepository.findByCanchaIdAndFechaHoraInicioBetweenAndEstadoNot(canchaId, inicioDia, finDia, EstadoReserva.CANCELADA, pageable)
+                .map(this::mapToResponse);
     }
 
-    public List<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, java.time.LocalDate fecha) {
+    public org.springframework.data.domain.Page<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, java.time.LocalDate fecha, org.springframework.data.domain.Pageable pageable) {
         java.time.LocalDateTime inicioDia = fecha.atStartOfDay();
         java.time.LocalDateTime finDia = fecha.atTime(23, 59, 59);
-        return reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(estId, inicioDia, finDia, EstadoReserva.CANCELADA)
-                .stream()
-                .map(this::mapToResponse)
-                .collect(java.util.stream.Collectors.toList());
+        return reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(estId, inicioDia, finDia, EstadoReserva.CANCELADA, pageable)
+                .map(this::mapToResponse);
     }
 
     private ReservaResponse mapToResponse(Reserva reserva) {

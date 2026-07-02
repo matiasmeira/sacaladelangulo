@@ -5,7 +5,6 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.service.ReservaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -59,17 +58,19 @@ public class ReservaController {
 
     @GetMapping("/cancha/{canchaId}")
     @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
-    public ResponseEntity<List<ReservaResponse>> obtenerReservas(
+    public ResponseEntity<org.springframework.data.domain.Page<ReservaResponse>> obtenerReservas(
             @PathVariable Long canchaId,
-            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha) {
-        return ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha));
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha,
+            @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
+        return org.springframework.http.ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha, pageable));
     }
 
     @GetMapping("/establecimiento/{estId}")
     @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
-    public ResponseEntity<List<ReservaResponse>> obtenerReservasPorEstablecimiento(
+    public ResponseEntity<org.springframework.data.domain.Page<ReservaResponse>> obtenerReservasPorEstablecimiento(
             @PathVariable Long estId,
-            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha) {
-        return ResponseEntity.ok(reservaService.obtenerReservasPorEstablecimientoYFecha(estId, fecha));
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha,
+            @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
+        return org.springframework.http.ResponseEntity.ok(reservaService.obtenerReservasPorEstablecimientoYFecha(estId, fecha, pageable));
     }
 }

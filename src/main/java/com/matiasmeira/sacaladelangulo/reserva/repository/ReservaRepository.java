@@ -54,17 +54,19 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             @Param("fin") LocalDateTime fin
     );
 
-    List<Reserva> findByCanchaIdAndFechaHoraInicioBetweenAndEstadoNot(
+    org.springframework.data.domain.Page<Reserva> findByCanchaIdAndFechaHoraInicioBetweenAndEstadoNot(
             Long canchaId,
             LocalDateTime inicio,
             LocalDateTime fin,
-            com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado
+            com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
+            org.springframework.data.domain.Pageable pageable
     );
 
-    List<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
+    org.springframework.data.domain.Page<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
             Long estId,
             LocalDateTime inicio,
             LocalDateTime fin,
-            com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado
+            com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
+            org.springframework.data.domain.Pageable pageable
     );
  }

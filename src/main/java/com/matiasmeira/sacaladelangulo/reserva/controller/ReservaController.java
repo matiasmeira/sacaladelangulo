@@ -56,12 +56,21 @@ public class ReservaController {
         return ResponseEntity.ok(reserva);
     }
 
+    @PutMapping("/{id}/cancelar")
+    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
+    public ResponseEntity<ReservaResponse> cancelarReserva(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        ReservaResponse reserva = reservaService.cancelarReserva(id, userDetails.getUsername());
+        return ResponseEntity.ok(reserva);
+    }
+
     @GetMapping("/cancha/{canchaId}")
     @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
     public ResponseEntity<org.springframework.data.domain.Page<ReservaResponse>> obtenerReservas(
             @PathVariable Long canchaId,
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha,
-            @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
+            @org.springdoc.core.annotations.ParameterObject @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
         return org.springframework.http.ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha, pageable));
     }
 
@@ -70,7 +79,7 @@ public class ReservaController {
     public ResponseEntity<org.springframework.data.domain.Page<ReservaResponse>> obtenerReservasPorEstablecimiento(
             @PathVariable Long estId,
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha,
-            @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
+            @org.springdoc.core.annotations.ParameterObject @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
         return org.springframework.http.ResponseEntity.ok(reservaService.obtenerReservasPorEstablecimientoYFecha(estId, fecha, pageable));
     }
 }

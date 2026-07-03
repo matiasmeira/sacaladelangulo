@@ -173,6 +173,56 @@ public class ReservaService {
         return mapToResponse(reservaActualizada);
     }
 
+    public ReservaResponse cancelarReserva(Long reservaId, String email) {
+        log.info("Iniciando cancelación de reserva. ID: {}, Email: {}", reservaId, email);
+
+        Reserva reserva = reservaRepository.findById(reservaId)
+                .orElseThrow(() -> new IllegalArgumentException("Reserva no encontrada"));
+        log.debug("Reserva encontrada. Estado actual: {}", reserva.getEstado());
+
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        Long duenioEstablecimientoId = reserva.getCancha().getEstablecimiento().getDueno().getId();
+        boolean esAdmin = usuarioAutenticado.getRol() == Role.ADMIN;
+        boolean esDuenoDelEstablecimiento = usuarioAutenticado.getId().equals(duenioEstablecimientoId);
+        boolean esElJugador = reserva.getJugador().getId().equals(usuarioAutenticado.getId());
+
+        if (!esAdmin && !esDuenoDelEstablecimiento && !esElJugador) {
+            log.warn("Acceso denegado a cancelar reserva. Usuario: {}, Dueño: {}", usuarioAutenticado.getId(), duenioEstablecimientoId);
+            throw new AccessDeniedException("No está autorizado para cancelar esta reserva");
+        }
+
+        if (esElJugador && !esAdmin && !esDuenoDelEstablecimiento) {
+            com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento establecimiento = reserva.getCancha().getEstablecimiento();
+
+            int horasPermitidas = establecimiento.getHorasCancelacionAntesPartido() != null ? establecimiento.getHorasCancelacionAntesPartido() : 24;
+            int minutosGracia = establecimiento.getMinutosGraciaCancelacion() != null ? establecimiento.getMinutosGraciaCancelacion() : 30;
+
+            long horasRestantes = java.time.Duration.between(java.time.LocalDateTime.now(), reserva.getFechaHoraInicio()).toHours();
+            long minutosDesdeCreacion = java.time.Duration.between(reserva.getFechaCreacion(), java.time.LocalDateTime.now()).toMinutes();
+
+            boolean dentroDelPeriodoDeGracia = minutosDesdeCreacion <= minutosGracia;
+            boolean antesDelLimiteDeCancelacion = horasRestantes >= horasPermitidas;
+
+            if (!antesDelLimiteDeCancelacion && !dentroDelPeriodoDeGracia) {
+                log.warn("Jugador intentó cancelar fuera de término. Restantes: {}h, Desde creación: {}m", horasRestantes, minutosDesdeCreacion);
+                throw new IllegalArgumentException(String.format("Solo puedes cancelar con al menos %d horas de anticipación, o dentro de los %d minutos posteriores a realizar la reserva.", horasPermitidas, minutosGracia));
+            }
+        }
+
+        if (reserva.getEstado() == EstadoReserva.CANCELADA) {
+            log.info("Reserva ya se encuentra cancelada. ID: {}", reservaId);
+            return mapToResponse(reserva);
+        }
+
+        reserva.setEstado(EstadoReserva.CANCELADA);
+        Reserva reservaActualizada = reservaRepository.save(reserva);
+        log.info("Reserva cancelada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
+
+        return mapToResponse(reservaActualizada);
+    }
+
     /**
      * Valida que haya disponibilidad en el pool de canchas lógicas.
      * Si la cancha solicitada es física y pertenece a un pool, valida el uso total del pool.

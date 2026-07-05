@@ -4,6 +4,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
@@ -33,6 +34,7 @@ public class ReservaService {
 
     private final ReservaRepository reservaRepository;
     private final CanchaRepository canchaRepository;
+    private final BloqueoCanchaRepository bloqueoCanchaRepository;
     private final UsuarioRepository usuarioRepository;
 
     /**
@@ -339,7 +341,7 @@ public class ReservaService {
                 .map(this::mapToResponse);
     }
 
-    private ReservaResponse mapToResponse(Reserva reserva) {
+    public ReservaResponse mapToResponse(Reserva reserva) {
         return new ReservaResponse(
                 reserva.getId(),
                 reserva.getJugador().getId(),

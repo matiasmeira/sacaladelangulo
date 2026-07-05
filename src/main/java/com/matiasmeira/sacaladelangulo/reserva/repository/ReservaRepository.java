@@ -62,6 +62,15 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             org.springframework.data.domain.Pageable pageable
     );
 
+    @Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId " +
+           "AND r.estado != 'CANCELADA' " +
+           "AND r.fechaHoraInicio < :fin AND r.fechaHoraFin > :inicio")
+    List<Reserva> findOverlappingByCanchaId(
+            @Param("canchaId") Long canchaId,
+            @Param("inicio") LocalDateTime inicio,
+            @Param("fin") LocalDateTime fin
+    );
+
     org.springframework.data.domain.Page<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
             Long estId,
             LocalDateTime inicio,

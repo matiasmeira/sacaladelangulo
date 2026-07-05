@@ -8,6 +8,8 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoReques
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -52,6 +54,17 @@ public class EstablecimientoService {
                 .isActive(true)
                 .dueno(dueno)
                 .build();
+
+        if (request.horariosAtencion() != null) {
+            establecimiento.setHorariosAtencion(request.horariosAtencion().stream()
+                    .map(dto -> HorarioAtencion.builder()
+                            .diaSemana(dto.diaSemana())
+                            .horaApertura(dto.horaApertura())
+                            .horaCierre(dto.horaCierre())
+                            .establecimiento(establecimiento)
+                            .build())
+                    .collect(Collectors.toList()));
+        }
 
         Establecimiento establecimientoGuardado = establecimientoRepository.save(establecimiento);
 
@@ -129,6 +142,21 @@ public class EstablecimientoService {
                 usuarioAutenticado.getPlanSuscripcion() == PlanSuscripcion.FREE ||
                 request.requiereSena());
 
+        if (establecimiento.getHorariosAtencion() == null) {
+            establecimiento.setHorariosAtencion(new java.util.ArrayList<>());
+        }
+        establecimiento.getHorariosAtencion().clear();
+        if (request.horariosAtencion() != null) {
+            establecimiento.getHorariosAtencion().addAll(request.horariosAtencion().stream()
+                    .map(dto -> HorarioAtencion.builder()
+                            .diaSemana(dto.diaSemana())
+                            .horaApertura(dto.horaApertura())
+                            .horaCierre(dto.horaCierre())
+                            .establecimiento(establecimiento)
+                            .build())
+                    .collect(Collectors.toList()));
+        }
+
         Establecimiento establecimientoActualizado = establecimientoRepository.save(establecimiento);
         return mapToResponse(establecimientoActualizado);
     }
@@ -142,7 +170,10 @@ public class EstablecimientoService {
                 establecimiento.getLongitud(),
                 establecimiento.getRequiereSena(),
                 establecimiento.getIsActive(),
-                establecimiento.getDueno().getId()
+                establecimiento.getDueno().getId(),
+                establecimiento.getHorariosAtencion() == null ? java.util.List.of() : establecimiento.getHorariosAtencion().stream()
+                        .map(h -> new HorarioAtencionDto(h.getDiaSemana(), h.getHoraApertura(), h.getHoraCierre()))
+                        .collect(Collectors.toList())
         );
     }
 }

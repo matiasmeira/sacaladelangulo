@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.dto;
 
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -20,6 +21,8 @@ public record EstablecimientoRequest(
         Double longitud,
 
         @NotNull(message = "Debe especificar si requiere seña")
-        Boolean requiereSena
+        Boolean requiereSena,
+
+        java.util.List<HorarioAtencionDto> horariosAtencion
 ) {
 }

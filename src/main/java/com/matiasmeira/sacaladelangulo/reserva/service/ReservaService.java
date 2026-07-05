@@ -84,6 +84,34 @@ public class ReservaService {
             throw new IllegalArgumentException("Duración no permitida. Opciones válidas: " + cancha.getDuracionesPermitidas() + " minutos");
         }
 
+        com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento establecimiento = cancha.getEstablecimiento();
+        java.time.DayOfWeek diaSemana = request.fechaHoraInicio().getDayOfWeek();
+        java.time.LocalTime horaInicio = request.fechaHoraInicio().toLocalTime();
+        java.time.LocalTime horaFin = request.fechaHoraFin().toLocalTime();
+
+        java.util.Optional<com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion> horarioOpt =
+                establecimiento.getHorariosAtencion() == null ? java.util.Optional.empty() :
+                        establecimiento.getHorariosAtencion().stream()
+                                .filter(h -> h.getDiaSemana() == diaSemana)
+                                .findFirst();
+
+        if (horarioOpt.isEmpty()) {
+            log.warn("El establecimiento está cerrado el día {}", diaSemana);
+            throw new IllegalArgumentException("El establecimiento está cerrado el " + diaSemana);
+        }
+
+        com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion horario = horarioOpt.get();
+        if (horaInicio.isBefore(horario.getHoraApertura()) || horaFin.isAfter(horario.getHoraCierre())) {
+            log.warn("Reserva fuera del horario de atención: inicio={} fin={} apertura={} cierre={}",
+                    horaInicio, horaFin, horario.getHoraApertura(), horario.getHoraCierre());
+            throw new IllegalArgumentException(String.format(
+                    "El horario de atención para %s es de %s a %s",
+                    horario.getDiaSemana(),
+                    horario.getHoraApertura(),
+                    horario.getHoraCierre())
+            );
+        }
+
         // Buscar todas las reservas solapadas del establecimiento
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(
                 cancha.getEstablecimiento().getId(),

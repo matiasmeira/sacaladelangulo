@@ -56,6 +56,10 @@ public class Establecimiento {
     @lombok.Builder.Default
     private Integer minutosGraciaCancelacion = 30;
 
+    @OneToMany(mappedBy = "establecimiento", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
+    @lombok.Builder.Default
+    private java.util.List<HorarioAtencion> horariosAtencion = new java.util.ArrayList<>();
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dueno_id", nullable = false)
     private Usuario dueno;

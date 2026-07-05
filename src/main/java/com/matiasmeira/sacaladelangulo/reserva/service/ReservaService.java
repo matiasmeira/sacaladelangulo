@@ -88,6 +88,12 @@ public class ReservaService {
             throw new IllegalArgumentException("Duración no permitida. Opciones válidas: " + cancha.getDuracionesPermitidas() + " minutos");
         }
 
+        java.util.List<com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha> bloqueos = 
+                bloqueoCanchaRepository.findOverlappingBloqueos(request.canchaId(), request.fechaHoraInicio(), request.fechaHoraFin());
+        if (!bloqueos.isEmpty()) {
+            throw new IllegalArgumentException("La cancha se encuentra bloqueada en ese horario. Motivo: " + bloqueos.get(0).getMotivo());
+        }
+
         com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento establecimiento = cancha.getEstablecimiento();
         java.time.DayOfWeek diaSemana = request.fechaHoraInicio().getDayOfWeek();
         java.time.LocalTime horaInicio = request.fechaHoraInicio().toLocalTime();

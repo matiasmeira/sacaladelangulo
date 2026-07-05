@@ -1,0 +1,126 @@
+package com.matiasmeira.sacaladelangulo.auth.service;
+
+import com.matiasmeira.sacaladelangulo.auth.dto.AuthRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
+import com.matiasmeira.sacaladelangulo.auth.dto.RegisterRequest;
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
+import com.matiasmeira.sacaladelangulo.auth.model.Role;
+import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
+import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("AuthService - Registro y autenticación")
+class AuthServiceTest {
+
+    @Mock
+    private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private JwtService jwtService;
+
+    @Mock
+    private AuthenticationManager authenticationManager;
+
+    @Mock
+    private UserDetailsService userDetailsService;
+
+    @InjectMocks
+    private AuthService authService;
+
+    @Test
+    @DisplayName("registerPlayer_Exito_GeneraToken")
+    void registerPlayer_Exito_GeneraToken() {
+        RegisterRequest request = new RegisterRequest("jugador@test.com", "Password123", "Juan");
+        UserDetails userDetails = org.springframework.security.core.userdetails.User
+                .withUsername(request.email())
+                .password(request.password())
+                .authorities("ROLE_PLAYER")
+                .build();
+
+        when(usuarioRepository.existsByEmail(request.email())).thenReturn(false);
+        when(passwordEncoder.encode(request.password())).thenReturn("encoded-password");
+        when(userDetailsService.loadUserByUsername(request.email())).thenReturn(userDetails);
+        when(jwtService.generateToken(userDetails)).thenReturn("jwt-token");
+
+        AuthResponse response = authService.registerPlayer(request);
+
+        assertEquals("jwt-token", response.token());
+        verify(usuarioRepository).save(any(Usuario.class));
+    }
+
+    @Test
+    @DisplayName("registerPlayer_Fallo_EmailExistente")
+    void registerPlayer_Fallo_EmailExistente() {
+        RegisterRequest request = new RegisterRequest("jugador@test.com", "Password123", "Juan");
+        when(usuarioRepository.existsByEmail(request.email())).thenReturn(true);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> authService.registerPlayer(request)
+        );
+
+        assertEquals("El email ya está registrado", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("authenticate_Exito_GeneraToken")
+    void authenticate_Exito_GeneraToken() {
+        AuthRequest request = new AuthRequest("jugador@test.com", "Password123");
+        UserDetails userDetails = org.springframework.security.core.userdetails.User
+                .withUsername(request.email())
+                .password(request.password())
+                .authorities("ROLE_PLAYER")
+                .build();
+
+        when(userDetailsService.loadUserByUsername(request.email())).thenReturn(userDetails);
+        when(jwtService.generateToken(userDetails)).thenReturn("jwt-token");
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+
+        AuthResponse response = authService.authenticate(request);
+
+        assertEquals("jwt-token", response.token());
+    }
+
+    @Test
+    @DisplayName("authenticate_Fallo_CredencialesInvalidas")
+    void authenticate_Fallo_CredencialesInvalidas() {
+        AuthRequest request = new AuthRequest("jugador@test.com", "Password123");
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Credenciales inválidas"));
+
+        BadCredentialsException exception = assertThrows(
+                BadCredentialsException.class,
+                () -> authService.authenticate(request)
+        );
+
+        assertEquals("Credenciales inválidas", exception.getMessage());
+    }
+}

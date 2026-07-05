@@ -69,7 +69,17 @@ class EstablecimientoServiceTest {
         );
 
         assertEquals(1, resultados.size());
-        assertEquals(10L, resultados.get(0).id());
-        assertEquals("Cancha Premium", resultados.get(0).nombre());
+        EstablecimientoResponse esperado = new EstablecimientoResponse(
+                10L,
+                "Cancha Premium",
+                "Av. Siempre Viva 123",
+                -34.6037,
+                -58.3816,
+                true,
+                true,
+                dueno.getId(),
+                List.of()
+        );
+        assertEquals(esperado, resultados.get(0));
     }
 }

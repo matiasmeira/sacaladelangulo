@@ -4,9 +4,13 @@ import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
@@ -22,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +34,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,7 +49,13 @@ class ReservaServiceTest {
     private CanchaRepository canchaRepository;
 
     @Mock
+    private BloqueoCanchaRepository bloqueoCanchaRepository;
+
+    @Mock
     private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private ReservaMapper reservaMapper;
 
     @InjectMocks
     private ReservaService reservaService;
@@ -90,6 +102,15 @@ class ReservaServiceTest {
                 .isActive(true)
                 .build();
 
+        establecimiento.setHorariosAtencion(List.of(
+                HorarioAtencion.builder()
+                        .diaSemana(java.time.DayOfWeek.TUESDAY)
+                        .horaApertura(LocalTime.of(10, 0))
+                        .horaCierre(LocalTime.of(22, 0))
+                        .establecimiento(establecimiento)
+                        .build()
+        ));
+
         cancha = Cancha.builder()
                 .id(100L)
                 .nombre("Cancha A")
@@ -104,6 +125,22 @@ class ReservaServiceTest {
                 .tarifas(new ArrayList<>())
                 .canchasFisicas(new ArrayList<>())
                 .build();
+
+        lenient().when(reservaMapper.mapToResponse(any(Reserva.class))).thenAnswer(invocation -> {
+            Reserva reserva = invocation.getArgument(0);
+            return new ReservaResponse(
+                    reserva.getId(),
+                    reserva.getJugador().getId(),
+                    reserva.getJugador().getNombre(),
+                    reserva.getCancha().getId(),
+                    reserva.getCancha().getNombre(),
+                    reserva.getFechaHoraInicio(),
+                    reserva.getFechaHoraFin(),
+                    reserva.getEstado().name(),
+                    reserva.getPrecioTotal(),
+                    reserva.getSenaPagada()
+            );
+        });
     }
 
     @Test
@@ -293,5 +330,120 @@ class ReservaServiceTest {
 
         // Assert
         assert exception.getMessage().equals("No hay disponibilidad en el pool para armar esta cancha");
+    }
+
+    @Test
+    @DisplayName("crearReserva_Fallo_CanchaBloqueada")
+    void crearReserva_Fallo_CanchaBloqueada() {
+        // Arrange
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 11, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
+
+        com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha bloqueo =
+                com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha.builder()
+                        .id(1L)
+                        .cancha(cancha)
+                        .fechaInicio(fechaInicio)
+                        .fechaFin(fechaFin)
+                        .motivo("Mantenimiento")
+                        .build();
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(bloqueoCanchaRepository.findOverlappingBloqueos(cancha.getId(), fechaInicio, fechaFin))
+                .thenReturn(List.of(bloqueo));
+
+        // Act
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.crearReserva(request, jugador.getEmail())
+        );
+
+        // Assert
+        assert exception.getMessage().contains("La cancha se encuentra bloqueada en ese horario");
+    }
+
+    @Test
+    @DisplayName("crearReserva_Exito_HorarioCruzaMedianoche")
+    void crearReserva_Exito_HorarioCruzaMedianoche() {
+        // Arrange
+        canchasInEstablecimientoWithHorarioNocturno();
+        cancha.setDuracionesPermitidas(new ArrayList<>(List.of(120)));
+
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 23, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 16, 1, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
+
+        Reserva reservaGuardada = Reserva.builder()
+                .id(10L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(fechaInicio)
+                .fechaHoraFin(fechaFin)
+                .estado(EstadoReserva.PENDIENTE_SENA)
+                .precioTotal(BigDecimal.valueOf(3000))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(bloqueoCanchaRepository.findOverlappingBloqueos(cancha.getId(), fechaInicio, fechaFin))
+                .thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin))
+                .thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
+                .thenReturn(List.of(cancha));
+        when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(() -> reservaService.crearReserva(request, jugador.getEmail()));
+
+        // Assert
+        assert response != null;
+        verify(reservaRepository).save(any(Reserva.class));
+    }
+
+    @Test
+    @DisplayName("crearReserva_Fallo_HorarioFueraDeServicioCruzaMedianoche")
+    void crearReserva_Fallo_HorarioFueraDeServicioCruzaMedianoche() {
+        // Arrange
+        establecimiento.setHorariosAtencion(List.of(
+                HorarioAtencion.builder()
+                        .diaSemana(java.time.DayOfWeek.TUESDAY)
+                        .horaApertura(LocalTime.of(20, 0))
+                        .horaCierre(LocalTime.of(2, 0))
+                        .establecimiento(establecimiento)
+                        .build()
+        ));
+
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 3, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 4, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin);
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(bloqueoCanchaRepository.findOverlappingBloqueos(cancha.getId(), fechaInicio, fechaFin))
+                .thenReturn(List.of());
+
+        // Act
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.crearReserva(request, jugador.getEmail())
+        );
+
+        // Assert
+        assert exception.getMessage().contains("El horario solicitado se encuentra fuera del horario de atención");
+    }
+
+    private void canchasInEstablecimientoWithHorarioNocturno() {
+        establecimiento.setHorariosAtencion(List.of(
+                HorarioAtencion.builder()
+                        .diaSemana(java.time.DayOfWeek.TUESDAY)
+                        .horaApertura(LocalTime.of(20, 0))
+                        .horaCierre(LocalTime.of(2, 0))
+                        .establecimiento(establecimiento)
+                        .build()
+        ));
     }
 }

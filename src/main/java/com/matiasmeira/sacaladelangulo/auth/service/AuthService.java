@@ -43,7 +43,7 @@ public class AuthService {
                 .telefono(null)
                 .rol(Role.PLAYER)
                 .planSuscripcion(PlanSuscripcion.FREE)
-                .isActive(true)
+                .isActive(false)
                 .emailVerified(false)
                 .telefonoVerificado(false)
                 .build();
@@ -65,7 +65,7 @@ public class AuthService {
                 .telefono(null)
                 .rol(Role.OWNER)
                 .planSuscripcion(PlanSuscripcion.TRIAL)
-                .isActive(true)
+                .isActive(false)
                 .emailVerified(false)
                 .telefonoVerificado(false)
                 .fechaFinPrueba(LocalDateTime.now().plusMonths(1))

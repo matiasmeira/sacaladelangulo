@@ -39,4 +39,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("error", ex.getMessage()));
     }
+
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, String>> handleOptimisticLockingFailure(org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+        Map<String, String> errorResponse = new java.util.HashMap<>();
+        errorResponse.put("error", "Conflicto de concurrencia");
+        errorResponse.put("message", "La cancha acaba de ser reservada o modificada por otro usuario. Por favor, actualiza la disponibilidad e intenta nuevamente.");
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT).body(errorResponse);
+    }
 }

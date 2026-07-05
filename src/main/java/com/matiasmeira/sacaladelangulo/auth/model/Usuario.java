@@ -66,7 +66,7 @@ public class Usuario {
             fechaCreacion = LocalDateTime.now();
         }
         if (isActive == null) {
-            isActive = true;
+            isActive = false;
         }
         if (emailVerified == null) {
             emailVerified = false;

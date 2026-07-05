@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * DTO para la recepción de datos al registrar un nuevo usuario.
@@ -12,6 +13,7 @@ public record RegisterRequest(
         String email,
 
         @NotBlank(message = "La contraseña es obligatoria")
+        @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
         String password,
 
         @NotBlank(message = "El nombre es obligatorio")

@@ -62,6 +62,14 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             org.springframework.data.domain.Pageable pageable
     );
 
+    @org.springframework.data.jpa.repository.Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId AND r.fechaHoraInicio < :finDia AND r.fechaHoraFin > :inicioDia AND r.estado != :estado")
+    org.springframework.data.domain.Page<Reserva> findReservasEnRangoDiario(
+            @org.springframework.data.repository.query.Param("canchaId") Long canchaId,
+            @org.springframework.data.repository.query.Param("inicioDia") java.time.LocalDateTime inicioDia,
+            @org.springframework.data.repository.query.Param("finDia") java.time.LocalDateTime finDia,
+            @org.springframework.data.repository.query.Param("estado") com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
+            org.springframework.data.domain.Pageable pageable);
+
     @Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId " +
            "AND r.estado != 'CANCELADA' " +
            "AND r.fechaHoraInicio < :fin AND r.fechaHoraFin > :inicio")

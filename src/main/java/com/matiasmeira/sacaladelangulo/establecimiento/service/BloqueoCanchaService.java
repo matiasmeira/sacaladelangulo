@@ -9,7 +9,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaReposito
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
-import com.matiasmeira.sacaladelangulo.reserva.service.ReservaService;
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,7 +25,7 @@ public class BloqueoCanchaService {
     private final BloqueoCanchaRepository bloqueoCanchaRepository;
     private final CanchaRepository canchaRepository;
     private final ReservaRepository reservaRepository;
-    private final ReservaService reservaService;
+    private final ReservaMapper reservaMapper;
 
     @Transactional
     public BloqueoCanchaResponse crearBloqueo(Long canchaId, BloqueoCanchaRequest request) {
@@ -59,7 +59,7 @@ public class BloqueoCanchaService {
                 bloqueo.getFechaInicio(),
                 bloqueo.getFechaFin(),
                 bloqueo.getMotivo(),
-                reservasAfectadas.stream().map(reservaService::mapToResponse).toList()
+                reservasAfectadas.stream().map(reservaMapper::mapToResponse).toList()
         );
     }
 }

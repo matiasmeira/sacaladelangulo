@@ -6,6 +6,7 @@ import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
@@ -36,6 +37,7 @@ public class ReservaService {
     private final CanchaRepository canchaRepository;
     private final BloqueoCanchaRepository bloqueoCanchaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ReservaMapper reservaMapper;
 
     /**
      * Crea una nueva reserva con validación de solapamientos y disponibilidad de pool.
@@ -103,15 +105,22 @@ public class ReservaService {
         }
 
         com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion horario = horarioOpt.get();
-        if (horaInicio.isBefore(horario.getHoraApertura()) || horaFin.isAfter(horario.getHoraCierre())) {
-            log.warn("Reserva fuera del horario de atención: inicio={} fin={} apertura={} cierre={}",
+        boolean cruzaMedianoche = horario.getHoraCierre().isBefore(horario.getHoraApertura());
+        boolean horaInicioValida;
+        boolean horaFinValida;
+
+        if (cruzaMedianoche) {
+            horaInicioValida = !horaInicio.isBefore(horario.getHoraApertura()) || !horaInicio.isAfter(horario.getHoraCierre());
+            horaFinValida = !horaFin.isBefore(horario.getHoraApertura()) || !horaFin.isAfter(horario.getHoraCierre());
+        } else {
+            horaInicioValida = !horaInicio.isBefore(horario.getHoraApertura()) && !horaInicio.isAfter(horario.getHoraCierre());
+            horaFinValida = !horaFin.isBefore(horario.getHoraApertura()) && !horaFin.isAfter(horario.getHoraCierre());
+        }
+
+        if (!horaInicioValida || !horaFinValida) {
+            log.warn("Reserva fuera del horario de atención nocturno: inicio={} fin={} apertura={} cierre={}",
                     horaInicio, horaFin, horario.getHoraApertura(), horario.getHoraCierre());
-            throw new IllegalArgumentException(String.format(
-                    "El horario de atención para %s es de %s a %s",
-                    horario.getDiaSemana(),
-                    horario.getHoraApertura(),
-                    horario.getHoraCierre())
-            );
+            throw new IllegalArgumentException("El horario solicitado se encuentra fuera del horario de atención del establecimiento para este día.");
         }
 
         // Buscar todas las reservas solapadas del establecimiento
@@ -164,7 +173,7 @@ public class ReservaService {
         log.info("Nueva reserva creada con éxito. ID: {}, Cancha: {}, Jugador: {}",
                 reservaGuardada.getId(), cancha.getNombre(), jugador.getNombre());
 
-        return mapToResponse(reservaGuardada);
+        return reservaMapper.mapToResponse(reservaGuardada);
     }
 
     /**
@@ -200,7 +209,7 @@ public class ReservaService {
         Reserva reservaActualizada = reservaRepository.save(reserva);
         log.info("Reserva confirmada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
 
-        return mapToResponse(reservaActualizada);
+        return reservaMapper.mapToResponse(reservaActualizada);
     }
 
     public ReservaResponse cancelarReserva(Long reservaId, String email) {
@@ -243,14 +252,14 @@ public class ReservaService {
 
         if (reserva.getEstado() == EstadoReserva.CANCELADA) {
             log.info("Reserva ya se encuentra cancelada. ID: {}", reservaId);
-            return mapToResponse(reserva);
+            return reservaMapper.mapToResponse(reserva);
         }
 
         reserva.setEstado(EstadoReserva.CANCELADA);
         Reserva reservaActualizada = reservaRepository.save(reserva);
         log.info("Reserva cancelada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
 
-        return mapToResponse(reservaActualizada);
+        return reservaMapper.mapToResponse(reservaActualizada);
     }
 
     /**
@@ -329,30 +338,16 @@ public class ReservaService {
      */
     public org.springframework.data.domain.Page<ReservaResponse> obtenerReservasPorCanchaYFecha(Long canchaId, java.time.LocalDate fecha, org.springframework.data.domain.Pageable pageable) {
         java.time.LocalDateTime inicioDia = fecha.atStartOfDay();
-        java.time.LocalDateTime finDia = fecha.atTime(23, 59, 59);
-        return reservaRepository.findByCanchaIdAndFechaHoraInicioBetweenAndEstadoNot(canchaId, inicioDia, finDia, EstadoReserva.CANCELADA, pageable)
-                .map(this::mapToResponse);
+        java.time.LocalDateTime finDia = fecha.atTime(java.time.LocalTime.MAX);
+        return reservaRepository.findReservasEnRangoDiario(canchaId, inicioDia, finDia, EstadoReserva.CANCELADA, pageable)
+                .map(reservaMapper::mapToResponse);
     }
 
     public org.springframework.data.domain.Page<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, java.time.LocalDate fecha, org.springframework.data.domain.Pageable pageable) {
         java.time.LocalDateTime inicioDia = fecha.atStartOfDay();
         java.time.LocalDateTime finDia = fecha.atTime(23, 59, 59);
         return reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(estId, inicioDia, finDia, EstadoReserva.CANCELADA, pageable)
-                .map(this::mapToResponse);
+                .map(reservaMapper::mapToResponse);
     }
 
-    public ReservaResponse mapToResponse(Reserva reserva) {
-        return new ReservaResponse(
-                reserva.getId(),
-                reserva.getJugador().getId(),
-                reserva.getJugador().getNombre(),
-                reserva.getCancha().getId(),
-                reserva.getCancha().getNombre(),
-                reserva.getFechaHoraInicio(),
-                reserva.getFechaHoraFin(),
-                reserva.getEstado().name(),
-                reserva.getPrecioTotal(),
-                reserva.getSenaPagada()
-        );
-    }
 }

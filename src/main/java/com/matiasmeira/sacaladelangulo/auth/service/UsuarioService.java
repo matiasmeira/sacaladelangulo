@@ -79,6 +79,7 @@ public class UsuarioService {
 
         usuario.setTelefono(codigoVerificacion.getTelefonoPendiente());
         usuario.setTelefonoVerificado(true);
+        usuario.setIsActive(true);
 
         usuarioRepository.save(usuario);
 

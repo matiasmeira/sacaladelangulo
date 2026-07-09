@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -35,7 +36,7 @@ public record CanchaRequest(
 
         Boolean permiteInicioMediaHora,
 
-        List<TarifaDto> tarifas,
+        @Valid List<TarifaDto> tarifas,
 
         List<Long> canchasFisicasIds,
 

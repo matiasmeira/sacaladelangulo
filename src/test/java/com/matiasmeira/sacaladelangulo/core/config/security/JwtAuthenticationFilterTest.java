@@ -44,6 +44,7 @@ class JwtAuthenticationFilterTest {
     @BeforeEach
     void setUp() {
         jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtService, userDetailsService);
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -64,8 +65,13 @@ class JwtAuthenticationFilterTest {
 
         jwtAuthenticationFilter.doFilter(request, response, filterChain);
 
-        verify(response).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        // El filtro no debe fijar el status manualmente: es Spring Security quien decide
+        // el 401/403 según si la ruta requiere autenticación, evitando que ese status
+        // quede sobreescrito por la respuesta real del controlador.
+        verify(response, never()).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         verify(filterChain).doFilter(request, response);
+        org.junit.jupiter.api.Assertions.assertNull(
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication());
     }
 
     @Test

@@ -41,7 +41,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             username = jwtService.extractUsername(token);
         } catch (JwtException ex) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            // Token inválido o expirado: se continúa sin autenticar. Es Spring Security
+            // (authorizeHttpRequests) quien decide si la ruta requiere 401/403 según corresponda;
+            // fijar el status acá quedaba sobreescrito por la respuesta real del controlador.
             filterChain.doFilter(request, response);
             return;
         }

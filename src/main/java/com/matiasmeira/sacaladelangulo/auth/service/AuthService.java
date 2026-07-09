@@ -32,12 +32,13 @@ public class AuthService {
     private final UserDetailsService userDetailsService;
 
     public AuthResponse registerPlayer(RegisterRequest request) {
-        if (usuarioRepository.existsByEmail(request.email())) {
+        String email = normalizarEmail(request.email());
+        if (usuarioRepository.existsByEmail(email)) {
             throw new IllegalArgumentException("El email ya está registrado");
         }
 
         Usuario usuario = Usuario.builder()
-                .email(request.email())
+                .email(email)
                 .password(passwordEncoder.encode(request.password()))
                 .nombre(request.nombre())
                 .telefono(null)
@@ -54,12 +55,13 @@ public class AuthService {
     }
 
     public AuthResponse registerOwner(RegisterRequest request) {
-        if (usuarioRepository.existsByEmail(request.email())) {
+        String email = normalizarEmail(request.email());
+        if (usuarioRepository.existsByEmail(email)) {
             throw new IllegalArgumentException("El email ya está registrado");
         }
 
         Usuario usuario = Usuario.builder()
-                .email(request.email())
+                .email(email)
                 .password(passwordEncoder.encode(request.password()))
                 .nombre(request.nombre())
                 .telefono(null)
@@ -77,9 +79,10 @@ public class AuthService {
     }
 
     public AuthResponse authenticate(AuthRequest request) {
+        String email = normalizarEmail(request.email());
         try {
             authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.email(), request.password())
+                    new UsernamePasswordAuthenticationToken(email, request.password())
             );
         } catch (BadCredentialsException ex) {
             throw new BadCredentialsException("Credenciales inválidas");
@@ -87,7 +90,11 @@ public class AuthService {
             throw new IllegalArgumentException("Error de autenticación");
         }
 
-        var userDetails = userDetailsService.loadUserByUsername(request.email());
+        var userDetails = userDetailsService.loadUserByUsername(email);
         return new AuthResponse(jwtService.generateToken(userDetails));
+    }
+
+    private String normalizarEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase();
     }
 }

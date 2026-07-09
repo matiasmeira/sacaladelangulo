@@ -4,21 +4,29 @@ import com.matiasmeira.sacaladelangulo.auth.model.CodigoVerificacion;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.CodigoVerificacionRepository;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 /**
  * Servicio de negocio para gestión de verificación de teléfono mediante OTP.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class UsuarioService {
+
+    /**
+     * Cantidad máxima de intentos fallidos permitidos antes de invalidar el código
+     * y exigir solicitar uno nuevo (mitiga fuerza bruta sobre el OTP de 6 dígitos).
+     */
+    private static final int MAX_INTENTOS = 5;
 
     private final UsuarioRepository usuarioRepository;
     private final CodigoVerificacionRepository codigoVerificacionRepository;
@@ -47,8 +55,8 @@ public class UsuarioService {
 
         codigoVerificacionRepository.save(codigoVerificacion);
 
-        // Simular envío de SMS
-        System.out.println("Simulando SMS al " + telefono + ": Tu código es " + codigo);
+        // TODO: integrar proveedor real de SMS. Nunca loguear el código en INFO/producción.
+        log.debug("Código OTP generado para {} (envío de SMS simulado)", email);
     }
 
     /**
@@ -59,23 +67,29 @@ public class UsuarioService {
      */
     public void verificarCodigo(String email, String codigo) {
         // Buscar el código en la base de datos
-        Optional<CodigoVerificacion> codigoOpt = codigoVerificacionRepository.findByEmail(email);
+        CodigoVerificacion codigoVerificacion = codigoVerificacionRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Código inválido o expirado"));
 
-        if (codigoOpt.isEmpty()) {
+        if (LocalDateTime.now().isAfter(codigoVerificacion.getFechaExpiracion())) {
+            codigoVerificacionRepository.deleteByEmail(email);
             throw new IllegalArgumentException("Código inválido o expirado");
         }
 
-        CodigoVerificacion codigoVerificacion = codigoOpt.get();
+        if (codigoVerificacion.getIntentos() >= MAX_INTENTOS) {
+            codigoVerificacionRepository.deleteByEmail(email);
+            log.warn("OTP bloqueado por exceso de intentos para {}", email);
+            throw new IllegalArgumentException("Se superó el número máximo de intentos. Solicitá un nuevo código.");
+        }
 
-        // Validar que el código coincida y no esté expirado
-        if (!codigoVerificacion.getCodigo().equals(codigo) ||
-                LocalDateTime.now().isAfter(codigoVerificacion.getFechaExpiracion())) {
+        if (!codigoVerificacion.getCodigo().equals(codigo)) {
+            codigoVerificacion.setIntentos(codigoVerificacion.getIntentos() + 1);
+            codigoVerificacionRepository.save(codigoVerificacion);
             throw new IllegalArgumentException("Código inválido o expirado");
         }
 
         // Buscar el usuario y actualizar su teléfono
         Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
 
         usuario.setTelefono(codigoVerificacion.getTelefonoPendiente());
         usuario.setTelefonoVerificado(true);

@@ -19,6 +19,12 @@ import java.util.Date;
 @Service
 public class JwtService {
 
+    /**
+     * HS256 requiere una clave de al menos 256 bits (32 bytes). Se valida en el arranque
+     * para evitar que la aplicación levante con un secreto débil o mal configurado.
+     */
+    private static final int MIN_SECRET_LENGTH_BYTES = 32;
+
     private final SecretKey signingKey;
     private final long jwtExpirationMillis;
 
@@ -26,7 +32,12 @@ public class JwtService {
             @Value("${jwt.secret}") String jwtSecret,
             @Value("${jwt.expiration-millis:3600000}") long jwtExpirationMillis
     ) {
-        this.signingKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < MIN_SECRET_LENGTH_BYTES) {
+            throw new IllegalStateException(
+                    "jwt.secret debe tener al menos " + MIN_SECRET_LENGTH_BYTES + " bytes para firmar con HS256");
+        }
+        this.signingKey = Keys.hmacShaKeyFor(secretBytes);
         this.jwtExpirationMillis = jwtExpirationMillis;
     }
 
@@ -35,7 +46,6 @@ public class JwtService {
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(Date.from(Instant.now()))
                 .setExpiration(Date.from(Instant.now().plusMillis(jwtExpirationMillis)))
-                .claim("rol", userDetails.getAuthorities())
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }

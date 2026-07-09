@@ -35,4 +35,12 @@ public class CodigoVerificacion {
 
     @Column(nullable = false)
     private LocalDateTime fechaExpiracion;
+
+    /**
+     * Cantidad de intentos fallidos de verificación. Permite limitar la fuerza bruta
+     * sobre el código OTP de 6 dígitos.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer intentos = 0;
 }

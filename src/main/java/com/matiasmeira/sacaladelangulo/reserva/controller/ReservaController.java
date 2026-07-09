@@ -5,12 +5,19 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.service.ReservaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 /**
  * Controlador REST para reservas.
@@ -66,20 +73,22 @@ public class ReservaController {
     }
 
     @GetMapping("/cancha/{canchaId}")
-    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
-    public ResponseEntity<org.springframework.data.domain.Page<ReservaResponse>> obtenerReservas(
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<Page<ReservaResponse>> obtenerReservas(
             @PathVariable Long canchaId,
-            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha,
-            @org.springdoc.core.annotations.ParameterObject @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
-        return org.springframework.http.ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha, pageable));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
+        return ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha, pageable, userDetails.getUsername()));
     }
 
     @GetMapping("/establecimiento/{estId}")
-    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
-    public ResponseEntity<org.springframework.data.domain.Page<ReservaResponse>> obtenerReservasPorEstablecimiento(
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<Page<ReservaResponse>> obtenerReservasPorEstablecimiento(
             @PathVariable Long estId,
-            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fecha,
-            @org.springdoc.core.annotations.ParameterObject @org.springframework.data.web.PageableDefault(size = 10) org.springframework.data.domain.Pageable pageable) {
-        return org.springframework.http.ResponseEntity.ok(reservaService.obtenerReservasPorEstablecimientoYFecha(estId, fecha, pageable));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
+        return ResponseEntity.ok(reservaService.obtenerReservasPorEstablecimientoYFecha(estId, fecha, pageable, userDetails.getUsername()));
     }
 }

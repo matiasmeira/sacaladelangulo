@@ -86,4 +86,32 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
             org.springframework.data.domain.Pageable pageable
     );
+
+    /**
+     * IDs de canchas (dentro de la lista dada) que ya tienen alguna reserva solapada
+     * con el período indicado. Se usa para resolver disponibilidad en lote y evitar
+     * ejecutar una consulta de conteo por cada cancha (N+1).
+     */
+    @Query("SELECT DISTINCT r.cancha.id FROM Reserva r " +
+           "WHERE r.cancha.id IN :canchaIds " +
+           "AND r.estado != 'CANCELADA' " +
+           "AND r.fechaHoraInicio < :fin AND r.fechaHoraFin > :inicio")
+    List<Long> findCanchaIdsConSolapamiento(
+            @Param("canchaIds") List<Long> canchaIds,
+            @Param("inicio") LocalDateTime inicio,
+            @Param("fin") LocalDateTime fin
+    );
+
+    /**
+     * Trae la reserva junto con cancha -> establecimiento -> dueño y jugador en una sola
+     * consulta, evitando 3 round-trips adicionales por lazy loading encadenado al
+     * confirmar/cancelar (ver ReservaService).
+     */
+    @Query("SELECT r FROM Reserva r " +
+           "JOIN FETCH r.jugador " +
+           "JOIN FETCH r.cancha c " +
+           "JOIN FETCH c.establecimiento e " +
+           "JOIN FETCH e.dueno " +
+           "WHERE r.id = :id")
+    java.util.Optional<Reserva> findByIdConEstablecimientoYDueno(@Param("id") Long id);
  }

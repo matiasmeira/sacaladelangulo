@@ -26,7 +26,8 @@ public class BloqueoCanchaController {
             @PathVariable Long canchaId,
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody @Valid BloqueoCanchaRequest request) {
-        BloqueoCanchaResponse response = bloqueoCanchaService.crearBloqueo(canchaId, request);
+        BloqueoCanchaResponse response = bloqueoCanchaService.crearBloqueo(
+                establecimientoId, canchaId, request, userDetails.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

@@ -40,6 +40,7 @@ public class Establecimiento {
     private Boolean requiereSena;
 
     @Column(name = "is_active", nullable = false)
+    @lombok.Builder.Default
     private Boolean isActive = true;
 
     /**

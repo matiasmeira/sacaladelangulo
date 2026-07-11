@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.reserva.dto;
 
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
@@ -17,6 +18,9 @@ public record ReservaRequest(
 
         @NotNull(message = "La fecha y hora de fin es obligatoria")
         @FutureOrPresent(message = "La fecha y hora de fin debe ser en el presente o futuro")
-        LocalDateTime fechaHoraFin
+        LocalDateTime fechaHoraFin,
+
+        @NotNull(message = "Debe indicar el deporte para el que se reserva la cancha")
+        Deporte deporteSeleccionado
 ) {
 }

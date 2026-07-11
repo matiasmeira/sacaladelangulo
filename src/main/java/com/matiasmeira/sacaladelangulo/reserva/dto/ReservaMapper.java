@@ -21,7 +21,8 @@ public class ReservaMapper {
                 reserva.getPrecioTotal(),
                 reserva.getSenaPagada(),
                 reserva.getNombreClienteManual(),
-                reserva.getTelefonoClienteManual()
+                reserva.getTelefonoClienteManual(),
+                reserva.getDeporteSeleccionado()
         );
     }
 }

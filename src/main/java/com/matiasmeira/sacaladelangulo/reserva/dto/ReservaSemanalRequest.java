@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.reserva.dto;
 
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotNull;
 
@@ -32,6 +33,9 @@ public record ReservaSemanalRequest(
 
         @NotNull(message = "La hora de fin es obligatoria")
         LocalTime horaFin,
+
+        @NotNull(message = "Debe indicar el deporte para el que se reserva la cancha")
+        Deporte deporteSeleccionado,
 
         Long jugadorId,
 

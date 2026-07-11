@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.reserva.model;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -46,6 +47,16 @@ public class Reserva {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cancha_id", nullable = false)
     private Cancha cancha;
+
+    /**
+     * Deporte específico para el que se reservó la cancha en este turno. Una misma
+     * cancha puede soportar varios deportes (ver Cancha.deportes); esto registra
+     * cuál se usó para que el dueño prepare el equipamiento correspondiente
+     * (redes, arcos, etc.).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deporte_seleccionado", nullable = false)
+    private Deporte deporteSeleccionado;
 
     /**
      * Nombre del cliente para reservas de mostrador (sin usuario registrado).

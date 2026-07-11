@@ -10,7 +10,9 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Entidad que representa una cancha deportiva.
@@ -31,8 +33,16 @@ public class Cancha {
     @Column(nullable = false)
     private String nombre;
 
-    @Column(nullable = false)
-    private String deporte;
+    /**
+     * Deportes para los que está habilitada esta cancha. Una misma cancha puede
+     * soportar más de uno (ej. fútbol y hockey) y aparece en la búsqueda de ambos.
+     */
+    @ElementCollection
+    @CollectionTable(name = "cancha_deportes", joinColumns = @JoinColumn(name = "cancha_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deporte", nullable = false)
+    @Builder.Default
+    private Set<Deporte> deportes = new HashSet<>();
 
     @Column(nullable = false)
     private Integer capacidad;

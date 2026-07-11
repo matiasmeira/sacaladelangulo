@@ -9,6 +9,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoReques
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
@@ -19,6 +20,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -83,7 +85,7 @@ public class EstablecimientoService {
      * público no degrade con el volumen de datos.
      */
     @Transactional(readOnly = true)
-    public List<EstablecimientoResponse> buscarEstablecimientos(Double latitud, Double longitud, Double distanciaKm, String deporte, LocalDate fecha, LocalTime hora) {
+    public List<EstablecimientoResponse> buscarEstablecimientos(Double latitud, Double longitud, Double distanciaKm, Deporte deporte, LocalDate fecha, LocalTime hora) {
         Double radioBusqueda = (distanciaKm != null && distanciaKm > 0) ? distanciaKm : 10.0;
         List<Establecimiento> establecimientosCercanos = establecimientoRepository.findCercanosYPorDeporte(latitud, longitud, radioBusqueda, deporte);
 
@@ -97,7 +99,7 @@ public class EstablecimientoService {
         List<Cancha> canchas = canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(establecimientoIds);
         if (deporte != null) {
             canchas = canchas.stream()
-                    .filter(c -> c.getDeporte().equalsIgnoreCase(deporte))
+                    .filter(c -> c.getDeportes().contains(deporte))
                     .toList();
         }
 
@@ -147,6 +149,7 @@ public class EstablecimientoService {
         if (horarios == null) {
             return new ArrayList<>();
         }
+        validarHorarios(horarios);
         return horarios.stream()
                 .map(dto -> HorarioAtencion.builder()
                         .diaSemana(dto.diaSemana())
@@ -155,6 +158,24 @@ public class EstablecimientoService {
                         .establecimiento(establecimiento)
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Un mismo día de la semana no puede tener más de un horario cargado (si no, la
+     * validación de disponibilidad en ReservaService quedaría ambigua sobre cuál usar),
+     * y un horario con apertura == cierre no bloquea nada realmente (equivale a un día
+     * cerrado, pero de forma confusa) por lo que se rechaza explícitamente.
+     */
+    private void validarHorarios(List<HorarioAtencionDto> horarios) {
+        Set<DayOfWeek> diasVistos = new HashSet<>();
+        for (HorarioAtencionDto horario : horarios) {
+            if (!diasVistos.add(horario.diaSemana())) {
+                throw new IllegalArgumentException("No puede haber más de un horario de atención para el " + horario.diaSemana());
+            }
+            if (horario.horaApertura().equals(horario.horaCierre())) {
+                throw new IllegalArgumentException("La hora de apertura y cierre no pueden ser iguales (" + horario.diaSemana() + ")");
+            }
+        }
     }
 
     private Usuario buscarUsuarioPorEmail(String email) {

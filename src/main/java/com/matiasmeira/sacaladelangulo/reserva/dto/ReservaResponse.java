@@ -1,5 +1,7 @@
 package com.matiasmeira.sacaladelangulo.reserva.dto;
 
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -18,6 +20,7 @@ public record ReservaResponse(
         BigDecimal precioTotal,
         BigDecimal senaPagada,
         String nombreClienteManual,
-        String telefonoClienteManual
+        String telefonoClienteManual,
+        Deporte deporteSeleccionado
 ) {
 }

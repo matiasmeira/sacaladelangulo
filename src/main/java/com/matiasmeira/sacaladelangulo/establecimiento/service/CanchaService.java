@@ -52,7 +52,7 @@ public class CanchaService {
 
         Cancha cancha = Cancha.builder()
                 .nombre(request.nombre())
-                .deporte(request.deporte())
+                .deportes(request.deportes())
                 .capacidad(request.capacidad())
                 .precioBase(request.precioBase())
                 .montoSena(montoSena)
@@ -97,7 +97,7 @@ public class CanchaService {
         BigDecimal montoSena = validarMontoSena(request.montoSena(), usuarioAutenticado.getPlanSuscripcion());
 
         cancha.setNombre(request.nombre());
-        cancha.setDeporte(request.deporte());
+        cancha.setDeportes(request.deportes());
         cancha.setCapacidad(request.capacidad());
         cancha.setPrecioBase(request.precioBase());
         cancha.setMontoSena(montoSena);
@@ -205,7 +205,7 @@ public class CanchaService {
         return new CanchaResponse(
                 cancha.getId(),
                 cancha.getNombre(),
-                cancha.getDeporte(),
+                cancha.getDeportes(),
                 cancha.getCapacidad(),
                 cancha.getIsActive(),
                 cancha.getEstablecimiento().getId(),

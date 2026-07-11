@@ -6,10 +6,13 @@ import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
@@ -56,6 +59,7 @@ public class ReservaService {
     private final ReservaRepository reservaRepository;
     private final CanchaRepository canchaRepository;
     private final BloqueoCanchaRepository bloqueoCanchaRepository;
+    private final DiaNoLaborableRepository diaNoLaborableRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
     private final ReservaMapper reservaMapper;
@@ -73,11 +77,13 @@ public class ReservaService {
 
         Usuario jugador = buscarUsuarioPorEmail(email);
         Cancha cancha = buscarCanchaPorId(request.canchaId());
+        validarDeporteSoportado(request.deporteSeleccionado(), cancha);
 
         validarFechas(request);
         validarGranularidadHoraria(request, cancha);
         long duracionMinutos = validarDuracion(request, cancha);
         validarSinBloqueos(request, cancha);
+        validarDiaNoLaborable(request.fechaHoraInicio(), cancha.getEstablecimiento());
         validarHorarioAtencion(request, cancha.getEstablecimiento());
 
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(
@@ -95,6 +101,7 @@ public class ReservaService {
         Reserva reserva = Reserva.builder()
                 .jugador(jugador)
                 .cancha(cancha)
+                .deporteSeleccionado(request.deporteSeleccionado())
                 .fechaHoraInicio(request.fechaHoraInicio())
                 .fechaHoraFin(request.fechaHoraFin())
                 .estado(EstadoReserva.PENDIENTE_SENA)
@@ -125,11 +132,13 @@ public class ReservaService {
 
         Cancha cancha = buscarCanchaPorId(request.canchaId());
         validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+        validarDeporteSoportado(request.deporteSeleccionado(), cancha);
 
         validarFechas(request.fechaHoraInicio(), request.fechaHoraFin());
         validarGranularidadHoraria(request.fechaHoraInicio(), cancha);
         long duracionMinutos = validarDuracion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
         validarSinBloqueos(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
+        validarDiaNoLaborable(request.fechaHoraInicio(), cancha.getEstablecimiento());
         validarHorarioAtencion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha.getEstablecimiento());
 
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(
@@ -148,6 +157,7 @@ public class ReservaService {
         Reserva reserva = Reserva.builder()
                 .jugador(null)
                 .cancha(cancha)
+                .deporteSeleccionado(request.deporteSeleccionado())
                 .nombreClienteManual(request.nombreCliente())
                 .telefonoClienteManual(request.telefonoCliente())
                 .fechaHoraInicio(request.fechaHoraInicio())
@@ -191,6 +201,7 @@ public class ReservaService {
 
         Cancha cancha = buscarCanchaPorId(request.canchaId());
         validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+        validarDeporteSoportado(request.deporteSeleccionado(), cancha);
 
         Usuario jugador = null;
         if (request.jugadorId() != null) {
@@ -216,6 +227,7 @@ public class ReservaService {
                 validarGranularidadHoraria(inicio, cancha);
                 long duracionMinutos = validarDuracion(inicio, fin, cancha);
                 validarSinBloqueos(inicio, fin, cancha);
+                validarDiaNoLaborable(inicio, cancha.getEstablecimiento());
                 validarHorarioAtencion(inicio, fin, cancha.getEstablecimiento());
 
                 List<Reserva> solapadas = reservaRepository.findSuperpuestas(
@@ -228,6 +240,7 @@ public class ReservaService {
                 reservasAGuardar.add(Reserva.builder()
                         .jugador(jugador)
                         .cancha(cancha)
+                        .deporteSeleccionado(request.deporteSeleccionado())
                         .nombreClienteManual(jugador == null ? request.nombreClienteManual() : null)
                         .telefonoClienteManual(jugador == null ? request.telefonoClienteManual() : null)
                         .fechaHoraInicio(inicio)
@@ -331,6 +344,34 @@ public class ReservaService {
         if (!bloqueos.isEmpty()) {
             throw new IllegalArgumentException("La cancha se encuentra bloqueada en ese horario. Motivo: " + bloqueos.get(0).getMotivo());
         }
+    }
+
+    /**
+     * La cancha debe estar habilitada para el deporte solicitado: una misma cancha
+     * puede soportar varios deportes (ej. fútbol y hockey), pero solo se puede
+     * reservar para uno de los que tiene realmente habilitados.
+     */
+    private void validarDeporteSoportado(Deporte deporteSeleccionado, Cancha cancha) {
+        if (!cancha.getDeportes().contains(deporteSeleccionado)) {
+            log.warn("Deporte no soportado por la cancha. Cancha: {}, Deporte solicitado: {}", cancha.getId(), deporteSeleccionado);
+            throw new IllegalArgumentException("La cancha no está habilitada para el deporte " + deporteSeleccionado);
+        }
+    }
+
+    /**
+     * Excepción puntual al horario semanal recurrente: si la fecha cae en un
+     * DiaNoLaborable del establecimiento (feriado, cierre especial), se rechaza
+     * independientemente de lo que indique el HorarioAtencion del día de esa semana.
+     */
+    private void validarDiaNoLaborable(LocalDateTime fechaHoraInicio, Establecimiento establecimiento) {
+        diaNoLaborableRepository.findByEstablecimientoIdAndFecha(establecimiento.getId(), fechaHoraInicio.toLocalDate())
+                .ifPresent(diaNoLaborable -> {
+                    String motivo = diaNoLaborable.getMotivo();
+                    String detalle = (motivo == null || motivo.isBlank()) ? "" : ". Motivo: " + motivo;
+                    log.warn("El establecimiento {} no abre el {}", establecimiento.getId(), fechaHoraInicio.toLocalDate());
+                    throw new IllegalArgumentException(
+                            "El establecimiento no abre el " + fechaHoraInicio.toLocalDate() + detalle);
+                });
     }
 
     private void validarHorarioAtencion(ReservaRequest request, Establecimiento establecimiento) {
@@ -464,6 +505,62 @@ public class ReservaService {
         reserva.setEstado(EstadoReserva.CANCELADA);
         Reserva reservaActualizada = reservaRepository.save(reserva);
         log.info("Reserva cancelada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
+
+        return reservaMapper.mapToResponse(reservaActualizada);
+    }
+
+    /**
+     * Reasigna una reserva existente a otra cancha del mismo establecimiento (por ejemplo,
+     * para reubicarla cuando la cancha original quedó bloqueada por mantenimiento y hay una
+     * cancha equivalente libre en ese horario). Solo el dueño real del establecimiento o un
+     * administrador pueden moverla. Se revalidan las mismas reglas de disponibilidad que al
+     * crear una reserva (granularidad, duración, bloqueos, solapamientos y pool de canchas);
+     * no se revalida el horario de atención porque la nueva cancha pertenece al mismo
+     * establecimiento, ya validado cuando se creó la reserva original.
+     *
+     * @param reservaId ID de la reserva a mover
+     * @param nuevaCanchaId ID de la cancha destino
+     * @param email Email del usuario autenticado (OWNER/ADMIN)
+     * @return ReservaResponse con la reserva ya reasignada
+     */
+    public ReservaResponse moverReservaDeCancha(Long reservaId, Long nuevaCanchaId, String email) {
+        log.info("Iniciando movimiento de reserva. ID: {}, Nueva cancha: {}, Email: {}", reservaId, nuevaCanchaId, email);
+
+        Reserva reserva = reservaRepository.findByIdConEstablecimientoYDueno(reservaId)
+                .orElseThrow(() -> new EntityNotFoundException("Reserva no encontrada"));
+
+        validarPropietarioOAdmin(reserva.getCancha().getEstablecimiento(), email);
+
+        if (reserva.getEstado() == EstadoReserva.CANCELADA) {
+            throw new IllegalArgumentException("No se puede mover una reserva cancelada");
+        }
+
+        Cancha nuevaCancha = buscarCanchaPorId(nuevaCanchaId);
+        if (!nuevaCancha.getEstablecimiento().getId().equals(reserva.getCancha().getEstablecimiento().getId())) {
+            throw new IllegalArgumentException("La nueva cancha debe pertenecer al mismo establecimiento que la reserva original");
+        }
+        if (nuevaCancha.getId().equals(reserva.getCancha().getId())) {
+            throw new IllegalArgumentException("La reserva ya está asignada a esa cancha");
+        }
+        validarDeporteSoportado(reserva.getDeporteSeleccionado(), nuevaCancha);
+
+        LocalDateTime inicio = reserva.getFechaHoraInicio();
+        LocalDateTime fin = reserva.getFechaHoraFin();
+
+        validarGranularidadHoraria(inicio, nuevaCancha);
+        validarDuracion(inicio, fin, nuevaCancha);
+        validarSinBloqueos(inicio, fin, nuevaCancha);
+
+        List<Reserva> solapadas = reservaRepository.findSuperpuestas(
+                        nuevaCancha.getEstablecimiento().getId(), inicio, fin).stream()
+                .filter(r -> !r.getId().equals(reserva.getId()))
+                .toList();
+        validarCanchaExactaLibre(nuevaCancha, solapadas);
+        validarPoolCanchas(nuevaCancha, solapadas);
+
+        reserva.setCancha(nuevaCancha);
+        Reserva reservaActualizada = reservaRepository.save(reserva);
+        log.info("Reserva {} movida con éxito a la cancha {}", reservaId, nuevaCancha.getNombre());
 
         return reservaMapper.mapToResponse(reservaActualizada);
     }

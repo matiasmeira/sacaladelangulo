@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.reserva.controller;
 
+import com.matiasmeira.sacaladelangulo.reserva.dto.MoverReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
@@ -107,6 +108,26 @@ public class ReservaController {
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
         ReservaResponse reserva = reservaService.cancelarReserva(id, userDetails.getUsername());
+        return ResponseEntity.ok(reserva);
+    }
+
+    /**
+     * Mueve una reserva a otra cancha del mismo establecimiento (por ejemplo, para
+     * reubicarla cuando la cancha original fue bloqueada y hay una equivalente libre).
+     * Protegido: solo propietarios de establecimientos y administradores.
+     *
+     * @param id ID de la reserva a mover
+     * @param userDetails Detalles del usuario autenticado
+     * @param request DTO con el ID de la cancha destino
+     * @return ReservaResponse con la reserva ya reasignada
+     */
+    @PutMapping("/{id}/mover-cancha")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ReservaResponse> moverReservaDeCancha(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid MoverReservaRequest request) {
+        ReservaResponse reserva = reservaService.moverReservaDeCancha(id, request.nuevaCanchaId(), userDetails.getUsername());
         return ResponseEntity.ok(reserva);
     }
 

@@ -6,12 +6,14 @@ import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.BloqueoCanchaRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.BloqueoCanchaResponse;
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaDisponibleResponse;
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.ReservaAfectadaResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
-import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import lombok.RequiredArgsConstructor;
@@ -38,24 +40,12 @@ public class BloqueoCanchaService {
 
     @Transactional
     public BloqueoCanchaResponse crearBloqueo(Long establecimientoId, Long canchaId, BloqueoCanchaRequest request, String email) {
-        if (request.fechaInicio().isAfter(request.fechaFin())) {
-            throw new IllegalArgumentException("La fecha de inicio no puede ser posterior a la de fin");
+        if (!request.fechaInicio().isBefore(request.fechaFin())) {
+            throw new IllegalArgumentException("La fecha de inicio debe ser anterior a la de fin");
         }
 
-        Cancha cancha = canchaRepository.findById(canchaId)
-                .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
-
-        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
-        }
-
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !cancha.getEstablecimiento().getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
+        Cancha cancha = buscarCanchaDelEstablecimiento(establecimientoId, canchaId);
+        validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
 
         BloqueoCancha bloqueo = BloqueoCancha.builder()
                 .cancha(cancha)
@@ -74,14 +64,47 @@ public class BloqueoCanchaService {
 
         log.info("Bloqueo creado para cancha {}. Reservas afectadas: {}", canchaId, reservasAfectadas.size());
 
+        List<ReservaAfectadaResponse> reservasAfectadasConAlternativas = reservasAfectadas.stream()
+                .map(reserva -> new ReservaAfectadaResponse(
+                        reservaMapper.mapToResponse(reserva),
+                        buscarCanchasAlternativasDisponibles(cancha, reserva)))
+                .toList();
+
         return new BloqueoCanchaResponse(
                 bloqueo.getId(),
                 cancha.getId(),
                 bloqueo.getFechaInicio(),
                 bloqueo.getFechaFin(),
                 bloqueo.getMotivo(),
-                reservasAfectadas.stream().map(reservaMapper::mapToResponse).toList()
+                reservasAfectadasConAlternativas
         );
+    }
+
+    /**
+     * Busca, dentro del mismo establecimiento, canchas que soporten el deporte para el
+     * que se hizo la reserva afectada y tengan la misma capacidad que la cancha bloqueada
+     * (p. ej. "Cancha 5B" para una reserva de fútbol en "Cancha 5A") que estén libres
+     * —sin reserva ni bloqueo solapado— en el horario exacto de esa reserva. Se ofrecen
+     * como alternativa de reubicación en vez de cancelar directamente
+     * (ver PUT /reservas/{id}/mover-cancha).
+     */
+    private List<CanchaDisponibleResponse> buscarCanchasAlternativasDisponibles(Cancha canchaBloqueada, Reserva reserva) {
+        return canchaRepository.findByEstablecimientoIdAndIsActiveTrue(canchaBloqueada.getEstablecimiento().getId()).stream()
+                .filter(candidata -> !candidata.getId().equals(canchaBloqueada.getId()))
+                .filter(candidata -> candidata.getDeportes().contains(reserva.getDeporteSeleccionado()))
+                .filter(candidata -> candidata.getCapacidad().equals(canchaBloqueada.getCapacidad()))
+                .filter(candidata -> estaLibreEnElHorarioDeLaReserva(candidata, reserva))
+                .map(candidata -> new CanchaDisponibleResponse(candidata.getId(), candidata.getNombre()))
+                .toList();
+    }
+
+    private boolean estaLibreEnElHorarioDeLaReserva(Cancha candidata, Reserva reserva) {
+        boolean tieneBloqueo = !bloqueoCanchaRepository.findOverlappingBloqueos(
+                candidata.getId(), reserva.getFechaHoraInicio(), reserva.getFechaHoraFin()).isEmpty();
+        boolean tieneReservaSolapada = reservaRepository.findOverlappingByCanchaId(
+                        candidata.getId(), reserva.getFechaHoraInicio(), reserva.getFechaHoraFin()).stream()
+                .anyMatch(r -> !r.getId().equals(reserva.getId()));
+        return !tieneBloqueo && !tieneReservaSolapada;
     }
 
     @Transactional
@@ -96,13 +119,7 @@ public class BloqueoCanchaService {
             throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
         }
 
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !bloqueo.getCancha().getEstablecimiento().getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
+        validarPropietarioOAdmin(bloqueo.getCancha().getEstablecimiento(), email);
 
         bloqueoCanchaRepository.delete(bloqueo);
         log.info("Bloqueo {} eliminado de la cancha {}", bloqueoId, canchaId);
@@ -110,20 +127,8 @@ public class BloqueoCanchaService {
 
     @Transactional(readOnly = true)
     public List<BloqueoCanchaResponse> listarPorCancha(Long establecimientoId, Long canchaId, String email) {
-        Cancha cancha = canchaRepository.findById(canchaId)
-                .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
-
-        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
-        }
-
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !cancha.getEstablecimiento().getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
+        Cancha cancha = buscarCanchaDelEstablecimiento(establecimientoId, canchaId);
+        validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
 
         return bloqueoCanchaRepository.findByCanchaIdOrderByFechaInicioAsc(canchaId).stream()
                 .map(this::mapSinReservasAfectadas)
@@ -154,5 +159,23 @@ public class BloqueoCanchaService {
                 bloqueo.getMotivo(),
                 List.of()
         );
+    }
+
+    private Cancha buscarCanchaDelEstablecimiento(Long establecimientoId, Long canchaId) {
+        Cancha cancha = canchaRepository.findById(canchaId)
+                .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
+        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
+            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
+        }
+        return cancha;
+    }
+
+    private void validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        if (usuarioAutenticado.getRol() != Role.ADMIN &&
+                !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
+            throw new AccessDeniedException("No autorizado en este establecimiento");
+        }
     }
 }

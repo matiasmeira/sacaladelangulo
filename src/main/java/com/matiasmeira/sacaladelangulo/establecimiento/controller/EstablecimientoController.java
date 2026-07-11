@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.establecimiento.controller;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoResponse;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -49,7 +50,7 @@ public class EstablecimientoController {
             @RequestParam Double latitud,
             @RequestParam Double longitud,
             @RequestParam(required = false, defaultValue = "10.0") Double distanciaKm,
-            @RequestParam(required = false) String deporte,
+            @RequestParam(required = false) Deporte deporte,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime hora) {
         List<EstablecimientoResponse> resultados = establecimientoService.buscarEstablecimientos(latitud, longitud, distanciaKm, deporte, fecha, hora);

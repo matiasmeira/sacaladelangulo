@@ -1,7 +1,10 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.dto;
 
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
+
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.TarifaDto;
 
@@ -11,7 +14,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.TarifaDto;
 public record CanchaResponse(
         Long id,
         String nombre,
-        String deporte,
+        Set<Deporte> deportes,
         Integer capacidad,
         Boolean isActive,
         Long establecimientoId,

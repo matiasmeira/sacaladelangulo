@@ -1,0 +1,77 @@
+package com.matiasmeira.sacaladelangulo.buffet.controller;
+
+import com.matiasmeira.sacaladelangulo.buffet.dto.AjustarStockRequest;
+import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetRequest;
+import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetResponse;
+import com.matiasmeira.sacaladelangulo.buffet.service.ProductoBuffetService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * Controlador REST para el inventario de buffet de un establecimiento.
+ */
+@RestController
+@RequestMapping("/api/v1/establecimientos/{establecimientoId}/productos-buffet")
+@RequiredArgsConstructor
+public class ProductoBuffetController {
+
+    private final ProductoBuffetService productoBuffetService;
+
+    @PostMapping
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<ProductoBuffetResponse> crearProducto(
+            @PathVariable Long establecimientoId,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid ProductoBuffetRequest request) {
+        ProductoBuffetResponse producto = productoBuffetService.crearProducto(establecimientoId, request, userDetails.getUsername());
+        return ResponseEntity.status(HttpStatus.CREATED).body(producto);
+    }
+
+    @PutMapping("/{productoId}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<ProductoBuffetResponse> actualizarProducto(
+            @PathVariable Long establecimientoId,
+            @PathVariable Long productoId,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid ProductoBuffetRequest request) {
+        ProductoBuffetResponse producto = productoBuffetService.actualizarProducto(establecimientoId, productoId, request, userDetails.getUsername());
+        return ResponseEntity.ok(producto);
+    }
+
+    @PatchMapping("/{productoId}/stock")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<ProductoBuffetResponse> ajustarStock(
+            @PathVariable Long establecimientoId,
+            @PathVariable Long productoId,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid AjustarStockRequest request) {
+        ProductoBuffetResponse producto = productoBuffetService.ajustarStock(establecimientoId, productoId, request, userDetails.getUsername());
+        return ResponseEntity.ok(producto);
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<ProductoBuffetResponse>> listarPorEstablecimiento(
+            @PathVariable Long establecimientoId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(productoBuffetService.listarPorEstablecimiento(establecimientoId, userDetails.getUsername()));
+    }
+
+    @DeleteMapping("/{productoId}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Void> eliminarProducto(
+            @PathVariable Long establecimientoId,
+            @PathVariable Long productoId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        productoBuffetService.eliminarProducto(establecimientoId, productoId, userDetails.getUsername());
+        return ResponseEntity.noContent().build();
+    }
+}

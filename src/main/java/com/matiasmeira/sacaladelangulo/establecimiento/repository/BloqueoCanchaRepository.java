@@ -15,4 +15,12 @@ public interface BloqueoCanchaRepository extends JpaRepository<BloqueoCancha, Lo
     List<BloqueoCancha> findOverlappingBloqueos(@Param("canchaId") Long canchaId,
                                                 @Param("inicio") LocalDateTime inicio,
                                                 @Param("fin") LocalDateTime fin);
+
+    List<BloqueoCancha> findByCanchaIdOrderByFechaInicioAsc(Long canchaId);
+
+    @Query("SELECT b FROM BloqueoCancha b WHERE b.cancha.establecimiento.id = :establecimientoId AND " +
+           "(b.fechaInicio < :fin AND b.fechaFin > :inicio)")
+    List<BloqueoCancha> findByEstablecimientoAndRango(@Param("establecimientoId") Long establecimientoId,
+                                                       @Param("inicio") LocalDateTime inicio,
+                                                       @Param("fin") LocalDateTime fin);
 }

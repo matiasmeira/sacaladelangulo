@@ -20,6 +20,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @Service
@@ -78,6 +81,78 @@ public class BloqueoCanchaService {
                 bloqueo.getFechaFin(),
                 bloqueo.getMotivo(),
                 reservasAfectadas.stream().map(reservaMapper::mapToResponse).toList()
+        );
+    }
+
+    @Transactional
+    public void eliminarBloqueo(Long establecimientoId, Long canchaId, Long bloqueoId, String email) {
+        BloqueoCancha bloqueo = bloqueoCanchaRepository.findById(bloqueoId)
+                .orElseThrow(() -> new EntityNotFoundException("Bloqueo no encontrado"));
+
+        if (!bloqueo.getCancha().getId().equals(canchaId)) {
+            throw new IllegalArgumentException("El bloqueo no pertenece a esta cancha");
+        }
+        if (!bloqueo.getCancha().getEstablecimiento().getId().equals(establecimientoId)) {
+            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
+        }
+
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+
+        if (usuarioAutenticado.getRol() != Role.ADMIN &&
+                !bloqueo.getCancha().getEstablecimiento().getDueno().getId().equals(usuarioAutenticado.getId())) {
+            throw new AccessDeniedException("No autorizado en este establecimiento");
+        }
+
+        bloqueoCanchaRepository.delete(bloqueo);
+        log.info("Bloqueo {} eliminado de la cancha {}", bloqueoId, canchaId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BloqueoCanchaResponse> listarPorCancha(Long establecimientoId, Long canchaId, String email) {
+        Cancha cancha = canchaRepository.findById(canchaId)
+                .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
+
+        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
+            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
+        }
+
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+
+        if (usuarioAutenticado.getRol() != Role.ADMIN &&
+                !cancha.getEstablecimiento().getDueno().getId().equals(usuarioAutenticado.getId())) {
+            throw new AccessDeniedException("No autorizado en este establecimiento");
+        }
+
+        return bloqueoCanchaRepository.findByCanchaIdOrderByFechaInicioAsc(canchaId).stream()
+                .map(this::mapSinReservasAfectadas)
+                .toList();
+    }
+
+    /**
+     * Bloqueos de todas las canchas de un establecimiento que se superponen con el día dado.
+     * Accesible a cualquier usuario autenticado (no expone datos de jugadores): sirve para que
+     * la grilla de disponibilidad del jugador refleje los horarios bloqueados por el dueño.
+     */
+    @Transactional(readOnly = true)
+    public List<BloqueoCanchaResponse> listarPorEstablecimientoYFecha(Long establecimientoId, LocalDate fecha) {
+        LocalDateTime inicioDia = fecha.atStartOfDay();
+        LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
+
+        return bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, inicioDia, finDia).stream()
+                .map(this::mapSinReservasAfectadas)
+                .toList();
+    }
+
+    private BloqueoCanchaResponse mapSinReservasAfectadas(BloqueoCancha bloqueo) {
+        return new BloqueoCanchaResponse(
+                bloqueo.getId(),
+                bloqueo.getCancha().getId(),
+                bloqueo.getFechaInicio(),
+                bloqueo.getFechaFin(),
+                bloqueo.getMotivo(),
+                List.of()
         );
     }
 }

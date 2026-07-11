@@ -1,7 +1,9 @@
 package com.matiasmeira.sacaladelangulo.reserva.controller;
 
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.service.ReservaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Controlador REST para reservas.
@@ -44,6 +47,41 @@ public class ReservaController {
             @RequestBody @Valid ReservaRequest request) {
         ReservaResponse reserva = reservaService.crearReserva(request, userDetails.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED).body(reserva);
+    }
+
+    /**
+     * Crea una reserva de mostrador (cliente presencial/telefónico sin cuenta registrada).
+     * Protegido: solo el dueño real del establecimiento de la cancha, o un administrador.
+     *
+     * @param userDetails Detalles del usuario autenticado
+     * @param request DTO con datos de la reserva manual y del cliente
+     * @return ReservaResponse con la reserva creada, ya en estado CONFIRMADA
+     */
+    @PostMapping("/manual")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ReservaResponse> crearReservaManual(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid ReservaManualRequest request) {
+        ReservaResponse reserva = reservaService.crearReservaManual(request, userDetails.getUsername());
+        return ResponseEntity.status(HttpStatus.CREATED).body(reserva);
+    }
+
+    /**
+     * Crea un turno fijo semanal: genera una reserva individual, ya CONFIRMADA, por
+     * cada fecha del período que coincida con el día de la semana solicitado.
+     * Protegido: solo el dueño del establecimiento (rol OWNER).
+     *
+     * @param userDetails Detalles del usuario autenticado
+     * @param request DTO con el rango de fechas, día/horario recurrente y datos del cliente
+     * @return Lista de ReservaResponse con cada ocurrencia creada
+     */
+    @PostMapping("/semanal")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<ReservaResponse>> crearReservaSemanal(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid ReservaSemanalRequest request) {
+        List<ReservaResponse> reservas = reservaService.crearReservaSemanal(request, userDetails.getUsername());
+        return ResponseEntity.status(HttpStatus.CREATED).body(reservas);
     }
 
     /**

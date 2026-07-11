@@ -11,9 +11,11 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -33,6 +35,8 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -105,6 +109,160 @@ public class ReservaService {
         return reservaMapper.mapToResponse(reservaGuardada);
     }
 
+    /**
+     * Crea una reserva de mostrador para un cliente presencial/telefónico sin cuenta
+     * en la plataforma. Solo puede utilizarla el dueño real del establecimiento (o un
+     * administrador) al que pertenece la cancha solicitada. Nace directamente en estado
+     * CONFIRMADA, ya que la registra el propio dueño.
+     *
+     * @param request DTO con los datos de la reserva manual y del cliente
+     * @param email Email del usuario autenticado (OWNER/ADMIN)
+     * @return ReservaResponse con los datos de la reserva creada
+     */
+    public ReservaResponse crearReservaManual(ReservaManualRequest request, String email) {
+        log.info("Iniciando creación de reserva manual. Email: {}, Cancha: {}, Inicio: {}, Fin: {}",
+                email, request.canchaId(), request.fechaHoraInicio(), request.fechaHoraFin());
+
+        Cancha cancha = buscarCanchaPorId(request.canchaId());
+        validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+
+        validarFechas(request.fechaHoraInicio(), request.fechaHoraFin());
+        validarGranularidadHoraria(request.fechaHoraInicio(), cancha);
+        long duracionMinutos = validarDuracion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
+        validarSinBloqueos(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
+        validarHorarioAtencion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha.getEstablecimiento());
+
+        List<Reserva> solapadas = reservaRepository.findSuperpuestas(
+                cancha.getEstablecimiento().getId(),
+                request.fechaHoraInicio(),
+                request.fechaHoraFin()
+        );
+        log.debug("Se encontraron {} reservas solapadas en el predio", solapadas.size());
+
+        validarCanchaExactaLibre(cancha, solapadas);
+        validarPoolCanchas(cancha, solapadas);
+
+        BigDecimal precioCalculado = calcularPrecio(cancha, request.fechaHoraInicio(), duracionMinutos);
+        BigDecimal senaPagada = Boolean.TRUE.equals(request.senaFisicaRecibida()) ? cancha.getMontoSena() : BigDecimal.ZERO;
+
+        Reserva reserva = Reserva.builder()
+                .jugador(null)
+                .cancha(cancha)
+                .nombreClienteManual(request.nombreCliente())
+                .telefonoClienteManual(request.telefonoCliente())
+                .fechaHoraInicio(request.fechaHoraInicio())
+                .fechaHoraFin(request.fechaHoraFin())
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(precioCalculado)
+                .senaPagada(senaPagada)
+                .build();
+
+        Reserva reservaGuardada = reservaRepository.save(reserva);
+        log.info("Nueva reserva manual creada con éxito. ID: {}, Cancha: {}, Cliente: {}",
+                reservaGuardada.getId(), cancha.getNombre(), request.nombreCliente());
+
+        return reservaMapper.mapToResponse(reservaGuardada);
+    }
+
+    /**
+     * Crea un turno fijo semanal: genera una Reserva individual por cada fecha del
+     * período que coincida con el día de la semana solicitado, en el mismo horario.
+     * La operación es todo-o-nada: si una sola fecha no tiene disponibilidad (choca con
+     * otra reserva, un bloqueo por mantenimiento, o cae fuera del horario de atención),
+     * no se persiste ninguna reserva. Solo puede utilizarla el dueño real del
+     * establecimiento al que pertenece la cancha. Todas las reservas generadas nacen en
+     * estado CONFIRMADA, ya que las registra el propio dueño.
+     *
+     * @param request DTO con el rango de fechas, el día/horario recurrente y los datos del cliente
+     * @param email Email del usuario autenticado (OWNER)
+     * @return Lista de ReservaResponse con cada ocurrencia creada
+     */
+    public List<ReservaResponse> crearReservaSemanal(ReservaSemanalRequest request, String email) {
+        log.info("Iniciando creación de reserva semanal. Email: {}, Cancha: {}, Día: {}, Horario: {}-{}, Período: {} a {}",
+                email, request.canchaId(), request.diaSemana(), request.horaInicio(), request.horaFin(),
+                request.fechaInicioPeriodo(), request.fechaFinPeriodo());
+
+        if (request.fechaInicioPeriodo().isAfter(request.fechaFinPeriodo())) {
+            throw new IllegalArgumentException("La fecha de inicio del período no puede ser posterior a la fecha de fin del período");
+        }
+        if (!request.horaInicio().isBefore(request.horaFin())) {
+            throw new IllegalArgumentException("La hora de inicio debe ser anterior a la hora de fin");
+        }
+
+        Cancha cancha = buscarCanchaPorId(request.canchaId());
+        validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+
+        Usuario jugador = null;
+        if (request.jugadorId() != null) {
+            jugador = usuarioRepository.findById(request.jugadorId())
+                    .orElseThrow(() -> new EntityNotFoundException("Jugador no encontrado"));
+        } else if (request.nombreClienteManual() == null || request.nombreClienteManual().isBlank()) {
+            throw new IllegalArgumentException("Debe indicar un jugador registrado (jugadorId) o el nombre del cliente (nombreClienteManual)");
+        }
+
+        List<LocalDate> fechasDelPeriodo = generarFechasDelPeriodo(
+                request.fechaInicioPeriodo(), request.fechaFinPeriodo(), request.diaSemana());
+        if (fechasDelPeriodo.isEmpty()) {
+            throw new IllegalArgumentException("El período indicado no contiene ningún " + request.diaSemana());
+        }
+
+        List<Reserva> reservasAGuardar = new ArrayList<>();
+        for (LocalDate fecha : fechasDelPeriodo) {
+            LocalDateTime inicio = fecha.atTime(request.horaInicio());
+            LocalDateTime fin = fecha.atTime(request.horaFin());
+
+            try {
+                validarFechas(inicio, fin);
+                validarGranularidadHoraria(inicio, cancha);
+                long duracionMinutos = validarDuracion(inicio, fin, cancha);
+                validarSinBloqueos(inicio, fin, cancha);
+                validarHorarioAtencion(inicio, fin, cancha.getEstablecimiento());
+
+                List<Reserva> solapadas = reservaRepository.findSuperpuestas(
+                        cancha.getEstablecimiento().getId(), inicio, fin);
+                validarCanchaExactaLibre(cancha, solapadas);
+                validarPoolCanchas(cancha, solapadas);
+
+                BigDecimal precioCalculado = calcularPrecio(cancha, inicio, duracionMinutos);
+
+                reservasAGuardar.add(Reserva.builder()
+                        .jugador(jugador)
+                        .cancha(cancha)
+                        .nombreClienteManual(jugador == null ? request.nombreClienteManual() : null)
+                        .telefonoClienteManual(jugador == null ? request.telefonoClienteManual() : null)
+                        .fechaHoraInicio(inicio)
+                        .fechaHoraFin(fin)
+                        .estado(EstadoReserva.CONFIRMADA)
+                        .precioTotal(precioCalculado)
+                        .senaPagada(BigDecimal.ZERO)
+                        .build());
+            } catch (IllegalArgumentException ex) {
+                log.warn("Reserva semanal rechazada en la fecha {}: {}", fecha, ex.getMessage());
+                throw new IllegalArgumentException("No se pudo crear el turno fijo para el " + fecha + ": " + ex.getMessage());
+            }
+        }
+
+        List<Reserva> reservasGuardadas = reservaRepository.saveAll(reservasAGuardar);
+        log.info("Turno fijo creado con éxito. {} reservas generadas para la cancha {}",
+                reservasGuardadas.size(), cancha.getNombre());
+
+        return reservasGuardadas.stream().map(reservaMapper::mapToResponse).toList();
+    }
+
+    /**
+     * Genera las fechas del período que coinciden con el día de la semana indicado,
+     * avanzando de a una semana desde la primera ocurrencia dentro del rango.
+     */
+    private List<LocalDate> generarFechasDelPeriodo(LocalDate fechaInicioPeriodo, LocalDate fechaFinPeriodo, DayOfWeek diaSemana) {
+        List<LocalDate> fechas = new ArrayList<>();
+        LocalDate fecha = fechaInicioPeriodo.with(TemporalAdjusters.nextOrSame(diaSemana));
+        while (!fecha.isAfter(fechaFinPeriodo)) {
+            fechas.add(fecha);
+            fecha = fecha.plusWeeks(1);
+        }
+        return fechas;
+    }
+
     private Usuario buscarUsuarioPorEmail(String email) {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
@@ -120,30 +278,42 @@ public class ReservaService {
     }
 
     private void validarFechas(ReservaRequest request) {
-        if (!request.fechaHoraInicio().isBefore(request.fechaHoraFin())) {
+        validarFechas(request.fechaHoraInicio(), request.fechaHoraFin());
+    }
+
+    private void validarFechas(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin) {
+        if (!fechaHoraInicio.isBefore(fechaHoraFin)) {
             log.warn("Fechas inválidas. Inicio >= Fin");
             throw new IllegalArgumentException("La fecha de inicio debe ser anterior a la de fin");
         }
-        if (request.fechaHoraInicio().isBefore(LocalDateTime.now())) {
+        if (fechaHoraInicio.isBefore(LocalDateTime.now())) {
             log.warn("Reserva solicitada en el pasado");
             throw new IllegalArgumentException("No se pueden crear reservas en el pasado");
         }
     }
 
     private void validarGranularidadHoraria(ReservaRequest request, Cancha cancha) {
-        int minutoInicio = request.fechaHoraInicio().getMinute();
+        validarGranularidadHoraria(request.fechaHoraInicio(), cancha);
+    }
+
+    private void validarGranularidadHoraria(LocalDateTime fechaHoraInicio, Cancha cancha) {
+        int minutoInicio = fechaHoraInicio.getMinute();
         if (minutoInicio != 0 && minutoInicio != 30) {
-            log.warn("Inicio de reserva inválido: {}", request.fechaHoraInicio());
+            log.warn("Inicio de reserva inválido: {}", fechaHoraInicio);
             throw new IllegalArgumentException("Las reservas solo pueden iniciar en punto (:00) o y media (:30)");
         }
         if (Boolean.FALSE.equals(cancha.getPermiteInicioMediaHora()) && minutoInicio != 0) {
-            log.warn("Cancha no permite inicio a media hora: {}", request.fechaHoraInicio());
+            log.warn("Cancha no permite inicio a media hora: {}", fechaHoraInicio);
             throw new IllegalArgumentException("Esta cancha solo permite iniciar reservas en horas en punto exactas (:00)");
         }
     }
 
     private long validarDuracion(ReservaRequest request, Cancha cancha) {
-        long duracionMinutos = Duration.between(request.fechaHoraInicio(), request.fechaHoraFin()).toMinutes();
+        return validarDuracion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
+    }
+
+    private long validarDuracion(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Cancha cancha) {
+        long duracionMinutos = Duration.between(fechaHoraInicio, fechaHoraFin).toMinutes();
         if (!cancha.getDuracionesPermitidas().contains((int) duracionMinutos)) {
             log.warn("Duración no permitida: {} minutos", duracionMinutos);
             throw new IllegalArgumentException("Duración no permitida. Opciones válidas: " + cancha.getDuracionesPermitidas() + " minutos");
@@ -152,17 +322,25 @@ public class ReservaService {
     }
 
     private void validarSinBloqueos(ReservaRequest request, Cancha cancha) {
+        validarSinBloqueos(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
+    }
+
+    private void validarSinBloqueos(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Cancha cancha) {
         List<BloqueoCancha> bloqueos = bloqueoCanchaRepository.findOverlappingBloqueos(
-                cancha.getId(), request.fechaHoraInicio(), request.fechaHoraFin());
+                cancha.getId(), fechaHoraInicio, fechaHoraFin);
         if (!bloqueos.isEmpty()) {
             throw new IllegalArgumentException("La cancha se encuentra bloqueada en ese horario. Motivo: " + bloqueos.get(0).getMotivo());
         }
     }
 
     private void validarHorarioAtencion(ReservaRequest request, Establecimiento establecimiento) {
-        DayOfWeek diaSemana = request.fechaHoraInicio().getDayOfWeek();
-        LocalTime horaInicio = request.fechaHoraInicio().toLocalTime();
-        LocalTime horaFin = request.fechaHoraFin().toLocalTime();
+        validarHorarioAtencion(request.fechaHoraInicio(), request.fechaHoraFin(), establecimiento);
+    }
+
+    private void validarHorarioAtencion(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Establecimiento establecimiento) {
+        DayOfWeek diaSemana = fechaHoraInicio.getDayOfWeek();
+        LocalTime horaInicio = fechaHoraInicio.toLocalTime();
+        LocalTime horaFin = fechaHoraFin.toLocalTime();
 
         Optional<HorarioAtencion> horarioOpt = establecimiento.getHorariosAtencion() == null ? Optional.empty() :
                 establecimiento.getHorariosAtencion().stream()
@@ -206,13 +384,17 @@ public class ReservaService {
     }
 
     private BigDecimal calcularPrecio(Cancha cancha, ReservaRequest request, long duracionMinutos) {
+        return calcularPrecio(cancha, request.fechaHoraInicio(), duracionMinutos);
+    }
+
+    private BigDecimal calcularPrecio(Cancha cancha, LocalDateTime fechaHoraInicio, long duracionMinutos) {
         BigDecimal duracionHoras = BigDecimal.valueOf(duracionMinutos)
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
         BigDecimal precioPorHora = cancha.getPrecioBase();
         for (var tarifa : cancha.getTarifas()) {
-            if (tarifa.getDiaSemana() == request.fechaHoraInicio().getDayOfWeek() &&
-                    !request.fechaHoraInicio().toLocalTime().isBefore(tarifa.getHoraInicio()) &&
-                    request.fechaHoraInicio().toLocalTime().isBefore(tarifa.getHoraFin())) {
+            if (tarifa.getDiaSemana() == fechaHoraInicio.getDayOfWeek() &&
+                    !fechaHoraInicio.toLocalTime().isBefore(tarifa.getHoraInicio()) &&
+                    fechaHoraInicio.toLocalTime().isBefore(tarifa.getHoraFin())) {
                 precioPorHora = tarifa.getPrecio();
                 break;
             }
@@ -263,7 +445,7 @@ public class ReservaService {
         Long duenioEstablecimientoId = reserva.getCancha().getEstablecimiento().getDueno().getId();
         boolean esAdmin = usuarioAutenticado.getRol() == Role.ADMIN;
         boolean esDuenoDelEstablecimiento = usuarioAutenticado.getId().equals(duenioEstablecimientoId);
-        boolean esElJugador = reserva.getJugador().getId().equals(usuarioAutenticado.getId());
+        boolean esElJugador = reserva.getJugador() != null && reserva.getJugador().getId().equals(usuarioAutenticado.getId());
 
         if (!esAdmin && !esDuenoDelEstablecimiento && !esElJugador) {
             log.warn("Acceso denegado a cancelar reserva. Usuario: {}, Dueño: {}", usuarioAutenticado.getId(), duenioEstablecimientoId);

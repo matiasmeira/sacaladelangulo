@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.reserva.dto;
 
+import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import org.springframework.stereotype.Component;
 
@@ -7,17 +8,20 @@ import org.springframework.stereotype.Component;
 public class ReservaMapper {
 
     public ReservaResponse mapToResponse(Reserva reserva) {
+        Usuario jugador = reserva.getJugador();
         return new ReservaResponse(
                 reserva.getId(),
-                reserva.getJugador().getId(),
-                reserva.getJugador().getNombre(),
+                jugador != null ? jugador.getId() : null,
+                jugador != null ? jugador.getNombre() : null,
                 reserva.getCancha().getId(),
                 reserva.getCancha().getNombre(),
                 reserva.getFechaHoraInicio(),
                 reserva.getFechaHoraFin(),
                 reserva.getEstado().name(),
                 reserva.getPrecioTotal(),
-                reserva.getSenaPagada()
+                reserva.getSenaPagada(),
+                reserva.getNombreClienteManual(),
+                reserva.getTelefonoClienteManual()
         );
     }
 }

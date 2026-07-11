@@ -16,6 +16,8 @@ public record ReservaResponse(
         LocalDateTime fechaHoraFin,
         String estado,
         BigDecimal precioTotal,
-        BigDecimal senaPagada
+        BigDecimal senaPagada,
+        String nombreClienteManual,
+        String telefonoClienteManual
 ) {
 }

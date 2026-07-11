@@ -105,10 +105,11 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     /**
      * Trae la reserva junto con cancha -> establecimiento -> dueño y jugador en una sola
      * consulta, evitando 3 round-trips adicionales por lazy loading encadenado al
-     * confirmar/cancelar (ver ReservaService).
+     * confirmar/cancelar (ver ReservaService). Se usa LEFT JOIN FETCH sobre el jugador
+     * porque las reservas de mostrador (manuales) no tienen un jugador asociado.
      */
     @Query("SELECT r FROM Reserva r " +
-           "JOIN FETCH r.jugador " +
+           "LEFT JOIN FETCH r.jugador " +
            "JOIN FETCH r.cancha c " +
            "JOIN FETCH c.establecimiento e " +
            "JOIN FETCH e.dueno " +

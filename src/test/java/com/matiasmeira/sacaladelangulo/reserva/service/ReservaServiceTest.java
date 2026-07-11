@@ -10,9 +10,11 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -25,6 +27,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -34,7 +38,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -130,15 +136,17 @@ class ReservaServiceTest {
             Reserva reserva = invocation.getArgument(0);
             return new ReservaResponse(
                     reserva.getId(),
-                    reserva.getJugador().getId(),
-                    reserva.getJugador().getNombre(),
+                    reserva.getJugador() != null ? reserva.getJugador().getId() : null,
+                    reserva.getJugador() != null ? reserva.getJugador().getNombre() : null,
                     reserva.getCancha().getId(),
                     reserva.getCancha().getNombre(),
                     reserva.getFechaHoraInicio(),
                     reserva.getFechaHoraFin(),
                     reserva.getEstado().name(),
                     reserva.getPrecioTotal(),
-                    reserva.getSenaPagada()
+                    reserva.getSenaPagada(),
+                    reserva.getNombreClienteManual(),
+                    reserva.getTelefonoClienteManual()
             );
         });
     }
@@ -434,6 +442,178 @@ class ReservaServiceTest {
 
         // Assert
         assert exception.getMessage().contains("El horario solicitado se encuentra fuera del horario de atención");
+    }
+
+    @Test
+    @DisplayName("crearReservaManual_Exito_QuedaConfirmadaYSinJugador")
+    void crearReservaManual_Exito_QuedaConfirmadaYSinJugador() {
+        // Arrange
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 11, 0);
+        ReservaManualRequest request = new ReservaManualRequest(
+                cancha.getId(), fechaInicio, fechaFin, "Cliente Mostrador", "1122334455", false);
+
+        Reserva reservaGuardada = Reserva.builder()
+                .id(20L)
+                .jugador(null)
+                .cancha(cancha)
+                .nombreClienteManual("Cliente Mostrador")
+                .telefonoClienteManual("1122334455")
+                .fechaHoraInicio(fechaInicio)
+                .fechaHoraFin(fechaFin)
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(() -> reservaService.crearReservaManual(request, dueno.getEmail()));
+
+        // Assert
+        assert response != null;
+        assert response.estado().equals("CONFIRMADA");
+        assert response.jugadorId() == null;
+        assert response.nombreClienteManual().equals("Cliente Mostrador");
+        verify(reservaRepository).save(argThat(r -> r.getEstado() == EstadoReserva.CONFIRMADA && r.getJugador() == null));
+    }
+
+    @Test
+    @DisplayName("crearReservaManual_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
+    void crearReservaManual_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
+        // Arrange
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 11, 0);
+        ReservaManualRequest request = new ReservaManualRequest(
+                cancha.getId(), fechaInicio, fechaFin, "Cliente Mostrador", null, null);
+
+        Usuario otroDueno = Usuario.builder()
+                .id(3L)
+                .email("otro-dueno@test.com")
+                .password("password")
+                .nombre("Otro Dueño")
+                .rol(Role.OWNER)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build();
+
+        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+
+        // Act & Assert
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> reservaService.crearReservaManual(request, otroDueno.getEmail())
+        );
+    }
+
+    @Test
+    @DisplayName("crearReservaSemanal_Exito_GeneraUnaReservaConfirmadaPorFecha")
+    void crearReservaSemanal_Exito_GeneraUnaReservaConfirmadaPorFecha() {
+        // Arrange: martes 08, 15 y 22 de enero de 2030 (3 ocurrencias)
+        LocalDate fechaInicioPeriodo = LocalDate.of(2030, 1, 8);
+        LocalDate fechaFinPeriodo = LocalDate.of(2030, 1, 22);
+        LocalTime horaInicio = LocalTime.of(20, 0);
+        LocalTime horaFin = LocalTime.of(21, 0);
+
+        ReservaSemanalRequest request = new ReservaSemanalRequest(
+                cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
+                horaInicio, horaFin, null, "Cliente Fijo", "1122334455");
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(bloqueoCanchaRepository.findOverlappingBloqueos(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        List<ReservaResponse> responses = assertDoesNotThrow(
+                () -> reservaService.crearReservaSemanal(request, dueno.getEmail()));
+
+        // Assert
+        assert responses.size() == 3;
+        assert responses.stream().allMatch(r -> r.estado().equals("CONFIRMADA"));
+        assert responses.stream().allMatch(r -> r.jugadorId() == null);
+        assert responses.stream().allMatch(r -> r.nombreClienteManual().equals("Cliente Fijo"));
+        verify(reservaRepository).saveAll(argThat(list -> ((List<?>) list).size() == 3));
+    }
+
+    @Test
+    @DisplayName("crearReservaSemanal_Fallo_TodoONada_UnaFechaBloqueada")
+    void crearReservaSemanal_Fallo_TodoONada_UnaFechaBloqueada() {
+        // Arrange
+        LocalDate fechaInicioPeriodo = LocalDate.of(2030, 1, 8);
+        LocalDate fechaFinPeriodo = LocalDate.of(2030, 1, 22);
+        LocalTime horaInicio = LocalTime.of(20, 0);
+        LocalTime horaFin = LocalTime.of(21, 0);
+
+        ReservaSemanalRequest request = new ReservaSemanalRequest(
+                cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
+                horaInicio, horaFin, null, "Cliente Fijo", null);
+
+        LocalDateTime inicioBloqueado = LocalDate.of(2030, 1, 22).atTime(horaInicio);
+        LocalDateTime finBloqueado = LocalDate.of(2030, 1, 22).atTime(horaFin);
+
+        BloqueoCancha bloqueo = BloqueoCancha.builder()
+                .id(1L)
+                .cancha(cancha)
+                .fechaInicio(inicioBloqueado)
+                .fechaFin(finBloqueado)
+                .motivo("Mantenimiento")
+                .build();
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(bloqueoCanchaRepository.findOverlappingBloqueos(any(), any(), any())).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findOverlappingBloqueos(cancha.getId(), inicioBloqueado, finBloqueado))
+                .thenReturn(List.of(bloqueo));
+
+        // Act
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.crearReservaSemanal(request, dueno.getEmail())
+        );
+
+        // Assert: todo-o-nada, no debe guardarse ninguna reserva aunque las 2 primeras fechas eran válidas
+        assert exception.getMessage().contains("2030-01-22");
+        assert exception.getMessage().contains("bloqueada");
+        verify(reservaRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("crearReservaSemanal_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
+    void crearReservaSemanal_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
+        // Arrange
+        ReservaSemanalRequest request = new ReservaSemanalRequest(
+                cancha.getId(), LocalDate.of(2030, 1, 8), LocalDate.of(2030, 1, 22), DayOfWeek.TUESDAY,
+                LocalTime.of(20, 0), LocalTime.of(21, 0), null, "Cliente Fijo", null);
+
+        Usuario otroDueno = Usuario.builder()
+                .id(4L)
+                .email("otro-dueno-semanal@test.com")
+                .password("password")
+                .nombre("Otro Dueño")
+                .rol(Role.OWNER)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build();
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+
+        // Act & Assert
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> reservaService.crearReservaSemanal(request, otroDueno.getEmail())
+        );
     }
 
     private void canchasInEstablecimientoWithHorarioNocturno() {

@@ -32,10 +32,12 @@ public class Reserva {
     private Long id;
 
     /**
-     * Usuario que realiza la reserva (jugador).
+     * Usuario que realiza la reserva (jugador). Nulo cuando la reserva fue cargada
+     * manualmente por el dueño para un cliente presencial/telefónico sin cuenta
+     * en la plataforma (ver nombreClienteManual/telefonoClienteManual).
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "jugador_id", nullable = false)
+    @JoinColumn(name = "jugador_id", nullable = true)
     private Usuario jugador;
 
     /**
@@ -44,6 +46,18 @@ public class Reserva {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cancha_id", nullable = false)
     private Cancha cancha;
+
+    /**
+     * Nombre del cliente para reservas de mostrador (sin usuario registrado).
+     */
+    @Column(name = "nombre_cliente_manual")
+    private String nombreClienteManual;
+
+    /**
+     * Teléfono del cliente para reservas de mostrador (opcional).
+     */
+    @Column(name = "telefono_cliente_manual")
+    private String telefonoClienteManual;
 
     /**
      * Fecha y hora de inicio de la reserva.

@@ -12,6 +12,7 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Map;
 
 /**
  * Servicio responsable de crear y validar tokens JWT.
@@ -42,10 +43,21 @@ public class JwtService {
     }
 
     public String generateToken(UserDetails userDetails) {
+        return generateToken(userDetails, Map.of(), jwtExpirationMillis);
+    }
+
+    /**
+     * Genera un token con claims adicionales y una expiración propia (distinta de la
+     * default), usado para sesiones de empleado de mostrador: viven mucho menos que
+     * una sesión normal y llevan el ID del empleado para que el frontend lo muestre
+     * sin pegarle a otro endpoint.
+     */
+    public String generateToken(UserDetails userDetails, Map<String, Object> extraClaims, long expirationMillis) {
         return Jwts.builder()
+                .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(Date.from(Instant.now()))
-                .setExpiration(Date.from(Instant.now().plusMillis(jwtExpirationMillis)))
+                .setExpiration(Date.from(Instant.now().plusMillis(expirationMillis)))
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }

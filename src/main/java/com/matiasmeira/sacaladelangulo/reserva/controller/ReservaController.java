@@ -59,7 +59,7 @@ public class ReservaController {
      * @return ReservaResponse con la reserva creada, ya en estado CONFIRMADA
      */
     @PostMapping("/manual")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<ReservaResponse> crearReservaManual(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody @Valid ReservaManualRequest request) {
@@ -103,11 +103,28 @@ public class ReservaController {
     }
 
     @PutMapping("/{id}/cancelar")
-    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<ReservaResponse> cancelarReserva(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
         ReservaResponse reserva = reservaService.cancelarReserva(id, userDetails.getUsername());
+        return ResponseEntity.ok(reserva);
+    }
+
+    /**
+     * Finaliza una reserva (el turno ya se jugó).
+     * Protegido: propietarios, administradores, y empleados con el permiso FINALIZAR_RESERVA.
+     *
+     * @param id ID de la reserva a finalizar
+     * @param userDetails Detalles del usuario autenticado
+     * @return ReservaResponse con la reserva finalizada
+     */
+    @PutMapping("/{id}/finalizar")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<ReservaResponse> finalizarReserva(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        ReservaResponse reserva = reservaService.finalizarReserva(id, userDetails.getUsername());
         return ResponseEntity.ok(reserva);
     }
 

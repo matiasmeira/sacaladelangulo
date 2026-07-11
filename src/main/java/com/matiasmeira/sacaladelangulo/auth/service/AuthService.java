@@ -2,12 +2,14 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
+import com.matiasmeira.sacaladelangulo.auth.dto.EmpleadoLoginRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.RegisterRequest;
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,6 +19,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * Servicio de negocio para registro y autenticación de usuarios.
@@ -30,6 +33,9 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
+
+    @Value("${jwt.empleado-expiration-millis:3600000}")
+    private long empleadoExpirationMillis;
 
     public AuthResponse registerPlayer(RegisterRequest request) {
         String email = normalizarEmail(request.email());
@@ -92,6 +98,37 @@ public class AuthService {
 
         var userDetails = userDetailsService.loadUserByUsername(email);
         return new AuthResponse(jwtService.generateToken(userDetails));
+    }
+
+    /**
+     * Login de mostrador: el empleado se identifica por nombre dentro de un
+     * establecimiento (no tiene email propio, ver EmpleadoService) + su PIN de 4
+     * dígitos. Reutiliza el mismo AuthenticationManager/BCrypt que el login normal,
+     * pero emite un token de vida corta (independiente de la sesión del dueño) con
+     * el ID del empleado como claim para que el frontend lo muestre sin otra llamada.
+     */
+    public AuthResponse authenticateEmpleado(EmpleadoLoginRequest request) {
+        Usuario empleado = usuarioRepository.findByEstablecimientoIdAndNombreAndRol(
+                        request.establecimientoId(), request.nombre(), Role.EMPLOYEE)
+                .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
+
+        if (!Boolean.TRUE.equals(empleado.getIsActive())) {
+            throw new BadCredentialsException("Credenciales inválidas");
+        }
+
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(empleado.getEmail(), request.pin())
+            );
+        } catch (BadCredentialsException ex) {
+            throw new BadCredentialsException("Credenciales inválidas");
+        } catch (AuthenticationException ex) {
+            throw new IllegalArgumentException("Error de autenticación");
+        }
+
+        var userDetails = userDetailsService.loadUserByUsername(empleado.getEmail());
+        String token = jwtService.generateToken(userDetails, Map.of("empleadoId", empleado.getId()), empleadoExpirationMillis);
+        return new AuthResponse(token);
     }
 
     private String normalizarEmail(String email) {

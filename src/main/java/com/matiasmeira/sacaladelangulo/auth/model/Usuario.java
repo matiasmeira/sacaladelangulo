@@ -1,6 +1,7 @@
 package com.matiasmeira.sacaladelangulo.auth.model;
 
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,6 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Entidad Usuario para persistir los datos de autenticación y perfil.
@@ -59,6 +62,25 @@ public class Usuario {
 
     @Column(name = "telefono_verificado", nullable = false)
     private Boolean telefonoVerificado;
+
+    /**
+     * Establecimiento al que pertenece este usuario cuando rol = EMPLOYEE.
+     * Nulo para el resto de los roles.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "establecimiento_id")
+    private Establecimiento establecimiento;
+
+    /**
+     * Acciones habilitadas para este usuario cuando rol = EMPLOYEE. Vacío/no
+     * aplicable para el resto de los roles.
+     */
+    @ElementCollection
+    @CollectionTable(name = "usuario_permisos", joinColumns = @JoinColumn(name = "usuario_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "permiso", nullable = false)
+    @Builder.Default
+    private Set<PermisoEmpleado> permisos = new HashSet<>();
 
     @PrePersist
     public void prePersist() {

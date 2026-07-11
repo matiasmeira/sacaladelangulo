@@ -13,6 +13,8 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
@@ -43,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -69,6 +72,12 @@ class ReservaServiceTest {
 
     @Mock
     private ReservaMapper reservaMapper;
+
+    @Mock
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
+
+    @Mock
+    private RegistroAuditoriaService registroAuditoriaService;
 
     @InjectMocks
     private ReservaService reservaService;
@@ -157,6 +166,11 @@ class ReservaServiceTest {
                     reserva.getDeporteSeleccionado()
             );
         });
+
+        // Default: cualquier acción con permiso (crearReservaManual/finalizarReserva) pasa
+        // la autorización como si la hiciera el dueño real. Los tests que necesiten otro
+        // comportamiento (acceso denegado, empleado con/sin permiso) lo overridean.
+        lenient().when(autorizacionEmpleadoService.validarAccion(any(), any(), any())).thenReturn(dueno);
     }
 
     @Test
@@ -474,7 +488,6 @@ class ReservaServiceTest {
                 .senaPagada(BigDecimal.ZERO)
                 .build();
 
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
@@ -511,8 +524,9 @@ class ReservaServiceTest {
                 .telefonoVerificado(false)
                 .build();
 
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(autorizacionEmpleadoService.validarAccion(any(), any(), any()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado para realizar esta acción en este establecimiento"));
 
         // Act & Assert
         assertThrows(
@@ -891,7 +905,6 @@ class ReservaServiceTest {
         ReservaManualRequest request = new ReservaManualRequest(
                 cancha.getId(), fechaInicio, fechaFin, Deporte.PADEL, "Cliente Mostrador", null, null);
 
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
 
         // Act & Assert
@@ -963,6 +976,200 @@ class ReservaServiceTest {
                 () -> reservaService.moverReservaDeCancha(reservaOriginal.getId(), canchaDestinoSinHockey.getId(), dueno.getEmail())
         );
         assert exception.getMessage().contains("HOCKEY");
+    }
+
+    @Test
+    @DisplayName("finalizarReserva_Exito_CambiaEstadoAFinalizada")
+    void finalizarReserva_Exito_CambiaEstadoAFinalizada() {
+        // Arrange
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(50L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+        when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.finalizarReserva(reservaConfirmada.getId(), dueno.getEmail()));
+
+        // Assert
+        assert response.estado().equals("FINALIZADA");
+        verify(reservaRepository).save(argThat(r -> r.getEstado() == EstadoReserva.FINALIZADA));
+    }
+
+    @Test
+    @DisplayName("finalizarReserva_Exito_EsIdempotenteSiYaEstaFinalizada")
+    void finalizarReserva_Exito_EsIdempotenteSiYaEstaFinalizada() {
+        // Arrange
+        Reserva reservaFinalizada = Reserva.builder()
+                .id(51L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.FINALIZADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaFinalizada.getId()))
+                .thenReturn(Optional.of(reservaFinalizada));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.finalizarReserva(reservaFinalizada.getId(), dueno.getEmail()));
+
+        // Assert
+        assert response.estado().equals("FINALIZADA");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("finalizarReserva_Fallo_ReservaCancelada")
+    void finalizarReserva_Fallo_ReservaCancelada() {
+        // Arrange
+        Reserva reservaCancelada = Reserva.builder()
+                .id(52L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CANCELADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaCancelada.getId()))
+                .thenReturn(Optional.of(reservaCancelada));
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.finalizarReserva(reservaCancelada.getId(), dueno.getEmail())
+        );
+        assert exception.getMessage().contains("cancelada");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("finalizarReserva_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
+    void finalizarReserva_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
+        // Arrange
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(53L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        Usuario otroDueno = Usuario.builder().id(6L).email("otro-final@test.com").rol(Role.OWNER).build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+        when(autorizacionEmpleadoService.validarAccion(any(), any(), any()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado para realizar esta acción en este establecimiento"));
+
+        // Act & Assert
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> reservaService.finalizarReserva(reservaConfirmada.getId(), otroDueno.getEmail())
+        );
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancelarReserva_Exito_EmpleadoConPermisoCancelarReserva")
+    void cancelarReserva_Exito_EmpleadoConPermisoCancelarReserva() {
+        // Arrange
+        Usuario empleado = Usuario.builder()
+                .id(7L)
+                .email("empleado-uuid@empleados.interno")
+                .nombre("Empleado Mostrador")
+                .rol(Role.EMPLOYEE)
+                .establecimiento(establecimiento)
+                .permisos(Set.of(com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.CANCELAR_RESERVA))
+                .isActive(true)
+                .build();
+
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(60L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+        when(usuarioRepository.findByEmail(empleado.getEmail())).thenReturn(Optional.of(empleado));
+        when(autorizacionEmpleadoService.tienePermiso(empleado, establecimiento,
+                com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.CANCELAR_RESERVA)).thenReturn(true);
+        when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.cancelarReserva(reservaConfirmada.getId(), empleado.getEmail()));
+
+        // Assert
+        assert response.estado().equals("CANCELADA");
+        verify(registroAuditoriaService).registrar(
+                eq(empleado), eq(com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.CANCELAR_RESERVA),
+                eq(reservaConfirmada.getId()), eq(true), any());
+    }
+
+    @Test
+    @DisplayName("cancelarReserva_Fallo_EmpleadoSinPermisoCancelarReserva")
+    void cancelarReserva_Fallo_EmpleadoSinPermisoCancelarReserva() {
+        // Arrange
+        Usuario empleadoSinPermiso = Usuario.builder()
+                .id(8L)
+                .email("empleado-sin-permiso@empleados.interno")
+                .nombre("Empleado Sin Permiso")
+                .rol(Role.EMPLOYEE)
+                .establecimiento(establecimiento)
+                .permisos(Set.of())
+                .isActive(true)
+                .build();
+
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(61L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+        when(usuarioRepository.findByEmail(empleadoSinPermiso.getEmail())).thenReturn(Optional.of(empleadoSinPermiso));
+        when(autorizacionEmpleadoService.tienePermiso(empleadoSinPermiso, establecimiento,
+                com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.CANCELAR_RESERVA)).thenReturn(false);
+
+        // Act & Assert
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> reservaService.cancelarReserva(reservaConfirmada.getId(), empleadoSinPermiso.getEmail())
+        );
+        verify(reservaRepository, never()).save(any());
     }
 
     private void canchasInEstablecimientoWithHorarioNocturno() {

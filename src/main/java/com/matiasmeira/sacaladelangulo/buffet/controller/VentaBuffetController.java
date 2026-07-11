@@ -34,7 +34,7 @@ public class VentaBuffetController {
     private final VentaService ventaService;
 
     @PostMapping
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<VentaResponse> registrarVenta(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody @Valid VentaRequest request) {

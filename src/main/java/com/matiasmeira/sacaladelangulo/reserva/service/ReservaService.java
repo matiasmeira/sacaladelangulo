@@ -1,9 +1,12 @@
 package com.matiasmeira.sacaladelangulo.reserva.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
@@ -63,6 +66,8 @@ public class ReservaService {
     private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
     private final ReservaMapper reservaMapper;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final RegistroAuditoriaService registroAuditoriaService;
 
     /**
      * Crea una nueva reserva con validación de solapamientos y disponibilidad de pool.
@@ -131,47 +136,56 @@ public class ReservaService {
                 email, request.canchaId(), request.fechaHoraInicio(), request.fechaHoraFin());
 
         Cancha cancha = buscarCanchaPorId(request.canchaId());
-        validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
-        validarDeporteSoportado(request.deporteSeleccionado(), cancha);
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
+                cancha.getEstablecimiento(), email, PermisoEmpleado.CREAR_RESERVA_MANUAL);
 
-        validarFechas(request.fechaHoraInicio(), request.fechaHoraFin());
-        validarGranularidadHoraria(request.fechaHoraInicio(), cancha);
-        long duracionMinutos = validarDuracion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
-        validarSinBloqueos(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
-        validarDiaNoLaborable(request.fechaHoraInicio(), cancha.getEstablecimiento());
-        validarHorarioAtencion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha.getEstablecimiento());
+        try {
+            validarDeporteSoportado(request.deporteSeleccionado(), cancha);
 
-        List<Reserva> solapadas = reservaRepository.findSuperpuestas(
-                cancha.getEstablecimiento().getId(),
-                request.fechaHoraInicio(),
-                request.fechaHoraFin()
-        );
-        log.debug("Se encontraron {} reservas solapadas en el predio", solapadas.size());
+            validarFechas(request.fechaHoraInicio(), request.fechaHoraFin());
+            validarGranularidadHoraria(request.fechaHoraInicio(), cancha);
+            long duracionMinutos = validarDuracion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
+            validarSinBloqueos(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
+            validarDiaNoLaborable(request.fechaHoraInicio(), cancha.getEstablecimiento());
+            validarHorarioAtencion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha.getEstablecimiento());
 
-        validarCanchaExactaLibre(cancha, solapadas);
-        validarPoolCanchas(cancha, solapadas);
+            List<Reserva> solapadas = reservaRepository.findSuperpuestas(
+                    cancha.getEstablecimiento().getId(),
+                    request.fechaHoraInicio(),
+                    request.fechaHoraFin()
+            );
+            log.debug("Se encontraron {} reservas solapadas en el predio", solapadas.size());
 
-        BigDecimal precioCalculado = calcularPrecio(cancha, request.fechaHoraInicio(), duracionMinutos);
-        BigDecimal senaPagada = Boolean.TRUE.equals(request.senaFisicaRecibida()) ? cancha.getMontoSena() : BigDecimal.ZERO;
+            validarCanchaExactaLibre(cancha, solapadas);
+            validarPoolCanchas(cancha, solapadas);
 
-        Reserva reserva = Reserva.builder()
-                .jugador(null)
-                .cancha(cancha)
-                .deporteSeleccionado(request.deporteSeleccionado())
-                .nombreClienteManual(request.nombreCliente())
-                .telefonoClienteManual(request.telefonoCliente())
-                .fechaHoraInicio(request.fechaHoraInicio())
-                .fechaHoraFin(request.fechaHoraFin())
-                .estado(EstadoReserva.CONFIRMADA)
-                .precioTotal(precioCalculado)
-                .senaPagada(senaPagada)
-                .build();
+            BigDecimal precioCalculado = calcularPrecio(cancha, request.fechaHoraInicio(), duracionMinutos);
+            BigDecimal senaPagada = Boolean.TRUE.equals(request.senaFisicaRecibida()) ? cancha.getMontoSena() : BigDecimal.ZERO;
 
-        Reserva reservaGuardada = reservaRepository.save(reserva);
-        log.info("Nueva reserva manual creada con éxito. ID: {}, Cancha: {}, Cliente: {}",
-                reservaGuardada.getId(), cancha.getNombre(), request.nombreCliente());
+            Reserva reserva = Reserva.builder()
+                    .jugador(null)
+                    .cancha(cancha)
+                    .deporteSeleccionado(request.deporteSeleccionado())
+                    .nombreClienteManual(request.nombreCliente())
+                    .telefonoClienteManual(request.telefonoCliente())
+                    .fechaHoraInicio(request.fechaHoraInicio())
+                    .fechaHoraFin(request.fechaHoraFin())
+                    .estado(EstadoReserva.CONFIRMADA)
+                    .precioTotal(precioCalculado)
+                    .senaPagada(senaPagada)
+                    .build();
 
-        return reservaMapper.mapToResponse(reservaGuardada);
+            Reserva reservaGuardada = reservaRepository.save(reserva);
+            log.info("Nueva reserva manual creada con éxito. ID: {}, Cancha: {}, Cliente: {}",
+                    reservaGuardada.getId(), cancha.getNombre(), request.nombreCliente());
+
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.CREAR_RESERVA_MANUAL,
+                    reservaGuardada.getId(), true, "Reserva manual creada para " + request.nombreCliente());
+            return reservaMapper.mapToResponse(reservaGuardada);
+        } catch (RuntimeException ex) {
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.CREAR_RESERVA_MANUAL, null, false, ex.getMessage());
+            throw ex;
+        }
     }
 
     /**
@@ -487,26 +501,81 @@ public class ReservaService {
         boolean esAdmin = usuarioAutenticado.getRol() == Role.ADMIN;
         boolean esDuenoDelEstablecimiento = usuarioAutenticado.getId().equals(duenioEstablecimientoId);
         boolean esElJugador = reserva.getJugador() != null && reserva.getJugador().getId().equals(usuarioAutenticado.getId());
+        boolean esEmpleadoAutorizado = autorizacionEmpleadoService.tienePermiso(
+                usuarioAutenticado, reserva.getCancha().getEstablecimiento(), PermisoEmpleado.CANCELAR_RESERVA);
 
-        if (!esAdmin && !esDuenoDelEstablecimiento && !esElJugador) {
+        if (!esAdmin && !esDuenoDelEstablecimiento && !esElJugador && !esEmpleadoAutorizado) {
             log.warn("Acceso denegado a cancelar reserva. Usuario: {}, Dueño: {}", usuarioAutenticado.getId(), duenioEstablecimientoId);
             throw new AccessDeniedException("No está autorizado para cancelar esta reserva");
         }
 
-        if (esElJugador && !esAdmin && !esDuenoDelEstablecimiento) {
-            validarPlazoDeCancelacion(reserva);
+        try {
+            if (esElJugador && !esAdmin && !esDuenoDelEstablecimiento && !esEmpleadoAutorizado) {
+                validarPlazoDeCancelacion(reserva);
+            }
+
+            if (reserva.getEstado() == EstadoReserva.CANCELADA) {
+                log.info("Reserva ya se encuentra cancelada. ID: {}", reservaId);
+                return reservaMapper.mapToResponse(reserva);
+            }
+
+            reserva.setEstado(EstadoReserva.CANCELADA);
+            Reserva reservaActualizada = reservaRepository.save(reserva);
+            log.info("Reserva cancelada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
+
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.CANCELAR_RESERVA, reservaId, true, "Reserva cancelada");
+            return reservaMapper.mapToResponse(reservaActualizada);
+        } catch (RuntimeException ex) {
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.CANCELAR_RESERVA, reservaId, false, ex.getMessage());
+            throw ex;
         }
+    }
 
-        if (reserva.getEstado() == EstadoReserva.CANCELADA) {
-            log.info("Reserva ya se encuentra cancelada. ID: {}", reservaId);
-            return reservaMapper.mapToResponse(reserva);
+    /**
+     * Finaliza una reserva (el turno ya se jugó). Solo el dueño real del
+     * establecimiento, un administrador, o un empleado con el permiso
+     * FINALIZAR_RESERVA pueden hacerlo. Es idempotente: si ya estaba finalizada,
+     * no hace nada.
+     *
+     * @param reservaId ID de la reserva a finalizar
+     * @param email Email del usuario autenticado
+     * @return ReservaResponse con los datos actualizados
+     */
+    public ReservaResponse finalizarReserva(Long reservaId, String email) {
+        log.info("Iniciando finalización de reserva. ID: {}, Email: {}", reservaId, email);
+
+        Reserva reserva = reservaRepository.findByIdConEstablecimientoYDueno(reservaId)
+                .orElseThrow(() -> new EntityNotFoundException("Reserva no encontrada"));
+
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
+                reserva.getCancha().getEstablecimiento(), email, PermisoEmpleado.FINALIZAR_RESERVA);
+
+        try {
+            if (reserva.getEstado() == EstadoReserva.CANCELADA) {
+                throw new IllegalArgumentException("No se puede finalizar una reserva cancelada");
+            }
+
+            if (reserva.getEstado() == EstadoReserva.FINALIZADA) {
+                log.info("Reserva ya se encontraba finalizada. ID: {}", reservaId);
+                return reservaMapper.mapToResponse(reserva);
+            }
+
+            reserva.setEstado(EstadoReserva.FINALIZADA);
+            Reserva reservaActualizada = reservaRepository.save(reserva);
+            log.info("Reserva finalizada con éxito. ID: {}", reservaId);
+
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.FINALIZAR_RESERVA, reservaId, true, "Reserva finalizada");
+            return reservaMapper.mapToResponse(reservaActualizada);
+        } catch (RuntimeException ex) {
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.FINALIZAR_RESERVA, reservaId, false, ex.getMessage());
+            throw ex;
         }
+    }
 
-        reserva.setEstado(EstadoReserva.CANCELADA);
-        Reserva reservaActualizada = reservaRepository.save(reserva);
-        log.info("Reserva cancelada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
-
-        return reservaMapper.mapToResponse(reservaActualizada);
+    private void registrarAuditoriaSiEsEmpleado(Usuario usuario, PermisoEmpleado accion, Long entidadAfectadaId, boolean exitoso, String detalle) {
+        if (usuario.getRol() == Role.EMPLOYEE) {
+            registroAuditoriaService.registrar(usuario, accion, entidadAfectadaId, exitoso, detalle);
+        }
     }
 
     /**

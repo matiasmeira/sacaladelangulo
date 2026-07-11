@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
+import com.matiasmeira.sacaladelangulo.auth.dto.EmpleadoLoginRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.RegisterRequest;
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
@@ -22,13 +23,17 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -119,6 +124,101 @@ class AuthServiceTest {
         BadCredentialsException exception = assertThrows(
                 BadCredentialsException.class,
                 () -> authService.authenticate(request)
+        );
+
+        assertEquals("Credenciales inválidas", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("authenticateEmpleado_Exito_GeneraTokenConClaimDeEmpleadoId")
+    void authenticateEmpleado_Exito_GeneraTokenConClaimDeEmpleadoId() {
+        EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Juan", "1234");
+        Usuario empleado = Usuario.builder()
+                .id(5L)
+                .email("empleado-uuid@empleados.sacaladelangulo.interno")
+                .nombre("Juan")
+                .rol(Role.EMPLOYEE)
+                .isActive(true)
+                .build();
+        UserDetails userDetails = org.springframework.security.core.userdetails.User
+                .withUsername(empleado.getEmail())
+                .password("hash-1234")
+                .authorities("ROLE_EMPLOYEE")
+                .build();
+
+        when(usuarioRepository.findByEstablecimientoIdAndNombreAndRol(10L, "Juan", Role.EMPLOYEE))
+                .thenReturn(Optional.of(empleado));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(new UsernamePasswordAuthenticationToken(empleado.getEmail(), request.pin()));
+        when(userDetailsService.loadUserByUsername(empleado.getEmail())).thenReturn(userDetails);
+        when(jwtService.generateToken(eq(userDetails), anyMap(), anyLong())).thenReturn("jwt-token-empleado");
+
+        AuthResponse response = authService.authenticateEmpleado(request);
+
+        assertEquals("jwt-token-empleado", response.token());
+        verify(jwtService).generateToken(eq(userDetails), eq(Map.of("empleadoId", empleado.getId())), anyLong());
+    }
+
+    @Test
+    @DisplayName("authenticateEmpleado_Fallo_EmpleadoNoEncontrado")
+    void authenticateEmpleado_Fallo_EmpleadoNoEncontrado() {
+        EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Fantasma", "1234");
+        when(usuarioRepository.findByEstablecimientoIdAndNombreAndRol(10L, "Fantasma", Role.EMPLOYEE))
+                .thenReturn(Optional.empty());
+
+        BadCredentialsException exception = assertThrows(
+                BadCredentialsException.class,
+                () -> authService.authenticateEmpleado(request)
+        );
+
+        assertEquals("Credenciales inválidas", exception.getMessage());
+        verify(authenticationManager, never()).authenticate(any());
+    }
+
+    @Test
+    @DisplayName("authenticateEmpleado_Fallo_EmpleadoInactivo")
+    void authenticateEmpleado_Fallo_EmpleadoInactivo() {
+        EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Juan", "1234");
+        Usuario empleadoInactivo = Usuario.builder()
+                .id(5L)
+                .email("empleado-uuid@empleados.sacaladelangulo.interno")
+                .nombre("Juan")
+                .rol(Role.EMPLOYEE)
+                .isActive(false)
+                .build();
+
+        when(usuarioRepository.findByEstablecimientoIdAndNombreAndRol(10L, "Juan", Role.EMPLOYEE))
+                .thenReturn(Optional.of(empleadoInactivo));
+
+        BadCredentialsException exception = assertThrows(
+                BadCredentialsException.class,
+                () -> authService.authenticateEmpleado(request)
+        );
+
+        assertEquals("Credenciales inválidas", exception.getMessage());
+        verify(authenticationManager, never()).authenticate(any());
+    }
+
+    @Test
+    @DisplayName("authenticateEmpleado_Fallo_PinIncorrecto")
+    void authenticateEmpleado_Fallo_PinIncorrecto() {
+        EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Juan", "0000");
+        Usuario empleado = Usuario.builder()
+                .id(5L)
+                .email("empleado-uuid@empleados.sacaladelangulo.interno")
+                .nombre("Juan")
+                .rol(Role.EMPLOYEE)
+                .isActive(true)
+                .build();
+
+        when(usuarioRepository.findByEstablecimientoIdAndNombreAndRol(10L, "Juan", Role.EMPLOYEE))
+                .thenReturn(Optional.of(empleado));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        BadCredentialsException exception = assertThrows(
+                BadCredentialsException.class,
+                () -> authService.authenticateEmpleado(request)
         );
 
         assertEquals("Credenciales inválidas", exception.getMessage());

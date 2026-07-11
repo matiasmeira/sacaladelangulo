@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.buffet.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
@@ -16,6 +17,8 @@ import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepository;
 import com.matiasmeira.sacaladelangulo.buffet.repository.VentaRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
@@ -51,6 +54,8 @@ public class VentaService {
     private final ReservaRepository reservaRepository;
     private final UsuarioRepository usuarioRepository;
     private final VentaMapper ventaMapper;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final RegistroAuditoriaService registroAuditoriaService;
 
     /**
      * Registra una venta de uno o más productos del buffet, descontando el stock
@@ -67,51 +72,65 @@ public class VentaService {
 
         Establecimiento establecimiento = establecimientoRepository.findById(request.establecimientoId())
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-        validarPropietarioOAdmin(establecimiento, email);
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
+                establecimiento, email, PermisoEmpleado.REGISTRAR_VENTA_BUFFET);
 
-        Reserva reserva = resolverReserva(request.reservaId(), establecimiento.getId());
+        try {
+            Reserva reserva = resolverReserva(request.reservaId(), establecimiento.getId());
 
-        Venta venta = Venta.builder()
-                .establecimiento(establecimiento)
-                .reserva(reserva)
-                .fechaHora(LocalDateTime.now())
-                .total(BigDecimal.ZERO)
-                .estado(EstadoVenta.CONFIRMADA)
-                .build();
+            Venta venta = Venta.builder()
+                    .establecimiento(establecimiento)
+                    .reserva(reserva)
+                    .fechaHora(LocalDateTime.now())
+                    .total(BigDecimal.ZERO)
+                    .estado(EstadoVenta.CONFIRMADA)
+                    .build();
 
-        List<DetalleVenta> detalles = new ArrayList<>();
-        BigDecimal total = BigDecimal.ZERO;
+            List<DetalleVenta> detalles = new ArrayList<>();
+            BigDecimal total = BigDecimal.ZERO;
 
-        for (DetalleVentaRequest detalleRequest : request.detalles()) {
-            ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimiento.getId(), detalleRequest.productoId());
+            for (DetalleVentaRequest detalleRequest : request.detalles()) {
+                ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimiento.getId(), detalleRequest.productoId());
 
-            BigDecimal subtotal = producto.getPrecio().multiply(BigDecimal.valueOf(detalleRequest.cantidad()));
-            total = total.add(subtotal);
+                BigDecimal subtotal = producto.getPrecio().multiply(BigDecimal.valueOf(detalleRequest.cantidad()));
+                total = total.add(subtotal);
 
-            int nuevoStock = producto.getStock() - detalleRequest.cantidad();
-            if (nuevoStock < 0) {
-                log.warn("La venta deja stock negativo. Producto: {}, Stock previo: {}, Vendido: {}, Nuevo stock: {}",
-                        producto.getId(), producto.getStock(), detalleRequest.cantidad(), nuevoStock);
+                int nuevoStock = producto.getStock() - detalleRequest.cantidad();
+                if (nuevoStock < 0) {
+                    log.warn("La venta deja stock negativo. Producto: {}, Stock previo: {}, Vendido: {}, Nuevo stock: {}",
+                            producto.getId(), producto.getStock(), detalleRequest.cantidad(), nuevoStock);
+                }
+                producto.setStock(nuevoStock);
+                productoBuffetRepository.save(producto);
+
+                detalles.add(DetalleVenta.builder()
+                        .venta(venta)
+                        .productoBuffet(producto)
+                        .cantidad(detalleRequest.cantidad())
+                        .subtotal(subtotal)
+                        .build());
             }
-            producto.setStock(nuevoStock);
-            productoBuffetRepository.save(producto);
 
-            detalles.add(DetalleVenta.builder()
-                    .venta(venta)
-                    .productoBuffet(producto)
-                    .cantidad(detalleRequest.cantidad())
-                    .subtotal(subtotal)
-                    .build());
+            venta.setTotal(total);
+            venta.setDetalles(detalles);
+
+            Venta ventaGuardada = ventaRepository.save(venta);
+            log.info("Venta registrada con éxito. ID: {}, Establecimiento: {}, Total: {}",
+                    ventaGuardada.getId(), establecimiento.getId(), total);
+
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.REGISTRAR_VENTA_BUFFET,
+                    ventaGuardada.getId(), true, "Venta registrada por un total de " + total);
+            return ventaMapper.mapToResponse(ventaGuardada);
+        } catch (RuntimeException ex) {
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.REGISTRAR_VENTA_BUFFET, null, false, ex.getMessage());
+            throw ex;
         }
+    }
 
-        venta.setTotal(total);
-        venta.setDetalles(detalles);
-
-        Venta ventaGuardada = ventaRepository.save(venta);
-        log.info("Venta registrada con éxito. ID: {}, Establecimiento: {}, Total: {}",
-                ventaGuardada.getId(), establecimiento.getId(), total);
-
-        return ventaMapper.mapToResponse(ventaGuardada);
+    private void registrarAuditoriaSiEsEmpleado(Usuario usuario, PermisoEmpleado accion, Long entidadAfectadaId, boolean exitoso, String detalle) {
+        if (usuario.getRol() == Role.EMPLOYEE) {
+            registroAuditoriaService.registrar(usuario, accion, entidadAfectadaId, exitoso, detalle);
+        }
     }
 
     /**

@@ -3,6 +3,8 @@ package com.matiasmeira.sacaladelangulo.buffet.service;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.buffet.dto.DetalleVentaRequest;
 import com.matiasmeira.sacaladelangulo.buffet.dto.MetricasVentasResponse;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaMapper;
@@ -42,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,6 +68,12 @@ class VentaServiceTest {
     @Mock
     private UsuarioRepository usuarioRepository;
 
+    @Mock
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
+
+    @Mock
+    private RegistroAuditoriaService registroAuditoriaService;
+
     private VentaService ventaService;
 
     private Usuario dueno;
@@ -76,13 +85,18 @@ class VentaServiceTest {
     void setUp() {
         ventaService = new VentaService(
                 ventaRepository, productoBuffetRepository, establecimientoRepository,
-                reservaRepository, usuarioRepository, new VentaMapper());
+                reservaRepository, usuarioRepository, new VentaMapper(),
+                autorizacionEmpleadoService, registroAuditoriaService);
 
         dueno = Usuario.builder()
                 .id(2L)
                 .email("dueno@test.com")
                 .rol(Role.OWNER)
                 .build();
+
+        // Default: cualquier llamada a registrarVenta pasa la autorización como si la
+        // hiciera el dueño real. Los tests que necesiten otro comportamiento lo overridean.
+        lenient().when(autorizacionEmpleadoService.validarAccion(any(), any(), any())).thenReturn(dueno);
 
         establecimiento = Establecimiento.builder()
                 .id(10L)
@@ -120,7 +134,6 @@ class VentaServiceTest {
                 List.of(new DetalleVentaRequest(agua.getId(), 3)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(productoBuffetRepository.findById(agua.getId())).thenReturn(Optional.of(agua));
         when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> {
             Venta venta = invocation.getArgument(0);
@@ -152,7 +165,6 @@ class VentaServiceTest {
         ));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(productoBuffetRepository.findById(agua.getId())).thenReturn(Optional.of(agua));
         when(productoBuffetRepository.findById(alfajor.getId())).thenReturn(Optional.of(alfajor));
         when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> {
@@ -180,7 +192,6 @@ class VentaServiceTest {
                 List.of(new DetalleVentaRequest(agua.getId(), 25)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(productoBuffetRepository.findById(agua.getId())).thenReturn(Optional.of(agua));
         when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> {
             Venta venta = invocation.getArgument(0);
@@ -208,7 +219,6 @@ class VentaServiceTest {
         ));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(productoBuffetRepository.findById(agua.getId())).thenReturn(Optional.of(agua));
         when(productoBuffetRepository.findById(alfajor.getId())).thenReturn(Optional.of(alfajor));
         when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> {
@@ -228,25 +238,58 @@ class VentaServiceTest {
     }
 
     @Test
+    @DisplayName("registrarVenta_Exito_EmpleadoConPermisoRegistrarVentaBuffet")
+    void registrarVenta_Exito_EmpleadoConPermisoRegistrarVentaBuffet() {
+        // Arrange
+        Usuario empleado = Usuario.builder()
+                .id(9L)
+                .email("empleado-uuid@empleados.interno")
+                .nombre("Empleado Mostrador")
+                .rol(Role.EMPLOYEE)
+                .establecimiento(establecimiento)
+                .permisos(Set.of(com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.REGISTRAR_VENTA_BUFFET))
+                .isActive(true)
+                .build();
+
+        VentaRequest request = new VentaRequest(establecimiento.getId(), null,
+                List.of(new DetalleVentaRequest(agua.getId(), 2)));
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarAccion(establecimiento, empleado.getEmail(),
+                com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.REGISTRAR_VENTA_BUFFET)).thenReturn(empleado);
+        when(productoBuffetRepository.findById(agua.getId())).thenReturn(Optional.of(agua));
+        when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> {
+            Venta venta = invocation.getArgument(0);
+            venta.setId(105L);
+            return venta;
+        });
+
+        // Act
+        VentaResponse response = assertDoesNotThrow(
+                () -> ventaService.registrarVenta(request, empleado.getEmail()));
+
+        // Assert
+        assertEquals("CONFIRMADA", response.estado());
+        verify(registroAuditoriaService).registrar(
+                eq(empleado), eq(com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.REGISTRAR_VENTA_BUFFET),
+                eq(105L), eq(true), any());
+    }
+
+    @Test
     @DisplayName("registrarVenta_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
     void registrarVenta_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
         // Arrange
         VentaRequest request = new VentaRequest(establecimiento.getId(), null,
                 List.of(new DetalleVentaRequest(agua.getId(), 1)));
 
-        Usuario otroDueno = Usuario.builder()
-                .id(3L)
-                .email("otro-dueno@test.com")
-                .rol(Role.OWNER)
-                .build();
-
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarAccion(any(), any(), any()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(
                 org.springframework.security.access.AccessDeniedException.class,
-                () -> ventaService.registrarVenta(request, otroDueno.getEmail())
+                () -> ventaService.registrarVenta(request, "otro-dueno@test.com")
         );
         verify(ventaRepository, never()).save(any());
     }
@@ -278,7 +321,6 @@ class VentaServiceTest {
                 List.of(new DetalleVentaRequest(productoDeOtroEstablecimiento.getId(), 1)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(productoBuffetRepository.findById(productoDeOtroEstablecimiento.getId()))
                 .thenReturn(Optional.of(productoDeOtroEstablecimiento));
 
@@ -330,7 +372,6 @@ class VentaServiceTest {
                 List.of(new DetalleVentaRequest(agua.getId(), 1)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(reservaRepository.findById(reservaDeOtroEstablecimiento.getId())).thenReturn(Optional.of(reservaDeOtroEstablecimiento));
 
         // Act & Assert
@@ -370,7 +411,6 @@ class VentaServiceTest {
                 List.of(new DetalleVentaRequest(agua.getId(), 1)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(reservaRepository.findById(reserva.getId())).thenReturn(Optional.of(reserva));
         when(productoBuffetRepository.findById(agua.getId())).thenReturn(Optional.of(agua));
 

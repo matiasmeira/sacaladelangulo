@@ -8,6 +8,8 @@ import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
+import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,10 +31,13 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -56,8 +61,18 @@ class AuthServiceTest {
     @Mock
     private UserDetailsService userDetailsService;
 
+    @Mock
+    private RateLimiterService rateLimiterService;
+
     @InjectMocks
     private AuthService authService;
+
+    @BeforeEach
+    void setUp() {
+        // Default: siempre hay intentos disponibles. Los tests que necesiten simular
+        // el límite agotado lo overridean explícitamente.
+        lenient().when(rateLimiterService.tryConsume(anyString(), anyInt(), anyLong())).thenReturn(true);
+    }
 
     @Test
     @DisplayName("registerPlayer_Exito_GeneraToken")
@@ -222,5 +237,31 @@ class AuthServiceTest {
         );
 
         assertEquals("Credenciales inválidas", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("authenticate_Fallo_LimiteDeIntentosSuperado")
+    void authenticate_Fallo_LimiteDeIntentosSuperado() {
+        AuthRequest request = new AuthRequest("jugador@test.com", "Password123");
+        when(rateLimiterService.tryConsume(eq("login:jugador@test.com"), anyInt(), anyLong())).thenReturn(false);
+
+        assertThrows(
+                RateLimitExceededException.class,
+                () -> authService.authenticate(request)
+        );
+        verify(authenticationManager, never()).authenticate(any());
+    }
+
+    @Test
+    @DisplayName("authenticateEmpleado_Fallo_LimiteDeIntentosSuperado")
+    void authenticateEmpleado_Fallo_LimiteDeIntentosSuperado() {
+        EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Juan", "1234");
+        when(rateLimiterService.tryConsume(eq("login-empleado:10:Juan"), anyInt(), anyLong())).thenReturn(false);
+
+        assertThrows(
+                RateLimitExceededException.class,
+                () -> authService.authenticateEmpleado(request)
+        );
+        verify(usuarioRepository, never()).findByEstablecimientoIdAndNombreAndRol(any(), any(), any());
     }
 }

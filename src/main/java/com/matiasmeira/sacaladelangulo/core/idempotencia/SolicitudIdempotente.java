@@ -1,0 +1,68 @@
+package com.matiasmeira.sacaladelangulo.core.idempotencia;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+
+/**
+ * Registro de una solicitud identificada con una clave de idempotencia (header
+ * Idempotency-Key), para poder devolver la misma respuesta si el cliente
+ * reintenta la misma operación (ej. timeout de red y reintento automático) en
+ * vez de repetir el efecto de negocio (doble reserva, doble venta, etc.).
+ * Mientras statusRespuesta es null, la solicitud original todavía se está
+ * procesando.
+ */
+@Entity
+@Table(name = "solicitudes_idempotentes", uniqueConstraints =
+        @UniqueConstraint(columnNames = {"clave", "usuario_email"}))
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class SolicitudIdempotente {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false)
+    private String clave;
+
+    @Column(name = "usuario_email", nullable = false)
+    private String usuarioEmail;
+
+    @Column(name = "metodo_http", nullable = false)
+    private String metodoHttp;
+
+    @Column(nullable = false)
+    private String path;
+
+    @Column(name = "status_respuesta")
+    private Integer statusRespuesta;
+
+    @Column(name = "content_type_respuesta")
+    private String contentTypeRespuesta;
+
+    @Lob
+    @Column(name = "cuerpo_respuesta")
+    private String cuerpoRespuesta;
+
+    @Column(name = "fecha_creacion", nullable = false)
+    private LocalDateTime fechaCreacion;
+
+    @Column(name = "fecha_completado")
+    private LocalDateTime fechaCompletado;
+}

@@ -2,6 +2,10 @@ package com.matiasmeira.sacaladelangulo.core.config.security;
 
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.auth.service.JwtService;
+import com.matiasmeira.sacaladelangulo.core.idempotencia.IdempotencyFilter;
+import com.matiasmeira.sacaladelangulo.core.idempotencia.SolicitudIdempotenteRepository;
+import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitFilter;
+import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,7 +34,11 @@ public class SecurityConfig {
     private final JwtService jwtService;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            RateLimitFilter rateLimitFilter,
+            IdempotencyFilter idempotencyFilter) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
@@ -44,7 +52,9 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(idempotencyFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
@@ -54,7 +64,7 @@ public class SecurityConfig {
         org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
         configuration.setAllowedOrigins(java.util.List.of("http://localhost:5173", "http://localhost:3000"));
         configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "Cache-Control"));
+        configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "Cache-Control", "Idempotency-Key"));
         configuration.setAllowCredentials(true);
 
         org.springframework.web.cors.UrlBasedCorsConfigurationSource source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
@@ -65,6 +75,16 @@ public class SecurityConfig {
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(UserDetailsService userDetailsService) {
         return new JwtAuthenticationFilter(jwtService, userDetailsService);
+    }
+
+    @Bean
+    public RateLimitFilter rateLimitFilter(RateLimiterService rateLimiterService) {
+        return new RateLimitFilter(rateLimiterService);
+    }
+
+    @Bean
+    public IdempotencyFilter idempotencyFilter(SolicitudIdempotenteRepository solicitudIdempotenteRepository) {
+        return new IdempotencyFilter(solicitudIdempotenteRepository);
     }
 
     @Bean

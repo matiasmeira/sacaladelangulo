@@ -8,6 +8,8 @@ import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
+import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,6 +20,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -28,11 +31,22 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthService {
 
+    /**
+     * Límites por identidad de negocio (no por IP: ver RateLimitFilter para eso),
+     * para que no alcance con rotar de IP para seguir probando contraseñas/PIN
+     * contra una cuenta puntual.
+     */
+    private static final int LOGIN_INTENTOS_MAXIMOS = 8;
+    private static final long LOGIN_VENTANA_MILLIS = Duration.ofMinutes(5).toMillis();
+    private static final int LOGIN_EMPLEADO_INTENTOS_MAXIMOS = 5;
+    private static final long LOGIN_EMPLEADO_VENTANA_MILLIS = Duration.ofMinutes(5).toMillis();
+
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
+    private final RateLimiterService rateLimiterService;
 
     @Value("${jwt.empleado-expiration-millis:3600000}")
     private long empleadoExpirationMillis;
@@ -86,6 +100,10 @@ public class AuthService {
 
     public AuthResponse authenticate(AuthRequest request) {
         String email = normalizarEmail(request.email());
+        if (!rateLimiterService.tryConsume("login:" + email, LOGIN_INTENTOS_MAXIMOS, LOGIN_VENTANA_MILLIS)) {
+            throw new RateLimitExceededException("Demasiados intentos de inicio de sesión. Intente nuevamente en unos minutos.");
+        }
+
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(email, request.password())
@@ -108,6 +126,11 @@ public class AuthService {
      * el ID del empleado como claim para que el frontend lo muestre sin otra llamada.
      */
     public AuthResponse authenticateEmpleado(EmpleadoLoginRequest request) {
+        String claveLimite = "login-empleado:" + request.establecimientoId() + ":" + request.nombre();
+        if (!rateLimiterService.tryConsume(claveLimite, LOGIN_EMPLEADO_INTENTOS_MAXIMOS, LOGIN_EMPLEADO_VENTANA_MILLIS)) {
+            throw new RateLimitExceededException("Demasiados intentos de inicio de sesión. Intente nuevamente en unos minutos.");
+        }
+
         Usuario empleado = usuarioRepository.findByEstablecimientoIdAndNombreAndRol(
                         request.establecimientoId(), request.nombre(), Role.EMPLOYEE)
                 .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));

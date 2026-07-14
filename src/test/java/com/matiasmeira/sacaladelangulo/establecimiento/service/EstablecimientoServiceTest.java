@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,9 @@ class EstablecimientoServiceTest {
 
     @Mock
     private CanchaRepository canchaRepository;
+
+    @Mock
+    private FeedbackRepository feedbackRepository;
 
     @InjectMocks
     private EstablecimientoService establecimientoService;
@@ -93,7 +97,10 @@ class EstablecimientoServiceTest {
                 true,
                 true,
                 dueno.getId(),
-                List.of()
+                List.of(),
+                null,
+                0L,
+                null
         );
         assertEquals(esperado, resultados.get(0));
     }

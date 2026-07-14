@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.PoolCanchaCalculator;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
@@ -45,7 +46,6 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Servicio de negocio para reservas.
@@ -666,49 +666,9 @@ public class ReservaService {
                 cancha.getEstablecimiento().getId()
         );
 
-        for (Cancha canchaDelPool : todasLasCanchas) {
-            if (canchaDelPool.getCanchasFisicas() != null && !canchaDelPool.getCanchasFisicas().isEmpty()) {
-                List<Long> poolIds = canchaDelPool.getCanchasFisicas().stream()
-                        .map(Cancha::getId)
-                        .collect(Collectors.toList());
-
-                log.debug("Cancha lógica encontrada: {} con {} canchas físicas", canchaDelPool.getId(), poolIds.size());
-
-                boolean afectaEstePool = canchaDelPool.getId().equals(cancha.getId()) ||
-                        poolIds.contains(cancha.getId());
-
-                if (afectaEstePool) {
-                    log.debug("La cancha solicitada afecta el pool. Validando disponibilidad...");
-
-                    int usoActual = 0;
-                    for (Reserva reservaSolapada : solapadas) {
-                        Long canchaReservadaId = reservaSolapada.getCancha().getId();
-
-                        if (poolIds.contains(canchaReservadaId)) {
-                            usoActual += 1;
-                            log.debug("Uso actual +1 (cancha física): total = {}", usoActual);
-                        } else if (canchaReservadaId.equals(canchaDelPool.getId())) {
-                            Integer canchasNecesarias = reservaSolapada.getCancha().getCanchasNecesarias();
-                            if (canchasNecesarias != null && canchasNecesarias > 0) {
-                                usoActual += canchasNecesarias;
-                                log.debug("Uso actual +{} (cancha lógica): total = {}", canchasNecesarias, usoActual);
-                            }
-                        }
-                    }
-
-                    int usoNuevo = cancha.getId().equals(canchaDelPool.getId()) ?
-                            (cancha.getCanchasNecesarias() != null ? cancha.getCanchasNecesarias() : 1) : 1;
-                    log.debug("Uso nuevo: {}", usoNuevo);
-
-                    int capacidadPool = poolIds.size();
-                    if (usoActual + usoNuevo > capacidadPool) {
-                        log.warn("No hay disponibilidad en el pool. Uso actual: {}, Uso nuevo: {}, Capacidad: {}",
-                                usoActual, usoNuevo, capacidadPool);
-                        throw new IllegalArgumentException("No hay disponibilidad en el pool para armar esta cancha");
-                    }
-                    log.debug("Validación de pool: OK (Uso: {}/{} disponibles)", usoActual + usoNuevo, capacidadPool);
-                }
-            }
+        if (!PoolCanchaCalculator.hayDisponibilidad(cancha, solapadas, todasLasCanchas)) {
+            log.warn("No hay disponibilidad en el pool. Cancha: {}", cancha.getId());
+            throw new IllegalArgumentException("No hay disponibilidad en el pool para armar esta cancha");
         }
     }
 

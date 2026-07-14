@@ -14,10 +14,12 @@ import java.util.List;
 public interface CanchaRepository extends JpaRepository<Cancha, Long> {
 
     /**
-     * Se trae "canchasFisicas" en la misma consulta (EntityGraph) para evitar N+1
-     * al validar disponibilidad de pools de canchas (ver ReservaService.validarPoolCanchas).
+     * Se traen "canchasFisicas" y "deportes" en la misma consulta (EntityGraph) para
+     * evitar N+1: canchasFisicas al validar disponibilidad de pools de canchas (ver
+     * ReservaService.validarPoolCanchas / PoolCanchaCalculator), deportes al armar la
+     * grilla de disponibilidad para varias canchas a la vez (ver DisponibilidadService).
      */
-    @EntityGraph(attributePaths = "canchasFisicas")
+    @EntityGraph(attributePaths = {"canchasFisicas", "deportes"})
     List<Cancha> findByEstablecimientoIdAndIsActiveTrue(Long establecimientoId);
 
     /**

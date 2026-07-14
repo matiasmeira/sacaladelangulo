@@ -12,6 +12,9 @@ public record EstablecimientoResponse(
         Boolean requiereSena,
         Boolean isActive,
         Long duenoId,
-        java.util.List<HorarioAtencionDto> horariosAtencion
+        java.util.List<HorarioAtencionDto> horariosAtencion,
+        Double promedioCalificacion,
+        Long cantidadCalificaciones,
+        FeedbackDestacadoDto comentarioDestacado
 ) {
 }

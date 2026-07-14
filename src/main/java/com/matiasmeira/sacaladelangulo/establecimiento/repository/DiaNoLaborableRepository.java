@@ -14,4 +14,10 @@ public interface DiaNoLaborableRepository extends JpaRepository<DiaNoLaborable, 
     Optional<DiaNoLaborable> findByEstablecimientoIdAndFecha(Long establecimientoId, LocalDate fecha);
 
     List<DiaNoLaborable> findByEstablecimientoIdOrderByFechaAsc(Long establecimientoId);
+
+    /**
+     * Variante en lote para la grilla de disponibilidad: trae todos los días no
+     * laborables del rango consultado en una sola consulta, en vez de una por día.
+     */
+    List<DiaNoLaborable> findByEstablecimientoIdAndFechaBetween(Long establecimientoId, LocalDate desde, LocalDate hasta);
 }

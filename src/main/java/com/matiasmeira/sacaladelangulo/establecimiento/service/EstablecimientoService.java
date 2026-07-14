@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoResponse;
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.FeedbackDestacadoDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
@@ -14,6 +15,8 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
+import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -25,6 +28,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +50,7 @@ public class EstablecimientoService {
     private final UsuarioRepository usuarioRepository;
     private final ReservaRepository reservaRepository;
     private final CanchaRepository canchaRepository;
+    private final FeedbackRepository feedbackRepository;
 
     public EstablecimientoResponse crearEstablecimiento(EstablecimientoRequest request, String email) {
         Usuario dueno = buscarUsuarioPorEmail(email);
@@ -73,9 +78,8 @@ public class EstablecimientoService {
     public List<EstablecimientoResponse> obtenerMisEstablecimientos(String email) {
         Usuario dueno = buscarUsuarioPorEmail(email);
 
-        return establecimientoRepository.findByDuenoIdAndIsActiveTrue(dueno.getId()).stream()
-                .map(this::mapToResponse)
-                .toList();
+        List<Establecimiento> establecimientos = establecimientoRepository.findByDuenoIdAndIsActiveTrue(dueno.getId());
+        return mapearConCalificaciones(establecimientos);
     }
 
     /**
@@ -90,9 +94,7 @@ public class EstablecimientoService {
         List<Establecimiento> establecimientosCercanos = establecimientoRepository.findCercanosYPorDeporte(latitud, longitud, radioBusqueda, deporte);
 
         if (fecha == null || hora == null) {
-            return establecimientosCercanos.stream()
-                    .map(this::mapToResponse)
-                    .toList();
+            return mapearConCalificaciones(establecimientosCercanos);
         }
 
         List<Long> establecimientoIds = establecimientosCercanos.stream().map(Establecimiento::getId).toList();
@@ -114,11 +116,11 @@ public class EstablecimientoService {
                 ? Set.of()
                 : new HashSet<>(reservaRepository.findCanchaIdsConSolapamiento(canchaIds, inicioReserva, finReserva));
 
-        return establecimientosCercanos.stream()
+        List<Establecimiento> establecimientosDisponibles = establecimientosCercanos.stream()
                 .filter(est -> canchasPorEstablecimiento.getOrDefault(est.getId(), List.of()).stream()
                         .anyMatch(c -> !canchasOcupadas.contains(c.getId())))
-                .map(this::mapToResponse)
                 .toList();
+        return mapearConCalificaciones(establecimientosDisponibles);
     }
 
     public EstablecimientoResponse actualizarEstablecimiento(Long id, EstablecimientoRequest request, String email) {
@@ -199,7 +201,55 @@ public class EstablecimientoService {
         return usuarioAutenticado;
     }
 
+    /**
+     * Mapea un único establecimiento (alta/actualización), resolviendo su promedio de
+     * calificación y comentario destacado con consultas puntuales: no hay riesgo de N+1
+     * porque es un solo establecimiento.
+     */
     private EstablecimientoResponse mapToResponse(Establecimiento establecimiento) {
+        Double promedio = feedbackRepository.calcularPromedioByEstablecimientoId(establecimiento.getId());
+        Long cantidad = feedbackRepository.contarByEstablecimientoId(establecimiento.getId());
+        FeedbackDestacadoDto destacado = feedbackRepository.findDestacadoByEstablecimientoId(establecimiento.getId())
+                .map(this::mapFeedbackDestacado)
+                .orElse(null);
+        return construirResponse(establecimiento, promedio, cantidad != null ? cantidad : 0L, destacado);
+    }
+
+    /**
+     * Mapea una lista de establecimientos resolviendo promedio/cantidad/destacado en un
+     * puñado de consultas agrupadas por establecimiento.id IN (...), en vez de una consulta
+     * por establecimiento, para no degradar los endpoints de listado (uno de ellos público).
+     */
+    private List<EstablecimientoResponse> mapearConCalificaciones(List<Establecimiento> establecimientos) {
+        List<Long> ids = establecimientos.stream().map(Establecimiento::getId).toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Double> promedios = new HashMap<>();
+        for (Object[] fila : feedbackRepository.calcularPromediosPorEstablecimientos(ids)) {
+            promedios.put((Long) fila[0], (Double) fila[1]);
+        }
+
+        Map<Long, Long> cantidades = new HashMap<>();
+        for (Object[] fila : feedbackRepository.contarPorEstablecimientos(ids)) {
+            cantidades.put((Long) fila[0], (Long) fila[1]);
+        }
+
+        Map<Long, Feedback> destacados = feedbackRepository.findDestacadosByEstablecimientoIdIn(ids).stream()
+                .collect(Collectors.toMap(f -> f.getReserva().getCancha().getEstablecimiento().getId(), f -> f));
+
+        return establecimientos.stream()
+                .map(est -> construirResponse(
+                        est,
+                        promedios.get(est.getId()),
+                        cantidades.getOrDefault(est.getId(), 0L),
+                        destacados.containsKey(est.getId()) ? mapFeedbackDestacado(destacados.get(est.getId())) : null))
+                .toList();
+    }
+
+    private EstablecimientoResponse construirResponse(Establecimiento establecimiento, Double promedioCalificacion,
+                                                        Long cantidadCalificaciones, FeedbackDestacadoDto comentarioDestacado) {
         return new EstablecimientoResponse(
                 establecimiento.getId(),
                 establecimiento.getNombre(),
@@ -211,7 +261,21 @@ public class EstablecimientoService {
                 establecimiento.getDueno().getId(),
                 establecimiento.getHorariosAtencion() == null ? List.of() : establecimiento.getHorariosAtencion().stream()
                         .map(h -> new HorarioAtencionDto(h.getDiaSemana(), h.getHoraApertura(), h.getHoraCierre()))
-                        .toList()
+                        .toList(),
+                promedioCalificacion,
+                cantidadCalificaciones,
+                comentarioDestacado
+        );
+    }
+
+    private FeedbackDestacadoDto mapFeedbackDestacado(Feedback feedback) {
+        Usuario jugador = feedback.getReserva().getJugador();
+        return new FeedbackDestacadoDto(
+                feedback.getId(),
+                feedback.getPuntuacion(),
+                feedback.getComentario(),
+                jugador != null ? jugador.getNombre() : null,
+                feedback.getFechaCreacion()
         );
     }
 }

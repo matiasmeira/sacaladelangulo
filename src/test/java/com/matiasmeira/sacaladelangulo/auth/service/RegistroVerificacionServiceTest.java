@@ -1,0 +1,252 @@
+package com.matiasmeira.sacaladelangulo.auth.service;
+
+import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
+import com.matiasmeira.sacaladelangulo.auth.dto.CompletarRegistroRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.IniciarRegistroRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.VerificarTokenResponse;
+import com.matiasmeira.sacaladelangulo.auth.model.TokenVerificacionEmail;
+import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
+import com.matiasmeira.sacaladelangulo.auth.repository.TokenVerificacionEmailRepository;
+import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.core.email.EmailService;
+import com.matiasmeira.sacaladelangulo.core.exception.TokenExpiradoException;
+import com.matiasmeira.sacaladelangulo.core.exception.TokenInvalidoException;
+import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
+import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("RegistroVerificacionService - Registro de jugadores en 2 pasos")
+class RegistroVerificacionServiceTest {
+
+    @Mock
+    private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private TokenVerificacionEmailRepository tokenVerificacionEmailRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private JwtService jwtService;
+
+    @Mock
+    private UserDetailsService userDetailsService;
+
+    @Mock
+    private RateLimiterService rateLimiterService;
+
+    @Mock
+    private EmailService emailService;
+
+    @InjectMocks
+    private RegistroVerificacionService registroVerificacionService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(rateLimiterService.tryConsume(anyString(), anyInt(), anyLong())).thenReturn(true);
+        ReflectionTestUtils.setField(registroVerificacionService, "frontendUrl", "http://localhost:5173");
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_Exito_GeneraTokenYEnviaEmail")
+    void iniciarRegistro_Exito_GeneraTokenYEnviaEmail() {
+        IniciarRegistroRequest request = new IniciarRegistroRequest("nuevo@test.com");
+        when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
+
+        registroVerificacionService.iniciarRegistro(request);
+
+        verify(tokenVerificacionEmailRepository).deleteByEmail("nuevo@test.com");
+
+        ArgumentCaptor<TokenVerificacionEmail> tokenCaptor = ArgumentCaptor.forClass(TokenVerificacionEmail.class);
+        verify(tokenVerificacionEmailRepository).save(tokenCaptor.capture());
+        TokenVerificacionEmail tokenGuardado = tokenCaptor.getValue();
+        assertEquals("nuevo@test.com", tokenGuardado.getEmail());
+        assertTrue(tokenGuardado.getFechaExpiracion().isAfter(LocalDateTime.now()));
+
+        ArgumentCaptor<String> linkCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService).enviarEmailVerificacion(eq("nuevo@test.com"), linkCaptor.capture());
+        assertEquals("http://localhost:5173/verificar?token=" + tokenGuardado.getToken(), linkCaptor.getValue());
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_Fallo_EmailYaRegistrado")
+    void iniciarRegistro_Fallo_EmailYaRegistrado() {
+        IniciarRegistroRequest request = new IniciarRegistroRequest("existente@test.com");
+        when(usuarioRepository.existsByEmail("existente@test.com")).thenReturn(true);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> registroVerificacionService.iniciarRegistro(request));
+
+        assertEquals("El email ya está registrado", exception.getMessage());
+        verify(tokenVerificacionEmailRepository, never()).save(any());
+        verify(emailService, never()).enviarEmailVerificacion(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_Fallo_RateLimitExcedido")
+    void iniciarRegistro_Fallo_RateLimitExcedido() {
+        IniciarRegistroRequest request = new IniciarRegistroRequest("nuevo@test.com");
+        when(rateLimiterService.tryConsume(eq("registro-email:nuevo@test.com"), anyInt(), anyLong())).thenReturn(false);
+
+        assertThrows(RateLimitExceededException.class, () -> registroVerificacionService.iniciarRegistro(request));
+
+        verify(usuarioRepository, never()).existsByEmail(anyString());
+        verify(tokenVerificacionEmailRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("verificarToken_Exito_TokenValido")
+    void verificarToken_Exito_TokenValido() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-valido")
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
+
+        VerificarTokenResponse response = registroVerificacionService.verificarToken("token-valido");
+
+        assertEquals("nuevo@test.com", response.email());
+        assertTrue(response.verificado());
+        verify(tokenVerificacionEmailRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("verificarToken_Fallo_TokenInexistente")
+    void verificarToken_Fallo_TokenInexistente() {
+        when(tokenVerificacionEmailRepository.findByToken("token-inexistente")).thenReturn(Optional.empty());
+
+        assertThrows(TokenInvalidoException.class, () -> registroVerificacionService.verificarToken("token-inexistente"));
+    }
+
+    @Test
+    @DisplayName("verificarToken_Fallo_TokenExpirado")
+    void verificarToken_Fallo_TokenExpirado() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-vencido")
+                .fechaExpiracion(LocalDateTime.now().minusMinutes(1))
+                .build();
+        when(tokenVerificacionEmailRepository.findByToken("token-vencido")).thenReturn(Optional.of(token));
+
+        assertThrows(TokenExpiradoException.class, () -> registroVerificacionService.verificarToken("token-vencido"));
+
+        verify(tokenVerificacionEmailRepository, times(1)).delete(token);
+    }
+
+    @Test
+    @DisplayName("completarRegistro_Exito_CreaUsuarioYDevuelveToken")
+    void completarRegistro_Exito_CreaUsuarioYDevuelveToken() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-valido")
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        CompletarRegistroRequest request = new CompletarRegistroRequest("token-valido", "Juan", "1122334455", "Password123");
+
+        UserDetails userDetails = User.withUsername("nuevo@test.com")
+                .password("encoded-password")
+                .authorities("ROLE_PLAYER")
+                .build();
+
+        when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
+        when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
+        when(passwordEncoder.encode("Password123")).thenReturn("encoded-password");
+        when(userDetailsService.loadUserByUsername("nuevo@test.com")).thenReturn(userDetails);
+        when(jwtService.generateToken(userDetails)).thenReturn("jwt-token");
+
+        AuthResponse response = registroVerificacionService.completarRegistro(request);
+
+        assertEquals("jwt-token", response.token());
+        verify(tokenVerificacionEmailRepository).delete(token);
+
+        ArgumentCaptor<Usuario> usuarioCaptor = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).save(usuarioCaptor.capture());
+        Usuario usuarioGuardado = usuarioCaptor.getValue();
+        assertEquals("nuevo@test.com", usuarioGuardado.getEmail());
+        assertTrue(usuarioGuardado.getEmailVerified());
+        assertTrue(usuarioGuardado.getIsActive());
+    }
+
+    @Test
+    @DisplayName("completarRegistro_Fallo_TokenInvalido")
+    void completarRegistro_Fallo_TokenInvalido() {
+        CompletarRegistroRequest request = new CompletarRegistroRequest("token-inexistente", "Juan", null, "Password123");
+        when(tokenVerificacionEmailRepository.findByToken("token-inexistente")).thenReturn(Optional.empty());
+
+        assertThrows(TokenInvalidoException.class, () -> registroVerificacionService.completarRegistro(request));
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("completarRegistro_Fallo_TokenExpirado")
+    void completarRegistro_Fallo_TokenExpirado() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-vencido")
+                .fechaExpiracion(LocalDateTime.now().minusMinutes(1))
+                .build();
+        CompletarRegistroRequest request = new CompletarRegistroRequest("token-vencido", "Juan", null, "Password123");
+        when(tokenVerificacionEmailRepository.findByToken("token-vencido")).thenReturn(Optional.of(token));
+
+        assertThrows(TokenExpiradoException.class, () -> registroVerificacionService.completarRegistro(request));
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("completarRegistro_Fallo_EmailYaRegistradoEntreVerificacionYCompletar")
+    void completarRegistro_Fallo_EmailYaRegistradoEntreVerificacionYCompletar() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-valido")
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        CompletarRegistroRequest request = new CompletarRegistroRequest("token-valido", "Juan", null, "Password123");
+
+        when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
+        when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(true);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> registroVerificacionService.completarRegistro(request));
+
+        assertEquals("El email ya está registrado", exception.getMessage());
+        verify(tokenVerificacionEmailRepository).delete(token);
+        verify(usuarioRepository, never()).save(any());
+    }
+}

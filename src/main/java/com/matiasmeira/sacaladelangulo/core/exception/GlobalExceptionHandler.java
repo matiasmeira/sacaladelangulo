@@ -51,6 +51,18 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(TokenInvalidoException.class)
+    public ResponseEntity<Map<String, String>> handleTokenInvalidoException(TokenInvalidoException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(TokenExpiradoException.class)
+    public ResponseEntity<Map<String, String>> handleTokenExpiradoException(TokenExpiradoException ex) {
+        return ResponseEntity.status(HttpStatus.GONE)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
     @ExceptionHandler(RateLimitExceededException.class)
     public ResponseEntity<Map<String, String>> handleRateLimitExceededException(RateLimitExceededException ex) {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)

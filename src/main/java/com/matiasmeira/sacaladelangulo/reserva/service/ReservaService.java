@@ -539,6 +539,10 @@ public class ReservaService {
                 validarPlazoDeCancelacion(reserva);
             }
 
+            if (reserva.getEstado() == EstadoReserva.FINALIZADA) {
+                throw new IllegalArgumentException("No se puede cancelar una reserva ya finalizada");
+            }
+
             if (reserva.getEstado() == EstadoReserva.CANCELADA) {
                 log.info("Reserva ya se encuentra cancelada. ID: {}", reservaId);
                 return reservaMapper.mapToResponse(reserva);

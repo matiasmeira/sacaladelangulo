@@ -132,6 +132,7 @@ class IdempotencyFilterTest {
                 .statusRespuesta(201)
                 .contentTypeRespuesta("application/json")
                 .cuerpoRespuesta("{\"id\":1}")
+                .bodyHash(IdempotencyFilter.calcularHash(new byte[0]))
                 .build();
         when(solicitudIdempotenteRepository.findByClaveAndUsuarioEmail("clave-abc", "jugador@test.com"))
                 .thenReturn(Optional.of(existente));
@@ -145,6 +146,31 @@ class IdempotencyFilterTest {
     }
 
     @Test
+    @DisplayName("doFilter_ClaveExistenteConPayloadDistinto_Responde422SinLlamarAlControlador")
+    void doFilter_ClaveExistenteConPayloadDistinto_Responde422SinLlamarAlControlador() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/reservas");
+        request.addHeader("Idempotency-Key", "clave-abc");
+        request.setContent("{\"canchaId\":2}".getBytes());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        SolicitudIdempotente existente = SolicitudIdempotente.builder()
+                .clave("clave-abc")
+                .usuarioEmail("jugador@test.com")
+                .statusRespuesta(201)
+                .contentTypeRespuesta("application/json")
+                .cuerpoRespuesta("{\"id\":1}")
+                .bodyHash(IdempotencyFilter.calcularHash("{\"canchaId\":1}".getBytes()))
+                .build();
+        when(solicitudIdempotenteRepository.findByClaveAndUsuarioEmail("clave-abc", "jugador@test.com"))
+                .thenReturn(Optional.of(existente));
+
+        idempotencyFilter.doFilter(request, response, filterChain);
+
+        verifyNoInteractions(filterChain);
+        assertEquals(422, response.getStatus());
+    }
+
+    @Test
     @DisplayName("doFilter_ClaveExistenteEnProceso_Responde409SinLlamarAlControlador")
     void doFilter_ClaveExistenteEnProceso_Responde409SinLlamarAlControlador() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/reservas");
@@ -155,6 +181,7 @@ class IdempotencyFilterTest {
                 .clave("clave-abc")
                 .usuarioEmail("jugador@test.com")
                 .statusRespuesta(null)
+                .bodyHash(IdempotencyFilter.calcularHash(new byte[0]))
                 .build();
         when(solicitudIdempotenteRepository.findByClaveAndUsuarioEmail("clave-abc", "jugador@test.com"))
                 .thenReturn(Optional.of(enProceso));

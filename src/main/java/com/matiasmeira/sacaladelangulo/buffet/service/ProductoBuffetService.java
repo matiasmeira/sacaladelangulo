@@ -78,6 +78,10 @@ public class ProductoBuffetService {
         ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimientoId, productoId);
         validarPropietarioOAdmin(producto.getEstablecimiento(), email);
 
+        // Lock pesimista antes de leer/escribir el stock: serializa contra cualquier otro
+        // ajuste/venta/cancelación concurrente sobre el mismo producto (ver A5 en la auditoría).
+        productoBuffetRepository.lockPorIds(List.of(productoId));
+
         int nuevoStock = producto.getStock() + request.cantidad();
         if (nuevoStock < 0) {
             log.warn("Ajuste de stock rechazado. Producto: {}, Stock actual: {}, Ajuste: {}",

@@ -10,7 +10,6 @@ import com.matiasmeira.sacaladelangulo.auth.model.TokenVerificacionEmail;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.TokenVerificacionEmailRepository;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
-import com.matiasmeira.sacaladelangulo.core.email.EmailService;
 import com.matiasmeira.sacaladelangulo.core.exception.TokenExpiradoException;
 import com.matiasmeira.sacaladelangulo.core.exception.TokenInvalidoException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
@@ -18,6 +17,7 @@ import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -56,14 +56,17 @@ public class RegistroVerificacionService {
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
     private final RateLimiterService rateLimiterService;
-    private final EmailService emailService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
 
     /**
-     * Paso 1: recibe solo el email, genera un token de verificación y dispara el link
-     * (simulado por ahora vía EmailService/LogEmailService).
+     * Paso 1: recibe solo el email, genera un token de verificación y publica el evento
+     * que dispara el link (ver RegistroVerificacionEmailListener) recién después de que
+     * esta transacción haga commit — así una falla del envío de email no revierte el
+     * token ya persistido, y no se mantiene la conexión de base de datos reservada
+     * durante la latencia de esa llamada externa.
      *
      * @param request DTO con el email a verificar
      */
@@ -89,7 +92,7 @@ public class RegistroVerificacionService {
         tokenVerificacionEmailRepository.save(tokenVerificacion);
 
         String linkVerificacion = frontendUrl + "/verificar?token=" + token;
-        emailService.enviarEmailVerificacion(email, linkVerificacion);
+        eventPublisher.publishEvent(new VerificacionEmailSolicitadaEvent(email, linkVerificacion));
         log.info("Token de verificación de registro generado para {}", email);
     }
 

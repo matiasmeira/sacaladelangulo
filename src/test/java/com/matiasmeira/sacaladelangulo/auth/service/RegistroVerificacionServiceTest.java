@@ -8,7 +8,6 @@ import com.matiasmeira.sacaladelangulo.auth.model.TokenVerificacionEmail;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.TokenVerificacionEmailRepository;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
-import com.matiasmeira.sacaladelangulo.core.email.EmailService;
 import com.matiasmeira.sacaladelangulo.core.exception.TokenExpiradoException;
 import com.matiasmeira.sacaladelangulo.core.exception.TokenInvalidoException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
@@ -21,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -67,7 +67,7 @@ class RegistroVerificacionServiceTest {
     private RateLimiterService rateLimiterService;
 
     @Mock
-    private EmailService emailService;
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private RegistroVerificacionService registroVerificacionService;
@@ -79,8 +79,8 @@ class RegistroVerificacionServiceTest {
     }
 
     @Test
-    @DisplayName("iniciarRegistro_Exito_GeneraTokenYEnviaEmail")
-    void iniciarRegistro_Exito_GeneraTokenYEnviaEmail() {
+    @DisplayName("iniciarRegistro_Exito_GeneraTokenYPublicaEventoDeEmail")
+    void iniciarRegistro_Exito_GeneraTokenYPublicaEventoDeEmail() {
         IniciarRegistroRequest request = new IniciarRegistroRequest("nuevo@test.com");
         when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
 
@@ -94,9 +94,10 @@ class RegistroVerificacionServiceTest {
         assertEquals("nuevo@test.com", tokenGuardado.getEmail());
         assertTrue(tokenGuardado.getFechaExpiracion().isAfter(LocalDateTime.now()));
 
-        ArgumentCaptor<String> linkCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailService).enviarEmailVerificacion(eq("nuevo@test.com"), linkCaptor.capture());
-        assertEquals("http://localhost:5173/verificar?token=" + tokenGuardado.getToken(), linkCaptor.getValue());
+        ArgumentCaptor<VerificacionEmailSolicitadaEvent> eventoCaptor = ArgumentCaptor.forClass(VerificacionEmailSolicitadaEvent.class);
+        verify(eventPublisher).publishEvent(eventoCaptor.capture());
+        assertEquals("nuevo@test.com", eventoCaptor.getValue().email());
+        assertEquals("http://localhost:5173/verificar?token=" + tokenGuardado.getToken(), eventoCaptor.getValue().linkVerificacion());
     }
 
     @Test
@@ -110,7 +111,7 @@ class RegistroVerificacionServiceTest {
 
         assertEquals("El email ya está registrado", exception.getMessage());
         verify(tokenVerificacionEmailRepository, never()).save(any());
-        verify(emailService, never()).enviarEmailVerificacion(anyString(), anyString());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

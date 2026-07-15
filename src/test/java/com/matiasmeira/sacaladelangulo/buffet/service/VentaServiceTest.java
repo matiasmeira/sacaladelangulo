@@ -459,7 +459,7 @@ class VentaServiceTest {
                 .detalles(List.of(detalleAgua, detalleAlfajor))
                 .build();
 
-        when(ventaRepository.findById(venta.getId())).thenReturn(Optional.of(venta));
+        when(ventaRepository.findByIdConDetalles(venta.getId())).thenReturn(Optional.of(venta));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -494,7 +494,7 @@ class VentaServiceTest {
                 .detalles(List.of(detalle))
                 .build();
 
-        when(ventaRepository.findById(ventaYaCancelada.getId())).thenReturn(Optional.of(ventaYaCancelada));
+        when(ventaRepository.findByIdConDetalles(ventaYaCancelada.getId())).thenReturn(Optional.of(ventaYaCancelada));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
 
         // Act
@@ -526,7 +526,7 @@ class VentaServiceTest {
                 .rol(Role.OWNER)
                 .build();
 
-        when(ventaRepository.findById(venta.getId())).thenReturn(Optional.of(venta));
+        when(ventaRepository.findByIdConDetalles(venta.getId())).thenReturn(Optional.of(venta));
         when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
 
         // Act & Assert
@@ -542,7 +542,7 @@ class VentaServiceTest {
     @DisplayName("cancelarVenta_Fallo_VentaNoExiste")
     void cancelarVenta_Fallo_VentaNoExiste() {
         // Arrange
-        when(ventaRepository.findById(999L)).thenReturn(Optional.empty());
+        when(ventaRepository.findByIdConDetalles(999L)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThrows(

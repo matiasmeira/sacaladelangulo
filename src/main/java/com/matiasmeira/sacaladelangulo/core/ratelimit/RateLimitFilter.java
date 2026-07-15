@@ -17,6 +17,14 @@ import java.util.Map;
  * cuentas. Es una defensa adicional a los límites por identidad de negocio
  * (ver AuthService), que protegen una cuenta puntual sin importar desde qué IP
  * se la ataque.
+ *
+ * La IP se toma de {@code request.getRemoteAddr()}, no de headers como
+ * X-Forwarded-For: el despliegue actual es una única instancia sin proxy/balanceador
+ * delante, así que confiar en un header que el propio cliente puede enviar arbitrario
+ * permitiría bypassear el límite rotándolo en cada request. Si en el futuro se agrega
+ * un proxy de confianza delante (que sobreescriba el header en vez de anexarlo), hay que
+ * volver a incorporar la lectura de X-Forwarded-For, pero solo confiando en él cuando la
+ * request efectivamente viene de ese proxy conocido.
  */
 @RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
@@ -39,7 +47,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        String ip = obtenerIpCliente(request);
+        String ip = request.getRemoteAddr();
         String clave = "ip:" + request.getRequestURI() + ":" + ip;
         if (!rateLimiterService.tryConsume(clave, limite.capacidad(), limite.ventanaMillis())) {
             response.setStatus(429);
@@ -49,14 +57,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    private String obtenerIpCliente(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     private record Limite(int capacidad, long ventanaMillis) {

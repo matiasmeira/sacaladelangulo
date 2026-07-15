@@ -1,8 +1,11 @@
 package com.matiasmeira.sacaladelangulo.core.idempotencia;
 
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,9 +15,15 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.Set;
 
 /**
@@ -61,8 +70,17 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return;
         }
 
+        byte[] cuerpoBytes = request.getInputStream().readAllBytes();
+        HttpServletRequest requestConCuerpoCacheado = new CachedBodyHttpServletRequest(request, cuerpoBytes);
+        String hashCuerpo = calcularHash(cuerpoBytes);
+
         var existente = solicitudIdempotenteRepository.findByClaveAndUsuarioEmail(clave, usuarioEmail);
         if (existente.isPresent()) {
+            if (!hashCuerpo.equals(existente.get().getBodyHash())) {
+                log.warn("Idempotency-Key reutilizada con un payload distinto. Clave: {}", clave);
+                responderClaveReutilizadaConOtroPayload(response);
+                return;
+            }
             atenderSolicitudExistente(existente.get(), response);
             return;
         }
@@ -72,6 +90,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
                 .usuarioEmail(usuarioEmail)
                 .metodoHttp(request.getMethod())
                 .path(request.getRequestURI())
+                .bodyHash(hashCuerpo)
                 .fechaCreacion(LocalDateTime.now())
                 .build();
         try {
@@ -84,7 +103,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 
         ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
         try {
-            filterChain.doFilter(request, wrappedResponse);
+            filterChain.doFilter(requestConCuerpoCacheado, wrappedResponse);
         } finally {
             completarSolicitud(solicitud, wrappedResponse);
             wrappedResponse.copyBodyToResponse();
@@ -122,6 +141,73 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         response.setStatus(409);
         response.setContentType("application/json");
         response.getWriter().write("{\"error\":\"Ya existe una solicitud en curso con la misma clave de idempotencia.\"}");
+    }
+
+    private void responderClaveReutilizadaConOtroPayload(HttpServletResponse response) throws IOException {
+        response.setStatus(422);
+        response.setContentType("application/json");
+        response.getWriter().write(
+                "{\"error\":\"La clave de idempotencia ya se usó con un cuerpo de solicitud distinto.\"}");
+    }
+
+    /**
+     * Hash del cuerpo de la request, para detectar que un cliente reutilice la misma
+     * Idempotency-Key con un payload distinto (bug de cliente o key mal generada): sin
+     * esto, el filtro devolvería silenciosamente la respuesta de la primera operación
+     * como si correspondiera a la segunda, aunque sean solicitudes de negocio distintas.
+     */
+    static String calcularHash(byte[] cuerpoBytes) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(cuerpoBytes));
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 no disponible", ex);
+        }
+    }
+
+    /**
+     * Envoltorio que permite leer el cuerpo de la request más de una vez: el filtro lo lee
+     * primero para calcular el hash de idempotencia, y el controlador necesita poder
+     * volver a leerlo después (deserialización de @RequestBody) sin que el stream original
+     * ya esté consumido.
+     */
+    private static class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
+        private final byte[] cuerpo;
+
+        CachedBodyHttpServletRequest(HttpServletRequest request, byte[] cuerpo) {
+            super(request);
+            this.cuerpo = cuerpo;
+        }
+
+        @Override
+        public ServletInputStream getInputStream() {
+            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(cuerpo);
+            return new ServletInputStream() {
+                @Override
+                public boolean isFinished() {
+                    return byteArrayInputStream.available() == 0;
+                }
+
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setReadListener(ReadListener readListener) {
+                }
+
+                @Override
+                public int read() {
+                    return byteArrayInputStream.read();
+                }
+            };
+        }
+
+        @Override
+        public BufferedReader getReader() {
+            return new BufferedReader(new InputStreamReader(getInputStream(), StandardCharsets.UTF_8));
+        }
     }
 
     private void completarSolicitud(SolicitudIdempotente solicitud, ContentCachingResponseWrapper wrappedResponse) {

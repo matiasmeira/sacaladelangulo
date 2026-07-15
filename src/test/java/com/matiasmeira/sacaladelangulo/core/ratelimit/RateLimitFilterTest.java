@@ -81,8 +81,11 @@ class RateLimitFilterTest {
     }
 
     @Test
-    @DisplayName("doFilter_UsaLaPrimeraIpDeXForwardedForComoClave")
-    void doFilter_UsaLaPrimeraIpDeXForwardedForComoClave() throws Exception {
+    @DisplayName("doFilter_IgnoraXForwardedFor_UsaSiempreElRemoteAddr")
+    void doFilter_IgnoraXForwardedFor_UsaSiempreElRemoteAddr() throws Exception {
+        // Sin proxy de confianza delante (despliegue de instancia única), el header
+        // X-Forwarded-For lo puede mandar cualquier cliente: si se confiara en él,
+        // alcanzaría con rotarlo en cada request para bypassear el límite por IP.
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/login");
         request.setRemoteAddr("127.0.0.1");
         request.addHeader("X-Forwarded-For", "203.0.113.9, 10.0.0.1");
@@ -94,6 +97,7 @@ class RateLimitFilterTest {
 
         ArgumentCaptor<String> claveCaptor = ArgumentCaptor.forClass(String.class);
         verify(rateLimiterService).tryConsume(claveCaptor.capture(), anyInt(), anyLong());
-        assertTrue(claveCaptor.getValue().contains("203.0.113.9"));
+        assertTrue(claveCaptor.getValue().contains("127.0.0.1"));
+        assertTrue(!claveCaptor.getValue().contains("203.0.113.9"));
     }
 }

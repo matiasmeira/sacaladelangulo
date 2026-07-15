@@ -86,6 +86,16 @@ public class VentaService {
                     .estado(EstadoVenta.CONFIRMADA)
                     .build();
 
+            // Lock pesimista sobre todos los productos del carrito antes de leer/escribir
+            // stock, en orden ascendente de ID para evitar deadlocks entre ventas
+            // concurrentes que comparten productos en distinto orden (ver A5).
+            List<Long> productoIdsOrdenados = request.detalles().stream()
+                    .map(DetalleVentaRequest::productoId)
+                    .distinct()
+                    .sorted()
+                    .toList();
+            productoBuffetRepository.lockPorIds(productoIdsOrdenados);
+
             List<DetalleVenta> detalles = new ArrayList<>();
             BigDecimal total = BigDecimal.ZERO;
 
@@ -141,7 +151,7 @@ public class VentaService {
     public VentaResponse cancelarVenta(Long ventaId, String email) {
         log.info("Iniciando cancelación de venta. ID: {}, Email: {}", ventaId, email);
 
-        Venta venta = ventaRepository.findById(ventaId)
+        Venta venta = ventaRepository.findByIdConDetalles(ventaId)
                 .orElseThrow(() -> new EntityNotFoundException("Venta no encontrada"));
         validarPropietarioOAdmin(venta.getEstablecimiento(), email);
 
@@ -149,6 +159,16 @@ public class VentaService {
             log.info("Venta ya se encontraba cancelada. ID: {}", ventaId);
             return ventaMapper.mapToResponse(venta);
         }
+
+        // Mismo lock pesimista que en registrarVenta/ajustarStock (ver A5): serializa la
+        // devolución de stock contra cualquier otra venta/ajuste concurrente sobre los
+        // mismos productos.
+        List<Long> productoIdsOrdenados = venta.getDetalles().stream()
+                .map(detalle -> detalle.getProductoBuffet().getId())
+                .distinct()
+                .sorted()
+                .toList();
+        productoBuffetRepository.lockPorIds(productoIdsOrdenados);
 
         for (DetalleVenta detalle : venta.getDetalles()) {
             ProductoBuffet producto = detalle.getProductoBuffet();

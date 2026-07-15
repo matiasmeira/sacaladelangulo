@@ -50,6 +50,13 @@ public class SolicitudIdempotente {
     @Column(nullable = false)
     private String path;
 
+    /**
+     * Hash SHA-256 (hex) del cuerpo de la request original, para detectar si la misma
+     * Idempotency-Key se reutiliza con un payload distinto (ver IdempotencyFilter).
+     */
+    @Column(name = "body_hash", nullable = false, length = 64)
+    private String bodyHash;
+
     @Column(name = "status_respuesta")
     private Integer statusRespuesta;
 

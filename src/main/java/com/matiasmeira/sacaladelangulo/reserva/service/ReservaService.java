@@ -705,6 +705,19 @@ public class ReservaService {
                 .map(reservaMapper::mapToResponse);
     }
 
+    /**
+     * Lista las reservas del jugador autenticado, opcionalmente filtradas por estado.
+     */
+    @Transactional(readOnly = true)
+    public Page<ReservaResponse> obtenerMisReservas(String email, EstadoReserva estado, Pageable pageable) {
+        Usuario jugador = buscarUsuarioPorEmail(email);
+        Pageable pageableFinal = capPageSize(pageable);
+        Page<Reserva> reservas = (estado == null)
+                ? reservaRepository.findByJugadorId(jugador.getId(), pageableFinal)
+                : reservaRepository.findByJugadorIdAndEstado(jugador.getId(), estado, pageableFinal);
+        return reservas.map(reservaMapper::mapToResponse);
+    }
+
     private void validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
         Usuario usuarioAutenticado = buscarUsuarioPorEmail(email);
         boolean esAdmin = usuarioAutenticado.getRol() == Role.ADMIN;

@@ -5,12 +5,14 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
+import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.service.ReservaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -166,5 +168,23 @@ public class ReservaController {
             @AuthenticationPrincipal UserDetails userDetails,
             @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
         return ResponseEntity.ok(reservaService.obtenerReservasPorEstablecimientoYFecha(estId, fecha, pageable, userDetails.getUsername()));
+    }
+
+    /**
+     * Lista las reservas del jugador autenticado, opcionalmente filtradas por estado.
+     * Protegido: solo jugadores (rol PLAYER).
+     *
+     * @param userDetails Detalles del usuario autenticado
+     * @param estado Filtro opcional por estado de la reserva
+     * @param pageable Paginación y orden (por defecto, más recientes primero)
+     * @return Page de ReservaResponse con las reservas del jugador
+     */
+    @GetMapping("/mis-reservas")
+    @PreAuthorize("hasRole('PLAYER')")
+    public ResponseEntity<Page<ReservaResponse>> obtenerMisReservas(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) EstadoReserva estado,
+            @ParameterObject @PageableDefault(size = 10, sort = "fechaHoraInicio", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(reservaService.obtenerMisReservas(userDetails.getUsername(), estado, pageable));
     }
 }

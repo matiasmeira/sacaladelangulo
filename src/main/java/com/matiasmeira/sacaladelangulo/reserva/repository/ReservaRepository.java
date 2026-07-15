@@ -87,6 +87,14 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             org.springframework.data.domain.Pageable pageable
     );
 
+    org.springframework.data.domain.Page<Reserva> findByJugadorId(Long jugadorId, org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<Reserva> findByJugadorIdAndEstado(
+            Long jugadorId,
+            com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
+            org.springframework.data.domain.Pageable pageable
+    );
+
     /**
      * IDs de canchas (dentro de la lista dada) que ya tienen alguna reserva solapada
      * con el período indicado. Se usa para resolver disponibilidad en lote y evitar

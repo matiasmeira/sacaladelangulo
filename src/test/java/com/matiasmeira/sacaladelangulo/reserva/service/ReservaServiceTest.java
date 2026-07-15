@@ -30,6 +30,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -1170,6 +1174,62 @@ class ReservaServiceTest {
                 () -> reservaService.cancelarReserva(reservaConfirmada.getId(), empleadoSinPermiso.getEmail())
         );
         verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("obtenerMisReservas_SinFiltroEstado_DebeRetornarReservasDelJugador")
+    void obtenerMisReservas_SinFiltroEstado_DebeRetornarReservasDelJugador() {
+        // Arrange
+        Reserva reserva = Reserva.builder()
+                .id(70L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Reserva> pageReservas = new PageImpl<>(List.of(reserva), pageable, 1);
+        ReservaResponse response = new ReservaResponse(
+                reserva.getId(), jugador.getId(), jugador.getNombre(), cancha.getId(), cancha.getNombre(),
+                reserva.getFechaHoraInicio(), reserva.getFechaHoraFin(), "CONFIRMADA",
+                reserva.getPrecioTotal(), reserva.getSenaPagada(), null, null, null);
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(reservaRepository.findByJugadorId(jugador.getId(), pageable)).thenReturn(pageReservas);
+        when(reservaMapper.mapToResponse(reserva)).thenReturn(response);
+
+        // Act
+        Page<ReservaResponse> resultado = reservaService.obtenerMisReservas(jugador.getEmail(), null, pageable);
+
+        // Assert
+        assert resultado.getTotalElements() == 1;
+        assert resultado.getContent().get(0).id().equals(70L);
+        verify(reservaRepository).findByJugadorId(jugador.getId(), pageable);
+        verify(reservaRepository, never()).findByJugadorIdAndEstado(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("obtenerMisReservas_ConFiltroEstado_DebeUsarQueryFiltrada")
+    void obtenerMisReservas_ConFiltroEstado_DebeUsarQueryFiltrada() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Reserva> pageVacia = new PageImpl<>(List.of(), pageable, 0);
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(reservaRepository.findByJugadorIdAndEstado(jugador.getId(), EstadoReserva.CANCELADA, pageable))
+                .thenReturn(pageVacia);
+
+        // Act
+        Page<ReservaResponse> resultado = reservaService.obtenerMisReservas(jugador.getEmail(), EstadoReserva.CANCELADA, pageable);
+
+        // Assert
+        assert resultado.getTotalElements() == 0;
+        verify(reservaRepository).findByJugadorIdAndEstado(jugador.getId(), EstadoReserva.CANCELADA, pageable);
+        verify(reservaRepository, never()).findByJugadorId(any(), any());
     }
 
     private void canchasInEstablecimientoWithHorarioNocturno() {

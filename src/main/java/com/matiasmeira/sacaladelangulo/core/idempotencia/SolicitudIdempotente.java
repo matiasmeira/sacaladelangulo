@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -25,8 +26,9 @@ import java.time.LocalDateTime;
  * procesando.
  */
 @Entity
-@Table(name = "solicitudes_idempotentes", uniqueConstraints =
-        @UniqueConstraint(columnNames = {"clave", "usuario_email"}))
+@Table(name = "solicitudes_idempotentes",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"clave", "usuario_email"}),
+        indexes = @Index(name = "idx_solicitudes_idempotentes_fecha_creacion", columnList = "fecha_creacion"))
 @Getter
 @Setter
 @Builder

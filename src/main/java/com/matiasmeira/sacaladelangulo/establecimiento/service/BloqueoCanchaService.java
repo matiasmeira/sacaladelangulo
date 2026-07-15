@@ -64,11 +64,9 @@ public class BloqueoCanchaService {
 
         log.info("Bloqueo creado para cancha {}. Reservas afectadas: {}", canchaId, reservasAfectadas.size());
 
-        List<ReservaAfectadaResponse> reservasAfectadasConAlternativas = reservasAfectadas.stream()
-                .map(reserva -> new ReservaAfectadaResponse(
-                        reservaMapper.mapToResponse(reserva),
-                        buscarCanchasAlternativasDisponibles(cancha, reserva)))
-                .toList();
+        List<ReservaAfectadaResponse> reservasAfectadasConAlternativas = reservasAfectadas.isEmpty()
+                ? List.of()
+                : calcularAlternativasParaReservasAfectadas(cancha, reservasAfectadas);
 
         return new BloqueoCanchaResponse(
                 bloqueo.getId(),
@@ -81,6 +79,32 @@ public class BloqueoCanchaService {
     }
 
     /**
+     * Para cada reserva afectada por el bloqueo, busca canchas alternativas dentro del
+     * mismo establecimiento. Precarga una sola vez las canchas activas y, para el rango
+     * completo que abarcan todas las reservas afectadas, los bloqueos y reservas del
+     * establecimiento — en vez de repetir esas 3 consultas por cada combinación
+     * reserva×cancha candidata (antes O(N×M) queries; ver A14 en la auditoría).
+     */
+    private List<ReservaAfectadaResponse> calcularAlternativasParaReservasAfectadas(Cancha canchaBloqueada, List<Reserva> reservasAfectadas) {
+        Long establecimientoId = canchaBloqueada.getEstablecimiento().getId();
+        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId);
+
+        LocalDateTime rangoInicio = reservasAfectadas.stream()
+                .map(Reserva::getFechaHoraInicio).min(LocalDateTime::compareTo).orElseThrow();
+        LocalDateTime rangoFin = reservasAfectadas.stream()
+                .map(Reserva::getFechaHoraFin).max(LocalDateTime::compareTo).orElseThrow();
+
+        List<BloqueoCancha> bloqueosEnRango = bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, rangoInicio, rangoFin);
+        List<Reserva> reservasEnRango = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin);
+
+        return reservasAfectadas.stream()
+                .map(reserva -> new ReservaAfectadaResponse(
+                        reservaMapper.mapToResponse(reserva),
+                        buscarCanchasAlternativasDisponibles(canchaBloqueada, reserva, todasLasCanchas, bloqueosEnRango, reservasEnRango)))
+                .toList();
+    }
+
+    /**
      * Busca, dentro del mismo establecimiento, canchas que soporten el deporte para el
      * que se hizo la reserva afectada y tengan la misma capacidad que la cancha bloqueada
      * (p. ej. "Cancha 5B" para una reserva de fútbol en "Cancha 5A") que estén libres
@@ -88,23 +112,31 @@ public class BloqueoCanchaService {
      * como alternativa de reubicación en vez de cancelar directamente
      * (ver PUT /reservas/{id}/mover-cancha).
      */
-    private List<CanchaDisponibleResponse> buscarCanchasAlternativasDisponibles(Cancha canchaBloqueada, Reserva reserva) {
-        return canchaRepository.findByEstablecimientoIdAndIsActiveTrue(canchaBloqueada.getEstablecimiento().getId()).stream()
+    private List<CanchaDisponibleResponse> buscarCanchasAlternativasDisponibles(Cancha canchaBloqueada, Reserva reserva,
+            List<Cancha> todasLasCanchas, List<BloqueoCancha> bloqueosEnRango, List<Reserva> reservasEnRango) {
+        return todasLasCanchas.stream()
                 .filter(candidata -> !candidata.getId().equals(canchaBloqueada.getId()))
                 .filter(candidata -> candidata.getDeportes().contains(reserva.getDeporteSeleccionado()))
                 .filter(candidata -> candidata.getCapacidad().equals(canchaBloqueada.getCapacidad()))
-                .filter(candidata -> estaLibreEnElHorarioDeLaReserva(candidata, reserva))
+                .filter(candidata -> estaLibreEnElHorarioDeLaReserva(candidata, reserva, bloqueosEnRango, reservasEnRango))
                 .map(candidata -> new CanchaDisponibleResponse(candidata.getId(), candidata.getNombre()))
                 .toList();
     }
 
-    private boolean estaLibreEnElHorarioDeLaReserva(Cancha candidata, Reserva reserva) {
-        boolean tieneBloqueo = !bloqueoCanchaRepository.findOverlappingBloqueos(
-                candidata.getId(), reserva.getFechaHoraInicio(), reserva.getFechaHoraFin()).isEmpty();
-        boolean tieneReservaSolapada = reservaRepository.findOverlappingByCanchaId(
-                        candidata.getId(), reserva.getFechaHoraInicio(), reserva.getFechaHoraFin()).stream()
-                .anyMatch(r -> !r.getId().equals(reserva.getId()));
+    private boolean estaLibreEnElHorarioDeLaReserva(Cancha candidata, Reserva reserva,
+            List<BloqueoCancha> bloqueosEnRango, List<Reserva> reservasEnRango) {
+        boolean tieneBloqueo = bloqueosEnRango.stream()
+                .filter(b -> b.getCancha().getId().equals(candidata.getId()))
+                .anyMatch(b -> seSuperponen(b.getFechaInicio(), b.getFechaFin(), reserva.getFechaHoraInicio(), reserva.getFechaHoraFin()));
+        boolean tieneReservaSolapada = reservasEnRango.stream()
+                .filter(r -> r.getCancha().getId().equals(candidata.getId()))
+                .filter(r -> !r.getId().equals(reserva.getId()))
+                .anyMatch(r -> seSuperponen(r.getFechaHoraInicio(), r.getFechaHoraFin(), reserva.getFechaHoraInicio(), reserva.getFechaHoraFin()));
         return !tieneBloqueo && !tieneReservaSolapada;
+    }
+
+    private boolean seSuperponen(LocalDateTime inicioA, LocalDateTime finA, LocalDateTime inicioB, LocalDateTime finB) {
+        return inicioA.isBefore(finB) && finA.isAfter(inicioB);
     }
 
     @Transactional

@@ -35,6 +35,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -254,11 +255,9 @@ class BloqueoCanchaServiceTest {
                 .thenReturn(List.of(reservaAfectada));
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
                 .thenReturn(List.of(cancha5A, cancha5B));
-        when(bloqueoCanchaRepository.findOverlappingBloqueos(
-                cancha5B.getId(), reservaAfectada.getFechaHoraInicio(), reservaAfectada.getFechaHoraFin()))
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
                 .thenReturn(List.of());
-        when(reservaRepository.findOverlappingByCanchaId(
-                cancha5B.getId(), reservaAfectada.getFechaHoraInicio(), reservaAfectada.getFechaHoraFin()))
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), any(), any()))
                 .thenReturn(List.of());
 
         // Act
@@ -308,11 +307,9 @@ class BloqueoCanchaServiceTest {
                 .thenReturn(List.of(reservaAfectada));
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
                 .thenReturn(List.of(cancha5A, cancha5B));
-        when(bloqueoCanchaRepository.findOverlappingBloqueos(
-                cancha5B.getId(), reservaAfectada.getFechaHoraInicio(), reservaAfectada.getFechaHoraFin()))
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
                 .thenReturn(List.of());
-        when(reservaRepository.findOverlappingByCanchaId(
-                cancha5B.getId(), reservaAfectada.getFechaHoraInicio(), reservaAfectada.getFechaHoraFin()))
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), any(), any()))
                 .thenReturn(List.of(otraReservaEnCancha5B));
 
         // Act

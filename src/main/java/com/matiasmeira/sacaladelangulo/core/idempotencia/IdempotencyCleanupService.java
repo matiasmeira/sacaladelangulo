@@ -28,7 +28,7 @@ public class IdempotencyCleanupService {
     @Transactional
     public void limpiarClavesExpiradas() {
         LocalDateTime limite = LocalDateTime.now().minus(RETENCION);
-        long eliminadas = solicitudIdempotenteRepository.deleteByFechaCreacionBefore(limite);
+        int eliminadas = solicitudIdempotenteRepository.borrarExpiradas(limite);
         if (eliminadas > 0) {
             log.info("Limpieza de idempotencia: {} claves expiradas eliminadas", eliminadas);
         }

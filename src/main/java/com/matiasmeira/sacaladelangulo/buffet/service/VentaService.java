@@ -21,6 +21,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
@@ -248,6 +249,11 @@ public class VentaService {
                 .orElseThrow(() -> new EntityNotFoundException("Reserva no encontrada"));
         if (!reserva.getCancha().getEstablecimiento().getId().equals(establecimientoId)) {
             throw new IllegalArgumentException("La reserva no pertenece a este establecimiento");
+        }
+        if (reserva.getEstado() != EstadoReserva.CONFIRMADA && reserva.getEstado() != EstadoReserva.FINALIZADA) {
+            // Ver M19 en la auditoría: sin este chequeo se podía cargar consumo de buffet a
+            // una reserva CANCELADA o todavía PENDIENTE_SENA, distorsionando reportes.
+            throw new IllegalArgumentException("No se puede cargar consumo a una reserva en estado " + reserva.getEstado());
         }
         return reserva;
     }

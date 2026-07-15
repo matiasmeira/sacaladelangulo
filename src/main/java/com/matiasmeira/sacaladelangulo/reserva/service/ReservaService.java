@@ -42,6 +42,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +59,13 @@ import java.util.Optional;
 public class ReservaService {
 
     private static final int TAMANIO_PAGINA_MAXIMO = 100;
+    /**
+     * Mismo tope que DisponibilidadService.RANGO_MAXIMO_DIAS: no tiene sentido permitir
+     * reservar más adelante de lo que la propia grilla de disponibilidad puede mostrar.
+     * Solo aplica a reservas puntuales (crearReserva/crearReservaManual); crearReservaSemanal
+     * queda afuera a propósito, ya que existe justamente para turnos fijos de largo plazo.
+     */
+    private static final int LIMITE_ANTICIPACION_DIAS = 31;
 
     private final ReservaRepository reservaRepository;
     private final CanchaRepository canchaRepository;
@@ -85,6 +93,7 @@ public class ReservaService {
         validarDeporteSoportado(request.deporteSeleccionado(), cancha);
 
         validarFechas(request);
+        validarLimiteDeAnticipacion(request.fechaHoraInicio());
         validarGranularidadHoraria(request, cancha);
         long duracionMinutos = validarDuracion(request, cancha);
         validarSinBloqueos(request, cancha);
@@ -146,6 +155,7 @@ public class ReservaService {
             validarDeporteSoportado(request.deporteSeleccionado(), cancha);
 
             validarFechas(request.fechaHoraInicio(), request.fechaHoraFin());
+            validarLimiteDeAnticipacion(request.fechaHoraInicio());
             validarGranularidadHoraria(request.fechaHoraInicio(), cancha);
             long duracionMinutos = validarDuracion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
             validarSinBloqueos(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
@@ -343,6 +353,18 @@ public class ReservaService {
         if (fechaHoraInicio.isBefore(LocalDateTime.now())) {
             log.warn("Reserva solicitada en el pasado");
             throw new IllegalArgumentException("No se pueden crear reservas en el pasado");
+        }
+    }
+
+    /**
+     * Cota superior de anticipación para reservas puntuales (ver LIMITE_ANTICIPACION_DIAS).
+     * No se llama desde crearReservaSemanal a propósito.
+     */
+    private void validarLimiteDeAnticipacion(LocalDateTime fechaHoraInicio) {
+        if (ChronoUnit.DAYS.between(LocalDateTime.now(), fechaHoraInicio) >= LIMITE_ANTICIPACION_DIAS) {
+            log.warn("Reserva solicitada con demasiada anticipación: {}", fechaHoraInicio);
+            throw new IllegalArgumentException(
+                    "No se pueden crear reservas con más de " + LIMITE_ANTICIPACION_DIAS + " días de anticipación");
         }
     }
 
@@ -641,6 +663,13 @@ public class ReservaService {
             if (reserva.getEstado() == EstadoReserva.FINALIZADA) {
                 log.info("Reserva ya se encontraba finalizada. ID: {}", reservaId);
                 return reservaMapper.mapToResponse(reserva);
+            }
+
+            if (reserva.getEstado() == EstadoReserva.PENDIENTE_SENA) {
+                // Mismo criterio de matriz de estados que confirmarReserva/cancelarReserva
+                // (ver C2 y A3 en la auditoría): una reserva tiene que pasar por CONFIRMADA
+                // antes de poder finalizarse.
+                throw new IllegalArgumentException("No se puede finalizar una reserva que todavía no fue confirmada");
             }
 
             reserva.setEstado(EstadoReserva.FINALIZADA);

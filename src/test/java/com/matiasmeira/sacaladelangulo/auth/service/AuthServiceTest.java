@@ -21,7 +21,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -59,9 +58,6 @@ class AuthServiceTest {
     private AuthenticationManager authenticationManager;
 
     @Mock
-    private UserDetailsService userDetailsService;
-
-    @Mock
     private RateLimiterService rateLimiterService;
 
     @InjectMocks
@@ -84,10 +80,9 @@ class AuthServiceTest {
                 .authorities("ROLE_PLAYER")
                 .build();
 
-        when(userDetailsService.loadUserByUsername(request.email())).thenReturn(userDetails);
         when(jwtService.generateToken(userDetails)).thenReturn("jwt-token");
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
-                .thenReturn(new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+                .thenReturn(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
 
         AuthResponse response = authService.authenticate(request);
 
@@ -129,8 +124,7 @@ class AuthServiceTest {
         when(usuarioRepository.findByEstablecimientoIdAndNombreAndRol(10L, "Juan", Role.EMPLOYEE))
                 .thenReturn(Optional.of(empleado));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
-                .thenReturn(new UsernamePasswordAuthenticationToken(empleado.getEmail(), request.pin()));
-        when(userDetailsService.loadUserByUsername(empleado.getEmail())).thenReturn(userDetails);
+                .thenReturn(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
         when(jwtService.generateToken(eq(userDetails), anyMap(), anyLong())).thenReturn("jwt-token-empleado");
 
         AuthResponse response = authService.authenticateEmpleado(request);
@@ -215,6 +209,36 @@ class AuthServiceTest {
                 () -> authService.authenticate(request)
         );
         verify(authenticationManager, never()).authenticate(any());
+    }
+
+    @Test
+    @DisplayName("registerOwner_Fallo_LimiteDeIntentosSuperado")
+    void registerOwner_Fallo_LimiteDeIntentosSuperado() {
+        RegisterRequest request = new RegisterRequest("dueno@test.com", "Password123", "Carlos");
+        when(rateLimiterService.tryConsume(eq("register-owner:dueno@test.com"), anyInt(), anyLong())).thenReturn(false);
+
+        assertThrows(
+                RateLimitExceededException.class,
+                () -> authService.registerOwner(request)
+        );
+        verify(usuarioRepository, never()).existsByEmail(anyString());
+        verify(usuarioRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("registerOwner_Fallo_CarreraDeInsercion_TraduceAExcepcionDeNegocio")
+    void registerOwner_Fallo_CarreraDeInsercion_TraduceAExcepcionDeNegocio() {
+        RegisterRequest request = new RegisterRequest("dueno@test.com", "Password123", "Carlos");
+        when(usuarioRepository.existsByEmail("dueno@test.com")).thenReturn(false);
+        when(usuarioRepository.saveAndFlush(any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> authService.registerOwner(request)
+        );
+
+        assertEquals("El email ya está registrado", exception.getMessage());
     }
 
     @Test

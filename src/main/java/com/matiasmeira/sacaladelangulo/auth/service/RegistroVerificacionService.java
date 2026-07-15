@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,7 +54,6 @@ public class RegistroVerificacionService {
     private final TokenVerificacionEmailRepository tokenVerificacionEmailRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final UserDetailsService userDetailsService;
     private final RateLimiterService rateLimiterService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -136,12 +135,22 @@ public class RegistroVerificacionService {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build();
-        usuarioRepository.save(usuario);
+        try {
+            usuarioRepository.saveAndFlush(usuario);
+        } catch (DataIntegrityViolationException ex) {
+            // existsByEmail + save no es atómico: un doble submit con el mismo token (el
+            // token no se consume hasta el final) puede pasar ambas veces el chequeo antes
+            // de que cualquiera inserte (ver M8 en la auditoría).
+            tokenVerificacionEmailRepository.delete(tokenVerificacion);
+            throw new IllegalArgumentException("El email ya está registrado");
+        }
 
         tokenVerificacionEmailRepository.delete(tokenVerificacion);
         log.info("Registro completado para {}", email);
 
-        var userDetails = userDetailsService.loadUserByUsername(usuario.getEmail());
+        // Se construye el UserDetails a partir del Usuario recién guardado en vez de
+        // volver a consultar la base con loadUserByUsername (ver M4 en la auditoría).
+        var userDetails = UsuarioUserDetailsMapper.map(usuario);
         return new AuthResponse(jwtService.generateToken(userDetails));
     }
 

@@ -43,7 +43,7 @@ public class VentaBuffetController {
     }
 
     @PutMapping("/{id}/cancelar")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<VentaResponse> cancelarVenta(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -56,7 +56,7 @@ public class VentaBuffetController {
      * ventas, ticket promedio y ranking de productos más vendidos.
      */
     @GetMapping("/metricas")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<MetricasVentasResponse> obtenerMetricas(
             @RequestParam Long establecimientoId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,

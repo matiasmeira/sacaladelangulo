@@ -383,6 +383,46 @@ class VentaServiceTest {
     }
 
     @Test
+    @DisplayName("registrarVenta_Fallo_ReservaCanceladaOPendienteDeSena")
+    void registrarVenta_Fallo_ReservaCanceladaOPendienteDeSena() {
+        // Arrange: cargar consumo a una reserva CANCELADA no debe permitirse (ver M19)
+        Cancha cancha = Cancha.builder()
+                .id(60L)
+                .nombre("Cancha A")
+                .deportes(Set.of(Deporte.FUTBOL))
+                .capacidad(10)
+                .precioBase(BigDecimal.valueOf(1500))
+                .montoSena(BigDecimal.valueOf(500))
+                .establecimiento(establecimiento)
+                .isActive(true)
+                .build();
+
+        Reserva reservaCancelada = Reserva.builder()
+                .id(71L)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CANCELADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        VentaRequest request = new VentaRequest(establecimiento.getId(), reservaCancelada.getId(),
+                List.of(new DetalleVentaRequest(agua.getId(), 1)));
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(reservaRepository.findById(reservaCancelada.getId())).thenReturn(Optional.of(reservaCancelada));
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> ventaService.registrarVenta(request, dueno.getEmail())
+        );
+        assertTrue(exception.getMessage().contains("CANCELADA"));
+        verify(ventaRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("registrarVenta_Exito_ConReservaValidaQuedaAsociada")
     void registrarVenta_Exito_ConReservaValidaQuedaAsociada() {
         // Arrange

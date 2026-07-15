@@ -72,14 +72,15 @@ public class ReservaController {
     /**
      * Crea un turno fijo semanal: genera una reserva individual, ya CONFIRMADA, por
      * cada fecha del período que coincida con el día de la semana solicitado.
-     * Protegido: solo el dueño del establecimiento (rol OWNER).
+     * Protegido: el dueño del establecimiento o un administrador (mismo criterio que
+     * ReservaService.validarPropietarioOAdmin, ver M12 en la auditoría).
      *
      * @param userDetails Detalles del usuario autenticado
      * @param request DTO con el rango de fechas, día/horario recurrente y datos del cliente
      * @return Lista de ReservaResponse con cada ocurrencia creada
      */
     @PostMapping("/semanal")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<List<ReservaResponse>> crearReservaSemanal(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody @Valid ReservaSemanalRequest request) {

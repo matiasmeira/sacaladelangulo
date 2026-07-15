@@ -17,7 +17,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "codigos_verificacion", indexes = @Index(columnList = "email"))
+@Table(name = "codigos_verificacion",
+        uniqueConstraints = @UniqueConstraint(columnNames = "email"),
+        indexes = @Index(columnList = "email"))
 public class CodigoVerificacion {
 
     @Id

@@ -17,6 +17,7 @@ import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -77,7 +78,15 @@ public class FeedbackService {
                 .destacado(false)
                 .build();
 
-        Feedback feedbackGuardado = feedbackRepository.save(feedback);
+        Feedback feedbackGuardado;
+        try {
+            feedbackGuardado = feedbackRepository.saveAndFlush(feedback);
+        } catch (DataIntegrityViolationException ex) {
+            // existsByReservaId + save no es atómico: dos requests casi simultáneas del
+            // mismo jugador (doble click/retry) pueden pasar ambas la validación antes de
+            // que cualquiera persista (ver M18 en la auditoría).
+            throw new IllegalArgumentException("Ya calificaste esta reserva");
+        }
         log.info("Feedback creado con éxito. ID: {}, Reserva: {}", feedbackGuardado.getId(), reservaId);
 
         return feedbackMapper.mapToResponse(feedbackGuardado);

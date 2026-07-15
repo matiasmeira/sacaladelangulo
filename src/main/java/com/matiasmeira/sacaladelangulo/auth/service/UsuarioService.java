@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.CodigoVerificacionRepository;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +54,17 @@ public class UsuarioService {
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(5))
                 .build();
 
-        codigoVerificacionRepository.save(codigoVerificacion);
+        try {
+            codigoVerificacionRepository.saveAndFlush(codigoVerificacion);
+        } catch (DataIntegrityViolationException ex) {
+            // El deleteByEmail + save no es atómico: dos solicitudes casi simultáneas para
+            // el mismo email pueden pasar ambas el delete antes de que cualquiera inserte.
+            // La constraint única sobre "email" (ver CodigoVerificacion) evita que queden dos
+            // filas vivas para el mismo usuario; acá se traduce en un mensaje claro en vez de
+            // un 500 no controlado.
+            log.debug("Carrera al solicitar código OTP para {}", email);
+            throw new IllegalArgumentException("Ya se generó un código recientemente. Esperá unos segundos e intentá de nuevo.");
+        }
 
         // TODO: integrar proveedor real de SMS. Nunca loguear el código en INFO/producción.
         log.debug("Código OTP generado para {} (envío de SMS simulado)", email);

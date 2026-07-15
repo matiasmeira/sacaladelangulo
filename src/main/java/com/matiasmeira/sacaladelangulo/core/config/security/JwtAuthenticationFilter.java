@@ -40,10 +40,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         token = authHeader.substring(7);
         try {
             username = jwtService.extractUsername(token);
-        } catch (JwtException ex) {
-            // Token inválido o expirado: se continúa sin autenticar. Es Spring Security
-            // (authorizeHttpRequests) quien decide si la ruta requiere 401/403 según corresponda;
-            // fijar el status acá quedaba sobreescrito por la respuesta real del controlador.
+        } catch (JwtException | IllegalArgumentException ex) {
+            // Token inválido, expirado o vacío ("Bearer " sin nada después, que jjwt rechaza
+            // con IllegalArgumentException en vez de JwtException): se continúa sin autenticar.
+            // Es Spring Security (authorizeHttpRequests) quien decide si la ruta requiere
+            // 401/403 según corresponda; fijar el status acá quedaba sobreescrito por la
+            // respuesta real del controlador.
             filterChain.doFilter(request, response);
             return;
         }

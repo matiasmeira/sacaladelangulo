@@ -2,11 +2,13 @@ package com.matiasmeira.sacaladelangulo.core.config.security;
 
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.auth.service.JwtService;
+import com.matiasmeira.sacaladelangulo.auth.service.UsuarioUserDetailsMapper;
 import com.matiasmeira.sacaladelangulo.core.idempotencia.IdempotencyFilter;
 import com.matiasmeira.sacaladelangulo.core.idempotencia.SolicitudIdempotenteRepository;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitFilter;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -32,6 +34,14 @@ public class SecurityConfig {
 
     private final UsuarioRepository usuarioRepository;
     private final JwtService jwtService;
+
+    /**
+     * Externalizado (a diferencia de antes, que estaba hardcodeado en el código) para
+     * poder cambiar los orígenes permitidos por entorno sin recompilar (ver M9 en la
+     * auditoría).
+     */
+    @Value("${app.cors.allowed-origins}")
+    private java.util.List<String> allowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -62,7 +72,7 @@ public class SecurityConfig {
     @Bean
     public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
         org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
-        configuration.setAllowedOrigins(java.util.List.of("http://localhost:5173", "http://localhost:3000"));
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "Cache-Control", "Idempotency-Key"));
         configuration.setAllowCredentials(true);
@@ -90,13 +100,7 @@ public class SecurityConfig {
     @Bean
     public UserDetailsService userDetailsService() {
         return username -> usuarioRepository.findByEmail(username == null ? null : username.trim().toLowerCase())
-                .map(usuario -> org.springframework.security.core.userdetails.User.builder()
-                        .username(usuario.getEmail())
-                        .password(usuario.getPassword())
-                        .disabled(!Boolean.TRUE.equals(usuario.getIsActive()))
-                        .roles(usuario.getRol().name())
-                        .build()
-                )
+                .map(UsuarioUserDetailsMapper::map)
                 .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("Usuario no encontrado"));
     }
 

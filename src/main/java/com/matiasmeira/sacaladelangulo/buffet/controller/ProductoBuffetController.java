@@ -26,7 +26,7 @@ public class ProductoBuffetController {
     private final ProductoBuffetService productoBuffetService;
 
     @PostMapping
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<ProductoBuffetResponse> crearProducto(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails,
@@ -36,7 +36,7 @@ public class ProductoBuffetController {
     }
 
     @PutMapping("/{productoId}")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<ProductoBuffetResponse> actualizarProducto(
             @PathVariable Long establecimientoId,
             @PathVariable Long productoId,
@@ -47,7 +47,7 @@ public class ProductoBuffetController {
     }
 
     @PatchMapping("/{productoId}/stock")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<ProductoBuffetResponse> ajustarStock(
             @PathVariable Long establecimientoId,
             @PathVariable Long productoId,
@@ -58,7 +58,7 @@ public class ProductoBuffetController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<List<ProductoBuffetResponse>> listarPorEstablecimiento(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -66,7 +66,7 @@ public class ProductoBuffetController {
     }
 
     @DeleteMapping("/{productoId}")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<Void> eliminarProducto(
             @PathVariable Long establecimientoId,
             @PathVariable Long productoId,

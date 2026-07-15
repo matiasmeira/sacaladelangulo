@@ -12,11 +12,13 @@ import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -40,19 +42,24 @@ public class AuthService {
     private static final long LOGIN_VENTANA_MILLIS = Duration.ofMinutes(5).toMillis();
     private static final int LOGIN_EMPLEADO_INTENTOS_MAXIMOS = 5;
     private static final long LOGIN_EMPLEADO_VENTANA_MILLIS = Duration.ofMinutes(5).toMillis();
+    /** Mismo criterio que RegistroVerificacionService.iniciarRegistro para el registro de jugadores. */
+    private static final int REGISTER_OWNER_INTENTOS_MAXIMOS = 3;
+    private static final long REGISTER_OWNER_VENTANA_MILLIS = Duration.ofMinutes(15).toMillis();
 
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
-    private final UserDetailsService userDetailsService;
     private final RateLimiterService rateLimiterService;
 
-    @Value("${jwt.empleado-expiration-millis:3600000}")
+    @Value("${jwt.empleado-expiration-millis:900000}")
     private long empleadoExpirationMillis;
 
     public AuthResponse registerOwner(RegisterRequest request) {
         String email = normalizarEmail(request.email());
+        if (!rateLimiterService.tryConsume("register-owner:" + email, REGISTER_OWNER_INTENTOS_MAXIMOS, REGISTER_OWNER_VENTANA_MILLIS)) {
+            throw new RateLimitExceededException("Demasiadas solicitudes de registro. Intentá nuevamente en unos minutos.");
+        }
         if (usuarioRepository.existsByEmail(email)) {
             throw new IllegalArgumentException("El email ya está registrado");
         }
@@ -70,8 +77,15 @@ public class AuthService {
                 .fechaFinPrueba(LocalDateTime.now().plusMonths(1))
                 .build();
 
-        usuarioRepository.save(usuario);
-        var userDetails = userDetailsService.loadUserByUsername(usuario.getEmail());
+        try {
+            usuarioRepository.saveAndFlush(usuario);
+        } catch (DataIntegrityViolationException ex) {
+            // existsByEmail + save no es atómico: dos registros casi simultáneos con el
+            // mismo email pueden pasar ambos el chequeo antes de que cualquiera inserte
+            // (ver M8 en la auditoría). El constraint único de "usuarios.email" lo traduce acá.
+            throw new IllegalArgumentException("El email ya está registrado");
+        }
+        var userDetails = UsuarioUserDetailsMapper.map(usuario);
         return new AuthResponse(jwtService.generateToken(userDetails));
     }
 
@@ -81,17 +95,23 @@ public class AuthService {
             throw new RateLimitExceededException("Demasiados intentos de inicio de sesión. Intente nuevamente en unos minutos.");
         }
 
+        Authentication resultado;
         try {
-            authenticationManager.authenticate(
+            resultado = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(email, request.password())
             );
-        } catch (BadCredentialsException ex) {
-            throw new BadCredentialsException("Credenciales inválidas");
         } catch (AuthenticationException ex) {
-            throw new IllegalArgumentException("Error de autenticación");
+            // Un único mensaje/status para cualquier fallo de autenticación (contraseña
+            // incorrecta, usuario inexistente, o cualquier otra AuthenticationException que
+            // Spring Security pueda lanzar en el futuro): distinguir entre subtipos convertiría
+            // este endpoint en un oráculo del estado de la cuenta (ver M3 en la auditoría).
+            throw new BadCredentialsException("Credenciales inválidas");
         }
 
-        var userDetails = userDetailsService.loadUserByUsername(email);
+        // authenticationManager.authenticate() ya cargó el UserDetails internamente (vía
+        // DaoAuthenticationProvider -> UserDetailsService) y lo devuelve como principal: se
+        // reutiliza en vez de volver a consultar la base con loadUserByUsername (ver M4).
+        var userDetails = (UserDetails) resultado.getPrincipal();
         return new AuthResponse(jwtService.generateToken(userDetails));
     }
 
@@ -116,17 +136,18 @@ public class AuthService {
             throw new BadCredentialsException("Credenciales inválidas");
         }
 
+        Authentication resultado;
         try {
-            authenticationManager.authenticate(
+            resultado = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(empleado.getEmail(), request.pin())
             );
-        } catch (BadCredentialsException ex) {
-            throw new BadCredentialsException("Credenciales inválidas");
         } catch (AuthenticationException ex) {
-            throw new IllegalArgumentException("Error de autenticación");
+            // Mismo criterio que authenticate(): un único mensaje/status para cualquier
+            // fallo de autenticación (ver M3 en la auditoría).
+            throw new BadCredentialsException("Credenciales inválidas");
         }
 
-        var userDetails = userDetailsService.loadUserByUsername(empleado.getEmail());
+        var userDetails = (UserDetails) resultado.getPrincipal();
         String token = jwtService.generateToken(userDetails, Map.of("empleadoId", empleado.getId()), empleadoExpirationMillis);
         return new AuthResponse(token);
     }

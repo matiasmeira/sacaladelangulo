@@ -31,7 +31,7 @@ public class DisponibilidadController {
      * Accesible a cualquier usuario autenticado (no expone datos de jugadores ni reservas).
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<DisponibilidadEstablecimientoResponse> obtenerDisponibilidad(
             @PathVariable Long establecimientoId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,

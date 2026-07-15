@@ -16,7 +16,11 @@ import java.time.LocalDateTime;
 
 /**
  * Entidad que representa una reserva de cancha deportiva.
- * Implementa Optimistic Locking mediante @Version para garantizar concurrencia segura.
+ * El campo @Version protege actualizaciones concurrentes sobre una reserva ya
+ * persistida (confirmar/cancelar/finalizar/mover). NO protege la creación de reservas
+ * solapadas: ese caso (dos inserts concurrentes para el mismo horario) se resuelve con
+ * locking pesimista sobre la cancha en ReservaService (ver bloquearCanchasRelacionadas,
+ * y C1 en la auditoría).
  */
 @Slf4j
 @Getter
@@ -108,8 +112,8 @@ public class Reserva {
     private LocalDateTime fechaCreacion;
 
     /**
-     * Version para Optimistic Locking.
-     * Evita conflictos de concurrencia en actualizaciones simultáneas.
+     * Optimistic locking sobre updates a esta fila ya persistida (ver comentario de
+     * clase para el alcance real: no cubre la creación de reservas solapadas).
      */
     @Version
     private Long version;

@@ -91,7 +91,7 @@ class FeedbackServiceTest {
         when(reservaRepository.findByIdConEstablecimientoYDueno(500L)).thenReturn(Optional.of(reserva));
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(feedbackRepository.existsByReservaId(500L)).thenReturn(false);
-        when(feedbackRepository.save(any(Feedback.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(feedbackRepository.saveAndFlush(any(Feedback.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(feedbackMapper.mapToResponse(any(Feedback.class))).thenReturn(
                 new FeedbackResponse(10L, 500L, 100L, 2L, "Juan", 5, "Excelente cancha", false, LocalDateTime.now()));
 
@@ -136,6 +136,24 @@ class FeedbackServiceTest {
         when(reservaRepository.findByIdConEstablecimientoYDueno(500L)).thenReturn(Optional.of(reserva));
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(feedbackRepository.existsByReservaId(500L)).thenReturn(true);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> feedbackService.crearFeedback(500L, request, jugador.getEmail()));
+        assertTrue(exception.getMessage().contains("Ya calificaste"));
+    }
+
+    @Test
+    @DisplayName("crearFeedback traduce la carrera de inserción perdida al mismo mensaje de negocio")
+    void crearFeedbackFallaPorCarreraDeInsercion() {
+        // existsByReservaId + save no es atómico: dos requests casi simultáneas (doble
+        // click/retry) pueden pasar ambas la validación antes de que cualquiera persista.
+        FeedbackRequest request = new FeedbackRequest(5, "Doble submit");
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(500L)).thenReturn(Optional.of(reserva));
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(feedbackRepository.existsByReservaId(500L)).thenReturn(false);
+        when(feedbackRepository.saveAndFlush(any(Feedback.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                 () -> feedbackService.crearFeedback(500L, request, jugador.getEmail()));

@@ -75,6 +75,22 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("doFilter_BearerVacio_DejaPasarPeroNoAutentica")
+    void doFilter_BearerVacio_DejaPasarPeroNoAutentica() throws Exception {
+        // "Bearer " sin nada después: jjwt rechaza el string vacío con IllegalArgumentException,
+        // no con JwtException (ver M1 en la auditoría).
+        when(request.getHeader("Authorization")).thenReturn("Bearer ");
+        when(jwtService.extractUsername("")).thenThrow(new IllegalArgumentException("JWT String argument cannot be null or empty"));
+
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
+
+        verify(response, never()).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        verify(filterChain).doFilter(request, response);
+        org.junit.jupiter.api.Assertions.assertNull(
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
     @DisplayName("doFilter_TokenValidoUsuarioInhabilitado_NoAutentica")
     void doFilter_TokenValidoUsuarioInhabilitado_NoAutentica() throws Exception {
         when(request.getHeader("Authorization")).thenReturn("Bearer valid-token");

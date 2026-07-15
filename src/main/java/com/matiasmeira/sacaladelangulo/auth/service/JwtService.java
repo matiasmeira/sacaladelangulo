@@ -63,15 +63,15 @@ public class JwtService {
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
-        return extractUsername(token).equals(userDetails.getUsername()) && !isTokenExpired(token);
+        // Un solo parseo/verificación de firma para las dos condiciones, en vez de
+        // parsear el token dos veces (una por extractUsername, otra por isTokenExpired).
+        Claims claims = extractAllClaims(token);
+        return claims.getSubject().equals(userDetails.getUsername())
+                && claims.getExpiration().after(Date.from(Instant.now()));
     }
 
     public String extractUsername(String token) {
         return extractAllClaims(token).getSubject();
-    }
-
-    private boolean isTokenExpired(String token) {
-        return extractAllClaims(token).getExpiration().before(Date.from(Instant.now()));
     }
 
     private Claims extractAllClaims(String token) {

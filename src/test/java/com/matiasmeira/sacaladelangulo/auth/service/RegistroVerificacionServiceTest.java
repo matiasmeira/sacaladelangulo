@@ -23,7 +23,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -59,9 +58,6 @@ class RegistroVerificacionServiceTest {
 
     @Mock
     private JwtService jwtService;
-
-    @Mock
-    private UserDetailsService userDetailsService;
 
     @Mock
     private RateLimiterService rateLimiterService;
@@ -187,7 +183,6 @@ class RegistroVerificacionServiceTest {
         when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
         when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
         when(passwordEncoder.encode("Password123")).thenReturn("encoded-password");
-        when(userDetailsService.loadUserByUsername("nuevo@test.com")).thenReturn(userDetails);
         when(jwtService.generateToken(userDetails)).thenReturn("jwt-token");
 
         AuthResponse response = registroVerificacionService.completarRegistro(request);
@@ -196,7 +191,7 @@ class RegistroVerificacionServiceTest {
         verify(tokenVerificacionEmailRepository).delete(token);
 
         ArgumentCaptor<Usuario> usuarioCaptor = ArgumentCaptor.forClass(Usuario.class);
-        verify(usuarioRepository).save(usuarioCaptor.capture());
+        verify(usuarioRepository).saveAndFlush(usuarioCaptor.capture());
         Usuario usuarioGuardado = usuarioCaptor.getValue();
         assertEquals("nuevo@test.com", usuarioGuardado.getEmail());
         assertTrue(usuarioGuardado.getEmailVerified());
@@ -210,7 +205,7 @@ class RegistroVerificacionServiceTest {
         when(tokenVerificacionEmailRepository.findByToken("token-inexistente")).thenReturn(Optional.empty());
 
         assertThrows(TokenInvalidoException.class, () -> registroVerificacionService.completarRegistro(request));
-        verify(usuarioRepository, never()).save(any());
+        verify(usuarioRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -226,7 +221,30 @@ class RegistroVerificacionServiceTest {
         when(tokenVerificacionEmailRepository.findByToken("token-vencido")).thenReturn(Optional.of(token));
 
         assertThrows(TokenExpiradoException.class, () -> registroVerificacionService.completarRegistro(request));
-        verify(usuarioRepository, never()).save(any());
+        verify(usuarioRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("completarRegistro_Fallo_CarreraDeInsercion_TraduceAExcepcionDeNegocioYBorraToken")
+    void completarRegistro_Fallo_CarreraDeInsercion_TraduceAExcepcionDeNegocioYBorraToken() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-valido")
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        CompletarRegistroRequest request = new CompletarRegistroRequest("token-valido", "Juan", null, "Password123");
+
+        when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
+        when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
+        when(usuarioRepository.saveAndFlush(any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> registroVerificacionService.completarRegistro(request));
+
+        assertEquals("El email ya está registrado", exception.getMessage());
+        verify(tokenVerificacionEmailRepository).delete(token);
     }
 
     @Test
@@ -248,6 +266,6 @@ class RegistroVerificacionServiceTest {
 
         assertEquals("El email ya está registrado", exception.getMessage());
         verify(tokenVerificacionEmailRepository).delete(token);
-        verify(usuarioRepository, never()).save(any());
+        verify(usuarioRepository, never()).saveAndFlush(any());
     }
 }

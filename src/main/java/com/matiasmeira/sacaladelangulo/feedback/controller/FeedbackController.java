@@ -27,10 +27,12 @@ public class FeedbackController {
 
     /**
      * Crea la calificación de una reserva finalizada.
-     * Protegido: solo el jugador que jugó la reserva (o un administrador).
+     * Protegido: solo el jugador que jugó la reserva (el service exige esa
+     * pertenencia explícitamente; ADMIN no está habilitado porque nunca es el
+     * jugador de una reserva ajena, ver M20 en la auditoría).
      */
     @PostMapping("/api/v1/reservas/{reservaId}/feedback")
-    @PreAuthorize("hasAnyRole('PLAYER', 'ADMIN')")
+    @PreAuthorize("hasRole('PLAYER')")
     public ResponseEntity<FeedbackResponse> crearFeedback(
             @PathVariable Long reservaId,
             @AuthenticationPrincipal UserDetails userDetails,

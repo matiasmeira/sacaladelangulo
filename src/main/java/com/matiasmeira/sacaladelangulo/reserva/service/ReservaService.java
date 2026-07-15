@@ -469,8 +469,11 @@ public class ReservaService {
     }
 
     /**
-     * Confirma una reserva y cambia su estado a CONFIRMADA.
-     * Solo el dueño del establecimiento o un administrador puede confirmar.
+     * Confirma una reserva y cambia su estado a CONFIRMADA. Solo se permite la
+     * transición PENDIENTE_SENA -> CONFIRMADA; es idempotente si ya estaba CONFIRMADA
+     * (no-op), y rechaza confirmar una reserva CANCELADA o FINALIZADA para no "resucitarla"
+     * sin revalidar solapamientos/pool. Solo el dueño del establecimiento o un
+     * administrador puede confirmar.
      *
      * @param reservaId ID de la reserva a confirmar
      * @param email Email del usuario autenticado
@@ -490,6 +493,17 @@ public class ReservaService {
                 !usuarioAutenticado.getId().equals(duenioEstablecimientoId)) {
             log.warn("Acceso denegado. Usuario: {}, Dueño: {}", usuarioAutenticado.getId(), duenioEstablecimientoId);
             throw new AccessDeniedException("No está autorizado para confirmar esta reserva");
+        }
+
+        if (reserva.getEstado() == EstadoReserva.CONFIRMADA) {
+            log.info("Reserva ya se encontraba confirmada. ID: {}", reservaId);
+            return reservaMapper.mapToResponse(reserva);
+        }
+
+        if (reserva.getEstado() != EstadoReserva.PENDIENTE_SENA) {
+            log.warn("Intento de confirmar una reserva en estado no válido. ID: {}, Estado: {}", reservaId, reserva.getEstado());
+            throw new IllegalArgumentException(
+                    "Solo se puede confirmar una reserva en estado PENDIENTE_SENA (actual: " + reserva.getEstado() + ")");
         }
 
         reserva.setEstado(EstadoReserva.CONFIRMADA);

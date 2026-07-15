@@ -51,29 +51,6 @@ public class AuthService {
     @Value("${jwt.empleado-expiration-millis:3600000}")
     private long empleadoExpirationMillis;
 
-    public AuthResponse registerPlayer(RegisterRequest request) {
-        String email = normalizarEmail(request.email());
-        if (usuarioRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("El email ya está registrado");
-        }
-
-        Usuario usuario = Usuario.builder()
-                .email(email)
-                .password(passwordEncoder.encode(request.password()))
-                .nombre(request.nombre())
-                .telefono(null)
-                .rol(Role.PLAYER)
-                .planSuscripcion(PlanSuscripcion.FREE)
-                .isActive(true)
-                .emailVerified(false)
-                .telefonoVerificado(false)
-                .build();
-
-        usuarioRepository.save(usuario);
-        var userDetails = userDetailsService.loadUserByUsername(usuario.getEmail());
-        return new AuthResponse(jwtService.generateToken(userDetails));
-    }
-
     public AuthResponse registerOwner(RegisterRequest request) {
         String email = normalizarEmail(request.email());
         if (usuarioRepository.existsByEmail(email)) {

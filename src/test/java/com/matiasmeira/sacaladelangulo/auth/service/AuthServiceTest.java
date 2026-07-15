@@ -75,41 +75,6 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("registerPlayer_Exito_GeneraToken")
-    void registerPlayer_Exito_GeneraToken() {
-        RegisterRequest request = new RegisterRequest("jugador@test.com", "Password123", "Juan");
-        UserDetails userDetails = org.springframework.security.core.userdetails.User
-                .withUsername(request.email())
-                .password(request.password())
-                .authorities("ROLE_PLAYER")
-                .build();
-
-        when(usuarioRepository.existsByEmail(request.email())).thenReturn(false);
-        when(passwordEncoder.encode(request.password())).thenReturn("encoded-password");
-        when(userDetailsService.loadUserByUsername(request.email())).thenReturn(userDetails);
-        when(jwtService.generateToken(userDetails)).thenReturn("jwt-token");
-
-        AuthResponse response = authService.registerPlayer(request);
-
-        assertEquals("jwt-token", response.token());
-        verify(usuarioRepository).save(any(Usuario.class));
-    }
-
-    @Test
-    @DisplayName("registerPlayer_Fallo_EmailExistente")
-    void registerPlayer_Fallo_EmailExistente() {
-        RegisterRequest request = new RegisterRequest("jugador@test.com", "Password123", "Juan");
-        when(usuarioRepository.existsByEmail(request.email())).thenReturn(true);
-
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> authService.registerPlayer(request)
-        );
-
-        assertEquals("El email ya está registrado", exception.getMessage());
-    }
-
-    @Test
     @DisplayName("authenticate_Exito_GeneraToken")
     void authenticate_Exito_GeneraToken() {
         AuthRequest request = new AuthRequest("jugador@test.com", "Password123");

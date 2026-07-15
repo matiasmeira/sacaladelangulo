@@ -15,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 /**
  * Controlador REST para registrar y autenticar usuarios.
  */
@@ -26,10 +28,19 @@ public class AuthController {
     private final AuthService authService;
     private final RegistroVerificacionService registroVerificacionService;
 
+    /**
+     * Endpoint de registro de jugadores en 1 solo paso, deprecado: permitía crear la
+     * cuenta sin verificar el email, en paralelo al flujo de 2 pasos (ver
+     * /registro/iniciar-verificar-completar más abajo), lo que anulaba la verificación.
+     * Se mantiene la ruta mapeada (en vez de borrarla) para devolver un 410 explícito con
+     * la migración esperada a quien todavía le pegue.
+     */
     @PostMapping("/register/player")
-    public ResponseEntity<AuthResponse> registerPlayer(@RequestBody @Valid RegisterRequest request) {
-        AuthResponse response = authService.registerPlayer(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<Map<String, String>> registerPlayerDeprecado() {
+        return ResponseEntity.status(HttpStatus.GONE).body(Map.of(
+                "error", "Este endpoint fue dado de baja. Registrate con el flujo de 2 pasos: " +
+                        "POST /api/v1/auth/registro/iniciar, luego POST /api/v1/auth/registro/completar."
+        ));
     }
 
     @PostMapping("/register/owner")

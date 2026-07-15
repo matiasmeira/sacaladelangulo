@@ -242,6 +242,21 @@ public class ReservaService {
         List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(cancha.getEstablecimiento().getId());
         bloquearCanchasRelacionadas(cancha, todasLasCanchas);
 
+        // Se precarga una sola vez el rango completo del período (días no laborables,
+        // bloqueos y reservas existentes) y se filtra en memoria por cada ocurrencia, en
+        // vez de repetir 3 queries por fecha (mismo patrón que DisponibilidadService, que
+        // enfrenta el mismo problema al generar la grilla completa de turnos libres).
+        Long establecimientoId = cancha.getEstablecimiento().getId();
+        LocalDate primeraFecha = fechasDelPeriodo.get(0);
+        LocalDate ultimaFecha = fechasDelPeriodo.get(fechasDelPeriodo.size() - 1);
+        LocalDateTime rangoInicio = primeraFecha.atStartOfDay();
+        LocalDateTime rangoFin = ultimaFecha.plusDays(1).atTime(LocalTime.MAX);
+
+        List<DiaNoLaborable> diasNoLaborables = diaNoLaborableRepository
+                .findByEstablecimientoIdAndFechaBetween(establecimientoId, primeraFecha, ultimaFecha);
+        List<BloqueoCancha> bloqueosEnRango = bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, rangoInicio, rangoFin);
+        List<Reserva> reservasEnRango = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin);
+
         List<Reserva> reservasAGuardar = new ArrayList<>();
         for (LocalDate fecha : fechasDelPeriodo) {
             LocalDateTime inicio = fecha.atTime(request.horaInicio());
@@ -251,12 +266,13 @@ public class ReservaService {
                 validarFechas(inicio, fin);
                 validarGranularidadHoraria(inicio, cancha);
                 long duracionMinutos = validarDuracion(inicio, fin, cancha);
-                validarSinBloqueos(inicio, fin, cancha);
-                validarDiaNoLaborable(inicio, cancha.getEstablecimiento());
+                validarSinBloqueos(inicio, fin, cancha, bloqueosEnRango);
+                validarDiaNoLaborable(inicio, cancha.getEstablecimiento(), diasNoLaborables);
                 validarHorarioAtencion(inicio, fin, cancha.getEstablecimiento());
 
-                List<Reserva> solapadas = reservaRepository.findSuperpuestas(
-                        cancha.getEstablecimiento().getId(), inicio, fin);
+                List<Reserva> solapadas = reservasEnRango.stream()
+                        .filter(r -> seSuperponen(r.getFechaHoraInicio(), r.getFechaHoraFin(), inicio, fin))
+                        .toList();
                 validarCanchaExactaLibre(cancha, solapadas);
                 validarPoolCanchas(cancha, solapadas, todasLasCanchas);
 
@@ -372,6 +388,21 @@ public class ReservaService {
     }
 
     /**
+     * Misma validación que {@link #validarSinBloqueos(LocalDateTime, LocalDateTime, Cancha)},
+     * pero filtrando en memoria una lista de bloqueos ya precargada para el rango completo
+     * (ver crearReservaSemanal), en vez de consultar la base de datos por cada ocurrencia.
+     */
+    private void validarSinBloqueos(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Cancha cancha, List<BloqueoCancha> bloqueosPrecargados) {
+        Optional<BloqueoCancha> bloqueo = bloqueosPrecargados.stream()
+                .filter(b -> b.getCancha().getId().equals(cancha.getId()))
+                .filter(b -> seSuperponen(b.getFechaInicio(), b.getFechaFin(), fechaHoraInicio, fechaHoraFin))
+                .findFirst();
+        if (bloqueo.isPresent()) {
+            throw new IllegalArgumentException("La cancha se encuentra bloqueada en ese horario. Motivo: " + bloqueo.get().getMotivo());
+        }
+    }
+
+    /**
      * La cancha debe estar habilitada para el deporte solicitado: una misma cancha
      * puede soportar varios deportes (ej. fútbol y hockey), pero solo se puede
      * reservar para uno de los que tiene realmente habilitados.
@@ -397,6 +428,29 @@ public class ReservaService {
                     throw new IllegalArgumentException(
                             "El establecimiento no abre el " + fechaHoraInicio.toLocalDate() + detalle);
                 });
+    }
+
+    /**
+     * Misma validación que {@link #validarDiaNoLaborable(LocalDateTime, Establecimiento)},
+     * pero filtrando en memoria una lista de días no laborables ya precargada para el rango
+     * completo (ver crearReservaSemanal), en vez de consultar la base de datos por cada
+     * ocurrencia.
+     */
+    private void validarDiaNoLaborable(LocalDateTime fechaHoraInicio, Establecimiento establecimiento, List<DiaNoLaborable> diasNoLaborablesPrecargados) {
+        diasNoLaborablesPrecargados.stream()
+                .filter(d -> d.getFecha().equals(fechaHoraInicio.toLocalDate()))
+                .findFirst()
+                .ifPresent(diaNoLaborable -> {
+                    String motivo = diaNoLaborable.getMotivo();
+                    String detalle = (motivo == null || motivo.isBlank()) ? "" : ". Motivo: " + motivo;
+                    log.warn("El establecimiento {} no abre el {}", establecimiento.getId(), fechaHoraInicio.toLocalDate());
+                    throw new IllegalArgumentException(
+                            "El establecimiento no abre el " + fechaHoraInicio.toLocalDate() + detalle);
+                });
+    }
+
+    private boolean seSuperponen(LocalDateTime inicioA, LocalDateTime finA, LocalDateTime inicioB, LocalDateTime finB) {
+        return inicioA.isBefore(finB) && finA.isAfter(inicioB);
     }
 
     private void validarHorarioAtencion(ReservaRequest request, Establecimiento establecimiento) {

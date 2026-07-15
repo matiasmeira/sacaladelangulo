@@ -554,7 +554,8 @@ class ReservaServiceTest {
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(bloqueoCanchaRepository.findOverlappingBloqueos(any(), any(), any())).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any())).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -597,9 +598,9 @@ class ReservaServiceTest {
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(bloqueoCanchaRepository.findOverlappingBloqueos(any(), any(), any())).thenReturn(List.of());
-        when(bloqueoCanchaRepository.findOverlappingBloqueos(cancha.getId(), inicioBloqueado, finBloqueado))
-                .thenReturn(List.of(bloqueo));
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of(bloqueo));
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any())).thenReturn(List.of());
 
         // Act
         IllegalArgumentException exception = assertThrows(
@@ -867,9 +868,9 @@ class ReservaServiceTest {
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(diaNoLaborableRepository.findByEstablecimientoIdAndFecha(any(), any())).thenReturn(Optional.empty());
-        when(diaNoLaborableRepository.findByEstablecimientoIdAndFecha(establecimiento.getId(), LocalDate.of(2030, 1, 15)))
-                .thenReturn(Optional.of(diaNoLaborable));
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of(diaNoLaborable));
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any())).thenReturn(List.of());
 
         // Act & Assert: todo-o-nada, no debe guardarse nada aunque el 08 era válido
         IllegalArgumentException exception = assertThrows(

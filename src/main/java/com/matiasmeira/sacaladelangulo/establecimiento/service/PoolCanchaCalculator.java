@@ -4,7 +4,9 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Cálculo puro (sin acceso a base de datos) de disponibilidad de pool de canchas
@@ -21,6 +23,35 @@ import java.util.List;
 public final class PoolCanchaCalculator {
 
     private PoolCanchaCalculator() {
+    }
+
+    /**
+     * Determina el conjunto de IDs de cancha que hay que bloquear (SELECT ... FOR UPDATE)
+     * antes de validar y crear una reserva sobre {@code cancha}, para que la validación de
+     * pool ({@link #hayDisponibilidad}) sea segura bajo concurrencia: incluye la cancha
+     * solicitada y toda cancha lógica/física que comparta un pool con ella, siguiendo el
+     * mismo criterio de "afectaEstePool" que usa hayDisponibilidad.
+     */
+    public static Set<Long> canchasRelacionadas(Cancha cancha, List<Cancha> todasLasCanchasDelEstablecimiento) {
+        Set<Long> relacionadas = new HashSet<>();
+        relacionadas.add(cancha.getId());
+
+        for (Cancha canchaDelPool : todasLasCanchasDelEstablecimiento) {
+            if (canchaDelPool.getCanchasFisicas() == null || canchaDelPool.getCanchasFisicas().isEmpty()) {
+                continue;
+            }
+
+            List<Long> poolIds = canchaDelPool.getCanchasFisicas().stream()
+                    .map(Cancha::getId)
+                    .toList();
+
+            boolean afectaEstePool = canchaDelPool.getId().equals(cancha.getId()) || poolIds.contains(cancha.getId());
+            if (afectaEstePool) {
+                relacionadas.add(canchaDelPool.getId());
+                relacionadas.addAll(poolIds);
+            }
+        }
+        return relacionadas;
     }
 
     public static boolean hayDisponibilidad(Cancha cancha, List<Reserva> solapadas, List<Cancha> todasLasCanchasDelEstablecimiento) {

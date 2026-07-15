@@ -91,6 +91,9 @@ public class ReservaService {
         validarDiaNoLaborable(request.fechaHoraInicio(), cancha.getEstablecimiento());
         validarHorarioAtencion(request, cancha.getEstablecimiento());
 
+        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(cancha.getEstablecimiento().getId());
+        bloquearCanchasRelacionadas(cancha, todasLasCanchas);
+
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(
                 cancha.getEstablecimiento().getId(),
                 request.fechaHoraInicio(),
@@ -99,7 +102,7 @@ public class ReservaService {
         log.debug("Se encontraron {} reservas solapadas en el predio", solapadas.size());
 
         validarCanchaExactaLibre(cancha, solapadas);
-        validarPoolCanchas(cancha, solapadas);
+        validarPoolCanchas(cancha, solapadas, todasLasCanchas);
 
         BigDecimal precioCalculado = calcularPrecio(cancha, request, duracionMinutos);
 
@@ -149,6 +152,9 @@ public class ReservaService {
             validarDiaNoLaborable(request.fechaHoraInicio(), cancha.getEstablecimiento());
             validarHorarioAtencion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha.getEstablecimiento());
 
+            List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(cancha.getEstablecimiento().getId());
+            bloquearCanchasRelacionadas(cancha, todasLasCanchas);
+
             List<Reserva> solapadas = reservaRepository.findSuperpuestas(
                     cancha.getEstablecimiento().getId(),
                     request.fechaHoraInicio(),
@@ -157,7 +163,7 @@ public class ReservaService {
             log.debug("Se encontraron {} reservas solapadas en el predio", solapadas.size());
 
             validarCanchaExactaLibre(cancha, solapadas);
-            validarPoolCanchas(cancha, solapadas);
+            validarPoolCanchas(cancha, solapadas, todasLasCanchas);
 
             BigDecimal precioCalculado = calcularPrecio(cancha, request.fechaHoraInicio(), duracionMinutos);
             BigDecimal senaPagada = Boolean.TRUE.equals(request.senaFisicaRecibida()) ? cancha.getMontoSena() : BigDecimal.ZERO;
@@ -231,6 +237,11 @@ public class ReservaService {
             throw new IllegalArgumentException("El período indicado no contiene ningún " + request.diaSemana());
         }
 
+        // Se bloquea una sola vez para todo el turno fijo: la cancha (y su pool) no cambia
+        // entre ocurrencias, solo la fecha/hora, así que un único lock por transacción alcanza.
+        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(cancha.getEstablecimiento().getId());
+        bloquearCanchasRelacionadas(cancha, todasLasCanchas);
+
         List<Reserva> reservasAGuardar = new ArrayList<>();
         for (LocalDate fecha : fechasDelPeriodo) {
             LocalDateTime inicio = fecha.atTime(request.horaInicio());
@@ -247,7 +258,7 @@ public class ReservaService {
                 List<Reserva> solapadas = reservaRepository.findSuperpuestas(
                         cancha.getEstablecimiento().getId(), inicio, fin);
                 validarCanchaExactaLibre(cancha, solapadas);
-                validarPoolCanchas(cancha, solapadas);
+                validarPoolCanchas(cancha, solapadas, todasLasCanchas);
 
                 BigDecimal precioCalculado = calcularPrecio(cancha, inicio, duracionMinutos);
 
@@ -620,12 +631,15 @@ public class ReservaService {
         validarDuracion(inicio, fin, nuevaCancha);
         validarSinBloqueos(inicio, fin, nuevaCancha);
 
+        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(nuevaCancha.getEstablecimiento().getId());
+        bloquearCanchasRelacionadas(nuevaCancha, todasLasCanchas);
+
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(
                         nuevaCancha.getEstablecimiento().getId(), inicio, fin).stream()
                 .filter(r -> !r.getId().equals(reserva.getId()))
                 .toList();
         validarCanchaExactaLibre(nuevaCancha, solapadas);
-        validarPoolCanchas(nuevaCancha, solapadas);
+        validarPoolCanchas(nuevaCancha, solapadas, todasLasCanchas);
 
         reserva.setCancha(nuevaCancha);
         Reserva reservaActualizada = reservaRepository.save(reserva);
@@ -660,16 +674,30 @@ public class ReservaService {
      *
      * @param cancha Cancha solicitada
      * @param solapadas Reservas solapadas en el establecimiento
+     * @param todasLasCanchasDelEstablecimiento canchas activas del establecimiento, ya
+     *                                           precargadas por el llamador (evita repetir la query)
      */
-    private void validarPoolCanchas(Cancha cancha, List<Reserva> solapadas) {
-        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(
-                cancha.getEstablecimiento().getId()
-        );
-
-        if (!PoolCanchaCalculator.hayDisponibilidad(cancha, solapadas, todasLasCanchas)) {
+    private void validarPoolCanchas(Cancha cancha, List<Reserva> solapadas, List<Cancha> todasLasCanchasDelEstablecimiento) {
+        if (!PoolCanchaCalculator.hayDisponibilidad(cancha, solapadas, todasLasCanchasDelEstablecimiento)) {
             log.warn("No hay disponibilidad en el pool. Cancha: {}", cancha.getId());
             throw new IllegalArgumentException("No hay disponibilidad en el pool para armar esta cancha");
         }
+    }
+
+    /**
+     * Adquiere un lock pesimista (SELECT ... FOR UPDATE) sobre la cancha solicitada y toda
+     * cancha relacionada por pool con ella, antes de validar solapamientos/disponibilidad
+     * y persistir la reserva. Serializa entre sí a las transacciones concurrentes que
+     * compiten por las mismas canchas, cerrando la condición de carrera que permitía
+     * doble-booking (dos reservas solapadas creadas en simultáneo pasando ambas la
+     * validación de "cancha libre").
+     */
+    private void bloquearCanchasRelacionadas(Cancha cancha, List<Cancha> todasLasCanchasDelEstablecimiento) {
+        List<Long> idsOrdenados = PoolCanchaCalculator.canchasRelacionadas(cancha, todasLasCanchasDelEstablecimiento)
+                .stream()
+                .sorted()
+                .toList();
+        canchaRepository.lockPorIds(idsOrdenados);
     }
 
     /**

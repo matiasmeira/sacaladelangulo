@@ -29,10 +29,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    private static final Map<String, Limite> LIMITES_POR_RUTA = Map.of(
+    /**
+     * Público (no private): RutasProtegidasCoincidenConControllersTest, en otro paquete,
+     * verifica que cada ruta hardcodeada acá siga existiendo como endpoint POST real, en
+     * vez de asumirlo (ver M26 en la auditoría).
+     */
+    public static final Map<String, Limite> LIMITES_POR_RUTA = Map.of(
             "/api/v1/auth/login", new Limite(15, Duration.ofMinutes(5).toMillis()),
             "/api/v1/auth/empleados/login", new Limite(30, Duration.ofMinutes(5).toMillis()),
-            "/api/v1/auth/register/player", new Limite(5, Duration.ofMinutes(10).toMillis()),
             "/api/v1/auth/register/owner", new Limite(5, Duration.ofMinutes(10).toMillis())
     );
 

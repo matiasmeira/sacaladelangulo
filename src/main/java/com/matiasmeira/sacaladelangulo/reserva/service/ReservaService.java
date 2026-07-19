@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
@@ -195,11 +196,11 @@ public class ReservaService {
             log.info("Nueva reserva manual creada con éxito. ID: {}, Cancha: {}, Cliente: {}",
                     reservaGuardada.getId(), cancha.getNombre(), request.nombreCliente());
 
-            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.CREAR_RESERVA_MANUAL,
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.CREAR_RESERVA_MANUAL,
                     reservaGuardada.getId(), true, "Reserva manual creada para " + request.nombreCliente());
             return reservaMapper.mapToResponse(reservaGuardada);
         } catch (RuntimeException ex) {
-            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.CREAR_RESERVA_MANUAL, null, false, ex.getMessage());
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.CREAR_RESERVA_MANUAL, null, false, ex.getMessage());
             throw ex;
         }
     }
@@ -628,10 +629,10 @@ public class ReservaService {
             Reserva reservaActualizada = reservaRepository.save(reserva);
             log.info("Reserva cancelada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
 
-            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.CANCELAR_RESERVA, reservaId, true, "Reserva cancelada");
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.CANCELAR_RESERVA, reservaId, true, "Reserva cancelada");
             return reservaMapper.mapToResponse(reservaActualizada);
         } catch (RuntimeException ex) {
-            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.CANCELAR_RESERVA, reservaId, false, ex.getMessage());
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.CANCELAR_RESERVA, reservaId, false, ex.getMessage());
             throw ex;
         }
     }
@@ -676,15 +677,15 @@ public class ReservaService {
             Reserva reservaActualizada = reservaRepository.save(reserva);
             log.info("Reserva finalizada con éxito. ID: {}", reservaId);
 
-            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.FINALIZAR_RESERVA, reservaId, true, "Reserva finalizada");
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.FINALIZAR_RESERVA, reservaId, true, "Reserva finalizada");
             return reservaMapper.mapToResponse(reservaActualizada);
         } catch (RuntimeException ex) {
-            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.FINALIZAR_RESERVA, reservaId, false, ex.getMessage());
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.FINALIZAR_RESERVA, reservaId, false, ex.getMessage());
             throw ex;
         }
     }
 
-    private void registrarAuditoriaSiEsEmpleado(Usuario usuario, PermisoEmpleado accion, Long entidadAfectadaId, boolean exitoso, String detalle) {
+    private void registrarAuditoriaSiEsEmpleado(Usuario usuario, AccionAuditoria accion, Long entidadAfectadaId, boolean exitoso, String detalle) {
         if (usuario.getRol() == Role.EMPLOYEE) {
             registroAuditoriaService.registrar(usuario, accion, entidadAfectadaId, exitoso, detalle);
         }

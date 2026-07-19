@@ -1,11 +1,11 @@
 package com.matiasmeira.sacaladelangulo.empleado.service;
 
-import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.dto.RegistroAuditoriaResponse;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.model.RegistroAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.repository.RegistroAuditoriaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
@@ -83,7 +83,7 @@ class RegistroAuditoriaServiceTest {
     @DisplayName("registrar_Exito_GuardaElRegistroConLosDatosCorrectos")
     void registrar_Exito_GuardaElRegistroConLosDatosCorrectos() {
         // Act
-        registroAuditoriaService.registrar(empleado, PermisoEmpleado.CANCELAR_RESERVA, 100L, true, "Reserva cancelada");
+        registroAuditoriaService.registrar(empleado, AccionAuditoria.CANCELAR_RESERVA, 100L, true, "Reserva cancelada");
 
         // Assert
         ArgumentCaptor<RegistroAuditoria> captor = ArgumentCaptor.forClass(RegistroAuditoria.class);
@@ -92,7 +92,7 @@ class RegistroAuditoriaServiceTest {
         RegistroAuditoria guardado = captor.getValue();
         assertEquals(empleado.getId(), guardado.getEmpleado().getId());
         assertEquals(establecimiento.getId(), guardado.getEstablecimiento().getId());
-        assertEquals(PermisoEmpleado.CANCELAR_RESERVA, guardado.getAccion());
+        assertEquals(AccionAuditoria.CANCELAR_RESERVA, guardado.getAccion());
         assertEquals(100L, guardado.getEntidadAfectadaId());
         assertEquals(true, guardado.getExitoso());
         assertEquals("Reserva cancelada", guardado.getDetalle());
@@ -106,7 +106,7 @@ class RegistroAuditoriaServiceTest {
                 .id(1L)
                 .empleado(empleado)
                 .establecimiento(establecimiento)
-                .accion(PermisoEmpleado.CANCELAR_RESERVA)
+                .accion(AccionAuditoria.CANCELAR_RESERVA)
                 .entidadAfectadaId(100L)
                 .exitoso(true)
                 .detalle("Reserva cancelada")

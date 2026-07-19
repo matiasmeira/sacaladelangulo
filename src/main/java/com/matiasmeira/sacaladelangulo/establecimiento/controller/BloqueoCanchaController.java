@@ -56,13 +56,17 @@ public class BloqueoCanchaController {
 
     /**
      * Bloqueos de todo el establecimiento en una fecha dada. Usado por la grilla de
-     * disponibilidad del jugador para no mostrar como libres horarios bloqueados.
+     * disponibilidad del jugador para no mostrar como libres horarios bloqueados. El
+     * motivo (texto libre cargado por el dueño/empleado) no se expone si quien consulta
+     * es PLAYER (ver M30 en la auditoría).
      */
     @GetMapping("/api/v1/establecimientos/{establecimientoId}/bloqueos")
     @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
     public ResponseEntity<List<BloqueoCanchaResponse>> listarPorEstablecimientoYFecha(
             @PathVariable Long establecimientoId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
-        return ResponseEntity.ok(bloqueoCanchaService.listarPorEstablecimientoYFecha(establecimientoId, fecha));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(bloqueoCanchaService.listarPorEstablecimientoYFecha(
+                establecimientoId, fecha, userDetails.getUsername()));
     }
 }

@@ -20,7 +20,13 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class IdempotencyCleanupService {
 
-    private static final Duration RETENCION = Duration.ofHours(24);
+    /**
+     * 2h alcanza holgadamente cualquier reintento real de un cliente (un timeout de red
+     * se reintenta en segundos/minutos, no horas); reduce la ventana en la que el cuerpo
+     * completo de la respuesta (potencial PII) queda persistido en texto plano (ver M27
+     * en la auditoría).
+     */
+    private static final Duration RETENCION = Duration.ofHours(2);
 
     private final SolicitudIdempotenteRepository solicitudIdempotenteRepository;
 

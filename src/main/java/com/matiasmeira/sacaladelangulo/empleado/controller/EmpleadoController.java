@@ -28,7 +28,7 @@ public class EmpleadoController {
     private final EmpleadoService empleadoService;
 
     @PostMapping
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<EmpleadoResponse> crearEmpleado(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails,
@@ -38,7 +38,7 @@ public class EmpleadoController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<List<EmpleadoResponse>> listarPorEstablecimiento(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -56,7 +56,7 @@ public class EmpleadoController {
     }
 
     @PutMapping("/{empleadoId}/permisos")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<EmpleadoResponse> actualizarPermisos(
             @PathVariable Long establecimientoId,
             @PathVariable Long empleadoId,
@@ -67,7 +67,7 @@ public class EmpleadoController {
     }
 
     @PutMapping("/{empleadoId}/pin")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<EmpleadoResponse> cambiarPin(
             @PathVariable Long establecimientoId,
             @PathVariable Long empleadoId,
@@ -78,7 +78,7 @@ public class EmpleadoController {
     }
 
     @DeleteMapping("/{empleadoId}")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<Void> desactivarEmpleado(
             @PathVariable Long establecimientoId,
             @PathVariable Long empleadoId,

@@ -169,26 +169,36 @@ public class BloqueoCanchaService {
 
     /**
      * Bloqueos de todas las canchas de un establecimiento que se superponen con el día dado.
-     * Accesible a cualquier usuario autenticado (no expone datos de jugadores): sirve para que
-     * la grilla de disponibilidad del jugador refleje los horarios bloqueados por el dueño.
+     * Accesible a cualquier usuario autenticado: sirve para que la grilla de disponibilidad
+     * del jugador refleje los horarios bloqueados por el dueño. El motivo (texto libre,
+     * puede contener notas operativas internas) no se incluye si quien consulta es PLAYER
+     * (ver M30 en la auditoría).
      */
     @Transactional(readOnly = true)
-    public List<BloqueoCanchaResponse> listarPorEstablecimientoYFecha(Long establecimientoId, LocalDate fecha) {
+    public List<BloqueoCanchaResponse> listarPorEstablecimientoYFecha(Long establecimientoId, LocalDate fecha, String email) {
         LocalDateTime inicioDia = fecha.atStartOfDay();
         LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
 
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        boolean ocultarMotivo = usuarioAutenticado.getRol() == Role.PLAYER;
+
         return bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, inicioDia, finDia).stream()
-                .map(this::mapSinReservasAfectadas)
+                .map(bloqueo -> mapSinReservasAfectadas(bloqueo, ocultarMotivo))
                 .toList();
     }
 
     private BloqueoCanchaResponse mapSinReservasAfectadas(BloqueoCancha bloqueo) {
+        return mapSinReservasAfectadas(bloqueo, false);
+    }
+
+    private BloqueoCanchaResponse mapSinReservasAfectadas(BloqueoCancha bloqueo, boolean ocultarMotivo) {
         return new BloqueoCanchaResponse(
                 bloqueo.getId(),
                 bloqueo.getCancha().getId(),
                 bloqueo.getFechaInicio(),
                 bloqueo.getFechaFin(),
-                bloqueo.getMotivo(),
+                ocultarMotivo ? null : bloqueo.getMotivo(),
                 List.of()
         );
     }

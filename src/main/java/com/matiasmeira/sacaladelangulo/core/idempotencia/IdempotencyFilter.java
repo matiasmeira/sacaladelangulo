@@ -24,6 +24,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -41,12 +42,25 @@ import java.util.Set;
 public class IdempotencyFilter extends OncePerRequestFilter {
 
     private static final String HEADER_CLAVE = "Idempotency-Key";
-    private static final Set<String> RUTAS_PROTEGIDAS = Set.of(
+    /**
+     * Público (no private): RutasProtegidasCoincidenConControllersTest, en otro paquete,
+     * verifica que cada ruta acá siga existiendo como endpoint POST real, para detectar en
+     * el test suite (no en producción) si un refactor de rutas desincroniza este set de
+     * los controllers reales (ver M26 en la auditoría).
+     */
+    public static final Set<String> RUTAS_PROTEGIDAS = Set.of(
             "/api/v1/reservas",
             "/api/v1/reservas/manual",
             "/api/v1/reservas/semanal",
             "/api/v1/buffet/ventas"
     );
+    /**
+     * Ventana corta para distinguir "en curso" de "abandonada" (el proceso murió entre
+     * guardar la solicitud y completarla — ver M21 en la auditoría), independiente de la
+     * retención de 24h de IdempotencyCleanupService: sin esto, una solicitud interrumpida
+     * bloquea cualquier reintento legítimo del cliente hasta que se limpie por completo.
+     */
+    private static final long TIMEOUT_EN_CURSO_MINUTOS = 3;
 
     private final SolicitudIdempotenteRepository solicitudIdempotenteRepository;
 
@@ -75,6 +89,11 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         String hashCuerpo = calcularHash(cuerpoBytes);
 
         var existente = solicitudIdempotenteRepository.findByClaveAndUsuarioEmail(clave, usuarioEmail);
+        if (existente.isPresent() && estaAbandonada(existente.get())) {
+            log.warn("Solicitud de idempotencia abandonada (sin completar tras {} min). Clave: {}", TIMEOUT_EN_CURSO_MINUTOS, clave);
+            solicitudIdempotenteRepository.delete(existente.get());
+            existente = Optional.empty();
+        }
         if (existente.isPresent()) {
             if (!hashCuerpo.equals(existente.get().getBodyHash())) {
                 log.warn("Idempotency-Key reutilizada con un payload distinto. Clave: {}", clave);
@@ -120,6 +139,11 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return null;
         }
         return authentication.getName();
+    }
+
+    private boolean estaAbandonada(SolicitudIdempotente solicitud) {
+        return solicitud.getStatusRespuesta() == null
+                && solicitud.getFechaCreacion().isBefore(LocalDateTime.now().minusMinutes(TIMEOUT_EN_CURSO_MINUTOS));
     }
 
     private void atenderSolicitudExistente(SolicitudIdempotente solicitud, HttpServletResponse response) throws IOException {

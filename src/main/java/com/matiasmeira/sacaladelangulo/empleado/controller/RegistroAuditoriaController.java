@@ -27,7 +27,7 @@ public class RegistroAuditoriaController {
     private final RegistroAuditoriaService registroAuditoriaService;
 
     @GetMapping
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<Page<RegistroAuditoriaResponse>> listarPorEstablecimiento(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails,

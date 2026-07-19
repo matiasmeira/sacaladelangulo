@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoMapper;
 import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoNombreResponse;
 import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoRequest;
 import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoResponse;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,6 +46,9 @@ class EmpleadoServiceTest {
     @Mock
     private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
+    @Mock
+    private RegistroAuditoriaService registroAuditoriaService;
+
     private EmpleadoService empleadoService;
 
     private Usuario dueno;
@@ -51,7 +56,7 @@ class EmpleadoServiceTest {
 
     @BeforeEach
     void setUp() {
-        empleadoService = new EmpleadoService(usuarioRepository, establecimientoRepository, passwordEncoder, new EmpleadoMapper());
+        empleadoService = new EmpleadoService(usuarioRepository, establecimientoRepository, passwordEncoder, new EmpleadoMapper(), registroAuditoriaService);
 
         dueno = Usuario.builder()
                 .id(2L)
@@ -96,6 +101,8 @@ class EmpleadoServiceTest {
         assertEquals(Set.of(PermisoEmpleado.CANCELAR_RESERVA), response.permisos());
         assertEquals(establecimiento.getId(), response.establecimientoId());
         verify(usuarioRepository).save(argThatEmpleadoTieneRolYPin());
+        verify(registroAuditoriaService).registrarAdministrativa(
+                eq(dueno), any(Usuario.class), eq(AccionAuditoria.CREAR_EMPLEADO), any());
     }
 
     private Usuario argThatEmpleadoTieneRolYPin() {
@@ -217,6 +224,8 @@ class EmpleadoServiceTest {
 
         // Assert
         assertEquals(2, response.permisos().size());
+        verify(registroAuditoriaService).registrarAdministrativa(
+                eq(dueno), eq(empleado), eq(AccionAuditoria.ACTUALIZAR_PERMISOS_EMPLEADO), any());
     }
 
     @Test
@@ -279,6 +288,8 @@ class EmpleadoServiceTest {
 
         // Assert
         assertEquals("hash-5678", empleado.getPassword());
+        verify(registroAuditoriaService).registrarAdministrativa(
+                eq(dueno), eq(empleado), eq(AccionAuditoria.CAMBIAR_PIN_EMPLEADO), any());
     }
 
     @Test
@@ -302,5 +313,7 @@ class EmpleadoServiceTest {
 
         // Assert
         assertEquals(false, empleado.getIsActive());
+        verify(registroAuditoriaService).registrarAdministrativa(
+                eq(dueno), eq(empleado), eq(AccionAuditoria.DESACTIVAR_EMPLEADO), any());
     }
 }

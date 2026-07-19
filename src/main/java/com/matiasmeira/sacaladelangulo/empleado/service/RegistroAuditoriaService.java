@@ -1,11 +1,11 @@
 package com.matiasmeira.sacaladelangulo.empleado.service;
 
-import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.dto.RegistroAuditoriaResponse;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.model.RegistroAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.repository.RegistroAuditoriaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
@@ -38,7 +38,7 @@ public class RegistroAuditoriaService {
      * guardado aunque la operación auditada haya fallado y hecho rollback.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void registrar(Usuario empleado, PermisoEmpleado accion, Long entidadAfectadaId, boolean exitoso, String detalle) {
+    public void registrar(Usuario empleado, AccionAuditoria accion, Long entidadAfectadaId, boolean exitoso, String detalle) {
         RegistroAuditoria registro = RegistroAuditoria.builder()
                 .empleado(empleado)
                 .establecimiento(empleado.getEstablecimiento())
@@ -51,6 +51,28 @@ public class RegistroAuditoriaService {
 
         registroAuditoriaRepository.save(registro);
         log.info("Auditoría registrada. Empleado: {}, Acción: {}, Éxito: {}", empleado.getId(), accion, exitoso);
+    }
+
+    /**
+     * Audita una acción administrativa del dueño/admin sobre un empleado (alta, cambio de
+     * permisos/PIN, baja) — a diferencia de {@link #registrar}, acá el actor no es el
+     * propio `empleado` sino quien lo administra (ver M31 en la auditoría).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void registrarAdministrativa(Usuario actor, Usuario empleadoAfectado, AccionAuditoria accion, String detalle) {
+        RegistroAuditoria registro = RegistroAuditoria.builder()
+                .empleado(empleadoAfectado)
+                .actorId(actor.getId())
+                .establecimiento(empleadoAfectado.getEstablecimiento())
+                .accion(accion)
+                .exitoso(true)
+                .detalle(detalle)
+                .fechaHora(LocalDateTime.now())
+                .build();
+
+        registroAuditoriaRepository.save(registro);
+        log.info("Auditoría administrativa registrada. Actor: {}, Empleado: {}, Acción: {}",
+                actor.getId(), empleadoAfectado.getId(), accion);
     }
 
     @Transactional(readOnly = true)
@@ -68,6 +90,7 @@ public class RegistroAuditoriaService {
                 registro.getId(),
                 registro.getEmpleado().getId(),
                 registro.getEmpleado().getNombre(),
+                registro.getActorId(),
                 registro.getAccion().name(),
                 registro.getEntidadAfectadaId(),
                 registro.getExitoso(),

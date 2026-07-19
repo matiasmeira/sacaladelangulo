@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoMapper;
 import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoNombreResponse;
 import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoRequest;
 import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoResponse;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,10 +40,11 @@ public class EmpleadoService {
     private final EstablecimientoRepository establecimientoRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmpleadoMapper empleadoMapper;
+    private final RegistroAuditoriaService registroAuditoriaService;
 
     public EmpleadoResponse crearEmpleado(Long establecimientoId, EmpleadoRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        validarPropietarioOAdmin(establecimiento, email);
+        Usuario actor = validarPropietarioOAdmin(establecimiento, email);
 
         if (usuarioRepository.existsByEstablecimientoIdAndNombreAndRol(establecimientoId, request.nombre(), Role.EMPLOYEE)) {
             throw new IllegalArgumentException("Ya existe un empleado con ese nombre en este establecimiento");
@@ -63,6 +65,8 @@ public class EmpleadoService {
         Usuario empleadoGuardado = usuarioRepository.save(empleado);
         log.info("Empleado creado. ID: {}, Establecimiento: {}", empleadoGuardado.getId(), establecimientoId);
 
+        registroAuditoriaService.registrarAdministrativa(actor, empleadoGuardado, AccionAuditoria.CREAR_EMPLEADO,
+                "Empleado creado: " + empleadoGuardado.getNombre());
         return empleadoMapper.mapToResponse(empleadoGuardado);
     }
 
@@ -89,33 +93,41 @@ public class EmpleadoService {
 
     public EmpleadoResponse actualizarPermisos(Long establecimientoId, Long empleadoId, ActualizarPermisosRequest request, String email) {
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
-        validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
+        Usuario actor = validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
 
         empleado.setPermisos(new HashSet<>(request.permisos()));
         Usuario empleadoActualizado = usuarioRepository.save(empleado);
         log.info("Permisos actualizados. Empleado: {}, Permisos: {}", empleadoId, request.permisos());
 
+        registroAuditoriaService.registrarAdministrativa(actor, empleadoActualizado, AccionAuditoria.ACTUALIZAR_PERMISOS_EMPLEADO,
+                "Permisos actualizados: " + request.permisos());
         return empleadoMapper.mapToResponse(empleadoActualizado);
     }
 
     public EmpleadoResponse cambiarPin(Long establecimientoId, Long empleadoId, CambiarPinRequest request, String email) {
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
-        validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
+        Usuario actor = validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
 
         empleado.setPassword(passwordEncoder.encode(request.pin()));
         Usuario empleadoActualizado = usuarioRepository.save(empleado);
         log.info("PIN actualizado. Empleado: {}", empleadoId);
 
+        // No se loguea el PIN nuevo ni el viejo en el detalle, solo que el cambio ocurrió.
+        registroAuditoriaService.registrarAdministrativa(actor, empleadoActualizado, AccionAuditoria.CAMBIAR_PIN_EMPLEADO,
+                "PIN actualizado");
         return empleadoMapper.mapToResponse(empleadoActualizado);
     }
 
     public void desactivarEmpleado(Long establecimientoId, Long empleadoId, String email) {
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
-        validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
+        Usuario actor = validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
 
         empleado.setIsActive(false);
-        usuarioRepository.save(empleado);
+        Usuario empleadoDesactivado = usuarioRepository.save(empleado);
         log.info("Empleado desactivado. ID: {}", empleadoId);
+
+        registroAuditoriaService.registrarAdministrativa(actor, empleadoDesactivado, AccionAuditoria.DESACTIVAR_EMPLEADO,
+                "Empleado desactivado");
     }
 
     private String generarEmailSintetico() {
@@ -138,12 +150,18 @@ public class EmpleadoService {
         return empleado;
     }
 
-    private void validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
+    /**
+     * Devuelve el usuario autenticado (OWNER real o ADMIN) para que los llamadores puedan
+     * reutilizarlo como actor de la auditoría administrativa, sin una segunda consulta
+     * (ver M31 en la auditoría).
+     */
+    private Usuario validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
         Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
         if (usuarioAutenticado.getRol() != Role.ADMIN &&
                 !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
             throw new AccessDeniedException("No autorizado en este establecimiento");
         }
+        return usuarioAutenticado;
     }
 }

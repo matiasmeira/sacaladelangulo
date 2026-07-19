@@ -1,6 +1,5 @@
 package com.matiasmeira.sacaladelangulo.empleado.model;
 
-import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import jakarta.persistence.Column;
@@ -43,13 +42,21 @@ public class RegistroAuditoria {
     @JoinColumn(name = "empleado_id", nullable = false)
     private Usuario empleado;
 
+    /**
+     * ID del OWNER/ADMIN que ejecutó una acción administrativa sobre `empleado` (alta,
+     * cambio de permisos/PIN, baja). Null para las acciones operativas, donde el propio
+     * `empleado` es quien actuó (ver M31 en la auditoría).
+     */
+    @Column(name = "actor_id")
+    private Long actorId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "establecimiento_id", nullable = false)
     private Establecimiento establecimiento;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private PermisoEmpleado accion;
+    private AccionAuditoria accion;
 
     @Column(name = "entidad_afectada_id")
     private Long entidadAfectadaId;

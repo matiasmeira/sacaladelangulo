@@ -271,7 +271,7 @@ class VentaServiceTest {
         // Assert
         assertEquals("CONFIRMADA", response.estado());
         verify(registroAuditoriaService).registrar(
-                eq(empleado), eq(com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.REGISTRAR_VENTA_BUFFET),
+                eq(empleado), eq(com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria.REGISTRAR_VENTA_BUFFET),
                 eq(105L), eq(true), any());
     }
 

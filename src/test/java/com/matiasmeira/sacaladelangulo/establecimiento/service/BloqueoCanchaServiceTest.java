@@ -365,4 +365,54 @@ class BloqueoCanchaServiceTest {
         // Assert
         verify(bloqueoCanchaRepository).delete(bloqueo);
     }
+
+    @Test
+    @DisplayName("listarPorEstablecimientoYFecha_ConPlayer_OcultaElMotivo")
+    void listarPorEstablecimientoYFecha_ConPlayer_OcultaElMotivo() {
+        // Arrange
+        BloqueoCancha bloqueo = BloqueoCancha.builder()
+                .id(1L)
+                .cancha(cancha5A)
+                .fechaInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaFin(LocalDateTime.of(2030, 1, 15, 12, 0))
+                .motivo("Reclamo del proveedor de mantenimiento")
+                .build();
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
+                .thenReturn(List.of(bloqueo));
+
+        // Act
+        List<BloqueoCanchaResponse> respuesta = bloqueoCanchaService.listarPorEstablecimientoYFecha(
+                establecimiento.getId(), java.time.LocalDate.of(2030, 1, 15), jugador.getEmail());
+
+        // Assert
+        assert respuesta.size() == 1;
+        assert respuesta.get(0).motivo() == null;
+    }
+
+    @Test
+    @DisplayName("listarPorEstablecimientoYFecha_ConDueno_IncluyeElMotivo")
+    void listarPorEstablecimientoYFecha_ConDueno_IncluyeElMotivo() {
+        // Arrange
+        BloqueoCancha bloqueo = BloqueoCancha.builder()
+                .id(1L)
+                .cancha(cancha5A)
+                .fechaInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaFin(LocalDateTime.of(2030, 1, 15, 12, 0))
+                .motivo("Reclamo del proveedor de mantenimiento")
+                .build();
+
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
+                .thenReturn(List.of(bloqueo));
+
+        // Act
+        List<BloqueoCanchaResponse> respuesta = bloqueoCanchaService.listarPorEstablecimientoYFecha(
+                establecimiento.getId(), java.time.LocalDate.of(2030, 1, 15), dueno.getEmail());
+
+        // Assert
+        assert respuesta.size() == 1;
+        assert respuesta.get(0).motivo().equals("Reclamo del proveedor de mantenimiento");
+    }
 }

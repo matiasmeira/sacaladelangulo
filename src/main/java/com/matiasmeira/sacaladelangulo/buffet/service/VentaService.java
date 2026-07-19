@@ -17,6 +17,7 @@ import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepository;
 import com.matiasmeira.sacaladelangulo.buffet.repository.VentaRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
@@ -129,16 +130,16 @@ public class VentaService {
             log.info("Venta registrada con éxito. ID: {}, Establecimiento: {}, Total: {}",
                     ventaGuardada.getId(), establecimiento.getId(), total);
 
-            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.REGISTRAR_VENTA_BUFFET,
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.REGISTRAR_VENTA_BUFFET,
                     ventaGuardada.getId(), true, "Venta registrada por un total de " + total);
             return ventaMapper.mapToResponse(ventaGuardada);
         } catch (RuntimeException ex) {
-            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, PermisoEmpleado.REGISTRAR_VENTA_BUFFET, null, false, ex.getMessage());
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.REGISTRAR_VENTA_BUFFET, null, false, ex.getMessage());
             throw ex;
         }
     }
 
-    private void registrarAuditoriaSiEsEmpleado(Usuario usuario, PermisoEmpleado accion, Long entidadAfectadaId, boolean exitoso, String detalle) {
+    private void registrarAuditoriaSiEsEmpleado(Usuario usuario, AccionAuditoria accion, Long entidadAfectadaId, boolean exitoso, String detalle) {
         if (usuario.getRol() == Role.EMPLOYEE) {
             registroAuditoriaService.registrar(usuario, accion, entidadAfectadaId, exitoso, detalle);
         }

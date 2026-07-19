@@ -4,12 +4,16 @@ import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -22,6 +26,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleEntityNotFoundException(EntityNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Map.of("error", ex.getMessage()));
+    }
+
+    /**
+     * NumberFormatException extiende IllegalArgumentException: sin este handler más
+     * específico (Spring resuelve al @ExceptionHandler más cercano en la jerarquía),
+     * un parseo manual sin capturar (Integer.parseInt, etc.) filtraría el mensaje crudo
+     * de la JDK a través del handler genérico de abajo. Hoy no hay ningún parseo manual
+     * en el proyecto, pero esto lo cubre igual como defensa en profundidad (ver M23).
+     */
+    @ExceptionHandler(NumberFormatException.class)
+    public ResponseEntity<Map<String, String>> handleNumberFormatException(NumberFormatException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "Parámetro numérico inválido"));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -67,6 +84,30 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleRateLimitExceededException(RateLimitExceededException ex) {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "Cuerpo de la petición inválido o mal formado"));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, String>> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "Parámetro '" + ex.getName() + "' inválido"));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, String>> handleHttpRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(Map.of("error", "Método " + ex.getMethod() + " no soportado para este endpoint"));
+    }
+
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<Map<String, String>> handleNoHandlerFoundException(NoHandlerFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", "Recurso no encontrado"));
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)

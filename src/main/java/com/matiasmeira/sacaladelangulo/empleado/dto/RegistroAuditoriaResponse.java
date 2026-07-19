@@ -6,6 +6,7 @@ public record RegistroAuditoriaResponse(
         Long id,
         Long empleadoId,
         String empleadoNombre,
+        Long actorId,
         String accion,
         Long entidadAfectadaId,
         Boolean exitoso,

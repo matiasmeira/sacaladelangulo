@@ -1198,7 +1198,7 @@ class ReservaServiceTest {
         // Assert
         assert response.estado().equals("CANCELADA");
         verify(registroAuditoriaService).registrar(
-                eq(empleado), eq(com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.CANCELAR_RESERVA),
+                eq(empleado), eq(com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria.CANCELAR_RESERVA),
                 eq(reservaConfirmada.getId()), eq(true), any());
     }
 

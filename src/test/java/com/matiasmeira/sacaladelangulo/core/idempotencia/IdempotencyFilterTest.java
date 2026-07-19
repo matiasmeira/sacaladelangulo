@@ -182,6 +182,7 @@ class IdempotencyFilterTest {
                 .usuarioEmail("jugador@test.com")
                 .statusRespuesta(null)
                 .bodyHash(IdempotencyFilter.calcularHash(new byte[0]))
+                .fechaCreacion(java.time.LocalDateTime.now())
                 .build();
         when(solicitudIdempotenteRepository.findByClaveAndUsuarioEmail("clave-abc", "jugador@test.com"))
                 .thenReturn(Optional.of(enProceso));
@@ -190,6 +191,42 @@ class IdempotencyFilterTest {
 
         verifyNoInteractions(filterChain);
         assertEquals(409, response.getStatus());
+    }
+
+    @Test
+    @DisplayName("doFilter_ClaveExistenteAbandonada_LaBorraYEjecutaElControladorComoSolicitudNueva")
+    void doFilter_ClaveExistenteAbandonada_LaBorraYEjecutaElControladorComoSolicitudNueva() throws Exception {
+        // El proceso murió entre guardar la solicitud y completarla: statusRespuesta sigue
+        // null, pero ya pasó la ventana corta de "en curso" (ver M21).
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/reservas");
+        request.addHeader("Idempotency-Key", "clave-abc");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        SolicitudIdempotente abandonada = SolicitudIdempotente.builder()
+                .clave("clave-abc")
+                .usuarioEmail("jugador@test.com")
+                .statusRespuesta(null)
+                .bodyHash(IdempotencyFilter.calcularHash(new byte[0]))
+                .fechaCreacion(java.time.LocalDateTime.now().minusMinutes(10))
+                .build();
+        when(solicitudIdempotenteRepository.findByClaveAndUsuarioEmail("clave-abc", "jugador@test.com"))
+                .thenReturn(Optional.of(abandonada));
+        when(solicitudIdempotenteRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        doAnswer(invocation -> {
+            HttpServletResponse resp = invocation.getArgument(1);
+            resp.setStatus(201);
+            resp.setContentType("application/json");
+            resp.getWriter().write("{\"id\":2}");
+            return null;
+        }).when(filterChain).doFilter(any(), any());
+
+        idempotencyFilter.doFilter(request, response, filterChain);
+
+        verify(solicitudIdempotenteRepository).delete(abandonada);
+        verify(filterChain).doFilter(any(), any());
+        assertEquals(201, response.getStatus());
+        assertEquals("{\"id\":2}", response.getContentAsString());
     }
 
     @Test

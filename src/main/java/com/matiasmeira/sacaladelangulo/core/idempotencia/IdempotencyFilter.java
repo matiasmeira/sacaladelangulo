@@ -61,6 +61,13 @@ public class IdempotencyFilter extends OncePerRequestFilter {
      * bloquea cualquier reintento legítimo del cliente hasta que se limpie por completo.
      */
     private static final long TIMEOUT_EN_CURSO_MINUTOS = 3;
+    /**
+     * Debe coincidir con SolicitudIdempotente.clave (length = 255): sin esta validación
+     * temprana, una clave más larga que la columna llega hasta el INSERT y revienta con
+     * DataIntegrityViolationException, indistinguible ahí de una carrera de idempotencia
+     * genuina (el catch de más abajo respondería 409 con un mensaje engañoso, ver B15).
+     */
+    private static final int LONGITUD_MAXIMA_CLAVE = 255;
 
     private final SolicitudIdempotenteRepository solicitudIdempotenteRepository;
 
@@ -75,6 +82,10 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         String clave = request.getHeader(HEADER_CLAVE);
         if (clave == null || clave.isBlank()) {
             filterChain.doFilter(request, response);
+            return;
+        }
+        if (clave.length() > LONGITUD_MAXIMA_CLAVE) {
+            responderClaveInvalida(response);
             return;
         }
 
@@ -165,6 +176,13 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         response.setStatus(409);
         response.setContentType("application/json");
         response.getWriter().write("{\"error\":\"Ya existe una solicitud en curso con la misma clave de idempotencia.\"}");
+    }
+
+    private void responderClaveInvalida(HttpServletResponse response) throws IOException {
+        response.setStatus(400);
+        response.setContentType("application/json");
+        response.getWriter().write(
+                "{\"error\":\"La clave de idempotencia no puede superar los " + LONGITUD_MAXIMA_CLAVE + " caracteres.\"}");
     }
 
     private void responderClaveReutilizadaConOtroPayload(HttpServletResponse response) throws IOException {

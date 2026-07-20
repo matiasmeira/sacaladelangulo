@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
@@ -70,6 +71,9 @@ class ReservaServiceTest {
 
     @Mock
     private DiaNoLaborableRepository diaNoLaborableRepository;
+
+    @Mock
+    private EstablecimientoRepository establecimientoRepository;
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -610,6 +614,32 @@ class ReservaServiceTest {
     }
 
     @Test
+    @DisplayName("crearReservaSemanal_Fallo_JugadorIdNoEsRolPlayer")
+    void crearReservaSemanal_Fallo_JugadorIdNoEsRolPlayer() {
+        // Arrange
+        LocalDate fechaInicioPeriodo = LocalDate.of(2030, 1, 8);
+        LocalDate fechaFinPeriodo = LocalDate.of(2030, 1, 22);
+        LocalTime horaInicio = LocalTime.of(20, 0);
+        LocalTime horaFin = LocalTime.of(21, 0);
+
+        ReservaSemanalRequest request = new ReservaSemanalRequest(
+                cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
+                horaInicio, horaFin, Deporte.FUTBOL, dueno.getId(), null, null);
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(usuarioRepository.findById(dueno.getId())).thenReturn(Optional.of(dueno));
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.crearReservaSemanal(request, dueno.getEmail())
+        );
+        assert exception.getMessage().contains("PLAYER");
+        verify(reservaRepository, never()).saveAll(any());
+    }
+
+    @Test
     @DisplayName("crearReservaSemanal_Fallo_TodoONada_UnaFechaBloqueada")
     void crearReservaSemanal_Fallo_TodoONada_UnaFechaBloqueada() {
         // Arrange
@@ -851,7 +881,34 @@ class ReservaServiceTest {
                 IllegalArgumentException.class,
                 () -> reservaService.moverReservaDeCancha(reservaCancelada.getId(), 999L, dueno.getEmail())
         );
-        assert exception.getMessage().contains("cancelada");
+        assert exception.getMessage().contains("pendiente de seña o confirmada");
+    }
+
+    @Test
+    @DisplayName("moverReservaDeCancha_Fallo_ReservaFinalizada")
+    void moverReservaDeCancha_Fallo_ReservaFinalizada() {
+        // Arrange
+        Reserva reservaFinalizada = Reserva.builder()
+                .id(34L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.FINALIZADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaFinalizada.getId()))
+                .thenReturn(Optional.of(reservaFinalizada));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.moverReservaDeCancha(reservaFinalizada.getId(), 999L, dueno.getEmail())
+        );
+        assert exception.getMessage().contains("pendiente de seña o confirmada");
     }
 
     @Test
@@ -1295,6 +1352,103 @@ class ReservaServiceTest {
         assert resultado.getTotalElements() == 0;
         verify(reservaRepository).findByJugadorIdAndEstado(jugador.getId(), EstadoReserva.CANCELADA, pageable);
         verify(reservaRepository, never()).findByJugadorId(any(), any());
+    }
+
+    @Test
+    @DisplayName("obtenerReservasPorCanchaYFecha_PorDefecto_ExcluyeCanceladas")
+    void obtenerReservasPorCanchaYFecha_PorDefecto_ExcluyeCanceladas() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Reserva> pageVacia = new PageImpl<>(List.of(), pageable, 0);
+        LocalDate fecha = LocalDate.of(2030, 1, 15);
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(reservaRepository.findReservasEnRangoDiario(
+                eq(cancha.getId()), any(), any(), eq(EstadoReserva.CANCELADA), eq(pageable)))
+                .thenReturn(pageVacia);
+
+        // Act
+        Page<ReservaResponse> resultado = reservaService.obtenerReservasPorCanchaYFecha(
+                cancha.getId(), fecha, false, pageable, dueno.getEmail());
+
+        // Assert
+        assert resultado.getTotalElements() == 0;
+        verify(reservaRepository).findReservasEnRangoDiario(eq(cancha.getId()), any(), any(), eq(EstadoReserva.CANCELADA), eq(pageable));
+        verify(reservaRepository, never()).findReservasEnRangoDiarioIncluyendoCanceladas(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("obtenerReservasPorCanchaYFecha_IncluirCanceladas_UsaQuerySinFiltro")
+    void obtenerReservasPorCanchaYFecha_IncluirCanceladas_UsaQuerySinFiltro() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Reserva> pageVacia = new PageImpl<>(List.of(), pageable, 0);
+        LocalDate fecha = LocalDate.of(2030, 1, 15);
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(reservaRepository.findReservasEnRangoDiarioIncluyendoCanceladas(eq(cancha.getId()), any(), any(), eq(pageable)))
+                .thenReturn(pageVacia);
+
+        // Act
+        Page<ReservaResponse> resultado = reservaService.obtenerReservasPorCanchaYFecha(
+                cancha.getId(), fecha, true, pageable, dueno.getEmail());
+
+        // Assert
+        assert resultado.getTotalElements() == 0;
+        verify(reservaRepository).findReservasEnRangoDiarioIncluyendoCanceladas(eq(cancha.getId()), any(), any(), eq(pageable));
+        verify(reservaRepository, never()).findReservasEnRangoDiario(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("obtenerReservasPorEstablecimientoYFecha_PorDefecto_ExcluyeCanceladas")
+    void obtenerReservasPorEstablecimientoYFecha_PorDefecto_ExcluyeCanceladas() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Reserva> pageVacia = new PageImpl<>(List.of(), pageable, 0);
+        LocalDate fecha = LocalDate.of(2030, 1, 15);
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
+                eq(establecimiento.getId()), any(), any(), eq(EstadoReserva.CANCELADA), eq(pageable)))
+                .thenReturn(pageVacia);
+
+        // Act
+        Page<ReservaResponse> resultado = reservaService.obtenerReservasPorEstablecimientoYFecha(
+                establecimiento.getId(), fecha, false, pageable, dueno.getEmail());
+
+        // Assert
+        assert resultado.getTotalElements() == 0;
+        verify(reservaRepository).findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
+                eq(establecimiento.getId()), any(), any(), eq(EstadoReserva.CANCELADA), eq(pageable));
+        verify(reservaRepository, never()).findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("obtenerReservasPorEstablecimientoYFecha_IncluirCanceladas_UsaQuerySinFiltro")
+    void obtenerReservasPorEstablecimientoYFecha_IncluirCanceladas_UsaQuerySinFiltro() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Reserva> pageVacia = new PageImpl<>(List.of(), pageable, 0);
+        LocalDate fecha = LocalDate.of(2030, 1, 15);
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(
+                eq(establecimiento.getId()), any(), any(), eq(pageable)))
+                .thenReturn(pageVacia);
+
+        // Act
+        Page<ReservaResponse> resultado = reservaService.obtenerReservasPorEstablecimientoYFecha(
+                establecimiento.getId(), fecha, true, pageable, dueno.getEmail());
+
+        // Assert
+        assert resultado.getTotalElements() == 0;
+        verify(reservaRepository).findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(
+                eq(establecimiento.getId()), any(), any(), eq(pageable));
+        verify(reservaRepository, never()).findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(any(), any(), any(), any(), any());
     }
 
     private void canchasInEstablecimientoWithHorarioNocturno() {

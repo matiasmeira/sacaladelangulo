@@ -61,7 +61,7 @@ public class BloqueoCanchaController {
      * es PLAYER (ver M30 en la auditoría).
      */
     @GetMapping("/api/v1/establecimientos/{establecimientoId}/bloqueos")
-    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<BloqueoCanchaResponse>> listarPorEstablecimientoYFecha(
             @PathVariable Long establecimientoId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,

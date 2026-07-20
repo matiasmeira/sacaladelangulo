@@ -64,6 +64,15 @@ public class Usuario {
     private Boolean telefonoVerificado;
 
     /**
+     * Incrementado en logout o al cambiar la contraseña/PIN: el JWT emitido antes de ese
+     * incremento lleva la versión vieja como claim y JwtService lo invalida en la
+     * siguiente petición, aunque no haya expirado (ver B3 en la auditoría).
+     */
+    @Column(name = "token_version", nullable = false)
+    @Builder.Default
+    private Integer tokenVersion = 0;
+
+    /**
      * Establecimiento al que pertenece este usuario cuando rol = EMPLOYEE.
      * Nulo para el resto de los roles.
      */
@@ -95,6 +104,9 @@ public class Usuario {
         }
         if (telefonoVerificado == null) {
             telefonoVerificado = false;
+        }
+        if (tokenVersion == null) {
+            tokenVersion = 0;
         }
     }
 }

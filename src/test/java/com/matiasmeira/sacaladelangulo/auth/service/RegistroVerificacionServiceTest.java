@@ -21,7 +21,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -175,15 +174,13 @@ class RegistroVerificacionServiceTest {
                 .build();
         CompletarRegistroRequest request = new CompletarRegistroRequest("token-valido", "Juan", "1122334455", "Password123");
 
-        UserDetails userDetails = User.withUsername("nuevo@test.com")
-                .password("encoded-password")
-                .authorities("ROLE_PLAYER")
-                .build();
-
         when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
         when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
         when(passwordEncoder.encode("Password123")).thenReturn("encoded-password");
-        when(jwtService.generateToken(userDetails)).thenReturn("jwt-token");
+        // El UserDetails real es un UsuarioPrincipal construido internamente a partir del
+        // Usuario recién creado (ver UsuarioUserDetailsMapper); no hay forma de construir
+        // acá una instancia igual a la que arma el código, así que se matchea por tipo.
+        when(jwtService.generateToken(any(UserDetails.class))).thenReturn("jwt-token");
 
         AuthResponse response = registroVerificacionService.completarRegistro(request);
 

@@ -3,6 +3,7 @@ package com.matiasmeira.sacaladelangulo.buffet.controller;
 import com.matiasmeira.sacaladelangulo.buffet.dto.MetricasVentasResponse;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaRequest;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaResponse;
+import com.matiasmeira.sacaladelangulo.buffet.service.VentaMetricasService;
 import com.matiasmeira.sacaladelangulo.buffet.service.VentaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import java.time.LocalDate;
 public class VentaBuffetController {
 
     private final VentaService ventaService;
+    private final VentaMetricasService ventaMetricasService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
@@ -62,6 +64,6 @@ public class VentaBuffetController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
             @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(ventaService.obtenerMetricas(establecimientoId, desde, hasta, userDetails.getUsername()));
+        return ResponseEntity.ok(ventaMetricasService.obtenerMetricas(establecimientoId, desde, hasta, userDetails.getUsername()));
     }
 }

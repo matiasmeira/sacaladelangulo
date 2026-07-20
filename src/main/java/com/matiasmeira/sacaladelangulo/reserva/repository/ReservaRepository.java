@@ -17,25 +17,6 @@ import java.util.List;
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     /**
-     * Cuenta las reservas que se solapan con el período de tiempo especificado.
-     * Excluye reservas canceladas para validar disponibilidad real.
-     *
-     * @param canchasIds Lista de IDs de canchas a validar
-     * @param inicio Fecha y hora de inicio del período
-     * @param fin Fecha y hora de fin del período
-     * @return Cantidad de reservas solapadas
-     */
-    @Query("SELECT COUNT(r) FROM Reserva r " +
-           "WHERE r.cancha.id IN :canchasIds " +
-           "AND r.estado != 'CANCELADA' " +
-           "AND (r.fechaHoraInicio < :fin AND r.fechaHoraFin > :inicio)")
-    long countReservasSolapadas(
-            @Param("canchasIds") List<Long> canchasIds,
-            @Param("inicio") LocalDateTime inicio,
-            @Param("fin") LocalDateTime fin
-    );
-
-    /**
      * Obtiene todas las reservas solapadas de un predio (establecimiento).
      * Excluye reservas canceladas y trae las canchas asociadas.
      *
@@ -54,20 +35,24 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             @Param("fin") LocalDateTime fin
     );
 
-    org.springframework.data.domain.Page<Reserva> findByCanchaIdAndFechaHoraInicioBetweenAndEstadoNot(
-            Long canchaId,
-            LocalDateTime inicio,
-            LocalDateTime fin,
-            com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
-            org.springframework.data.domain.Pageable pageable
-    );
-
     @org.springframework.data.jpa.repository.Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId AND r.fechaHoraInicio < :finDia AND r.fechaHoraFin > :inicioDia AND r.estado != :estado")
     org.springframework.data.domain.Page<Reserva> findReservasEnRangoDiario(
             @org.springframework.data.repository.query.Param("canchaId") Long canchaId,
             @org.springframework.data.repository.query.Param("inicioDia") java.time.LocalDateTime inicioDia,
             @org.springframework.data.repository.query.Param("finDia") java.time.LocalDateTime finDia,
             @org.springframework.data.repository.query.Param("estado") com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Misma consulta que findReservasEnRangoDiario pero sin excluir ningún estado, para
+     * cuando el dueño/admin pide explícitamente auditar cancelaciones históricas (ver B7
+     * en la auditoría).
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId AND r.fechaHoraInicio < :finDia AND r.fechaHoraFin > :inicioDia")
+    org.springframework.data.domain.Page<Reserva> findReservasEnRangoDiarioIncluyendoCanceladas(
+            @org.springframework.data.repository.query.Param("canchaId") Long canchaId,
+            @org.springframework.data.repository.query.Param("inicioDia") java.time.LocalDateTime inicioDia,
+            @org.springframework.data.repository.query.Param("finDia") java.time.LocalDateTime finDia,
             org.springframework.data.domain.Pageable pageable);
 
     @Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId " +
@@ -84,6 +69,17 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             LocalDateTime inicio,
             LocalDateTime fin,
             com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+    /**
+     * Misma consulta que findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot
+     * pero sin excluir ningún estado (ver B7 en la auditoría).
+     */
+    org.springframework.data.domain.Page<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(
+            Long estId,
+            LocalDateTime inicio,
+            LocalDateTime fin,
             org.springframework.data.domain.Pageable pageable
     );
 

@@ -118,6 +118,26 @@ public class CanchaService {
     }
 
     /**
+     * Desactiva una cancha (baja lógica, isActive=false): sin este método no había forma
+     * de dar de baja una cancha, solo de crearla o editarla (ver B19 en la auditoría).
+     * Misma validación de ownership que actualizarCancha.
+     */
+    public void desactivarCancha(Long establecimientoId, Long canchaId, String email) {
+        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
+        validarPropietario(establecimiento, email);
+
+        Cancha cancha = canchaRepository.findById(canchaId)
+                .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
+
+        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
+            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
+        }
+
+        cancha.setIsActive(false);
+        canchaRepository.save(cancha);
+    }
+
+    /**
      * Valida que el usuario autenticado sea el dueño del establecimiento o un administrador.
      */
     private Usuario validarPropietario(Establecimiento establecimiento, String email) {

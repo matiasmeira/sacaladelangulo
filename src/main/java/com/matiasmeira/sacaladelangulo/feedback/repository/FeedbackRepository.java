@@ -21,6 +21,14 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
 
     boolean existsByReservaId(Long reservaId);
 
+    /**
+     * Trae el feedback junto con reserva -> jugador en una sola consulta, para validar
+     * ownership (editar/eliminar el propio feedback) sin un round-trip extra por lazy
+     * loading (ver B10 en la auditoría).
+     */
+    @Query("SELECT f FROM Feedback f JOIN FETCH f.reserva r LEFT JOIN FETCH r.jugador WHERE f.id = :id")
+    Optional<Feedback> findByIdConReservaYJugador(@Param("id") Long id);
+
     @Query("SELECT f FROM Feedback f JOIN FETCH f.reserva r JOIN FETCH r.cancha c JOIN FETCH c.establecimiento " +
            "LEFT JOIN FETCH r.jugador " +
            "WHERE c.establecimiento.id = :estId ORDER BY f.fechaCreacion DESC")

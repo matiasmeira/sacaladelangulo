@@ -13,6 +13,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -53,6 +55,17 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@RequestBody @Valid AuthRequest request) {
         AuthResponse response = authService.authenticate(request);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Invalida el JWT actual del usuario autenticado (ver AuthService.logout y B3 en la
+     * auditoría). A diferencia del resto de /api/v1/auth/**, requiere autenticación:
+     * ver la excepción explícita en SecurityConfig.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal UserDetails userDetails) {
+        authService.logout(userDetails.getUsername());
+        return ResponseEntity.noContent().build();
     }
 
     /**

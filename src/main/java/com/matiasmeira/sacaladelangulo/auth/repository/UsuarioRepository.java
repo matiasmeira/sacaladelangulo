@@ -18,9 +18,20 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     boolean existsByEmail(String email);
 
-    Optional<Usuario> findByEstablecimientoIdAndNombreAndRol(Long establecimientoId, String nombre, Role rol);
+    /**
+     * IgnoreCase para que "Juan" y "juan" (o con espacios extra, ya trimeados por el
+     * llamador) se traten como el mismo empleado tanto al loguear como al validar
+     * unicidad de nombre (ver B4 en la auditoría).
+     */
+    Optional<Usuario> findByEstablecimientoIdAndNombreIgnoreCaseAndRol(Long establecimientoId, String nombre, Role rol);
 
-    boolean existsByEstablecimientoIdAndNombreAndRol(Long establecimientoId, String nombre, Role rol);
+    /**
+     * AndIsActiveTrue para que el nombre de un empleado desactivado quede libre y se
+     * pueda reutilizar al dar de alta a otro empleado (ver B18 en la auditoría): sin
+     * este filtro, un nombre queda bloqueado para siempre apenas se desactiva a quien
+     * lo tenía.
+     */
+    boolean existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(Long establecimientoId, String nombre, Role rol);
 
     List<Usuario> findByEstablecimientoIdAndRol(Long establecimientoId, Role rol);
 

@@ -56,12 +56,7 @@ public class FeedbackService {
                 .orElseThrow(() -> new EntityNotFoundException("Reserva no encontrada"));
 
         Usuario usuarioAutenticado = buscarUsuarioPorEmail(email);
-
-        boolean esElJugador = reserva.getJugador() != null && reserva.getJugador().getId().equals(usuarioAutenticado.getId());
-        if (!esElJugador) {
-            log.warn("Acceso denegado a calificar reserva. Usuario: {}, Reserva: {}", usuarioAutenticado.getId(), reservaId);
-            throw new AccessDeniedException("No está autorizado para calificar esta reserva");
-        }
+        validarEsElJugador(reserva, usuarioAutenticado);
 
         if (reserva.getEstado() != EstadoReserva.FINALIZADA) {
             throw new IllegalArgumentException("Solo se puede calificar una reserva finalizada");
@@ -90,6 +85,51 @@ public class FeedbackService {
         log.info("Feedback creado con éxito. ID: {}, Reserva: {}", feedbackGuardado.getId(), reservaId);
 
         return feedbackMapper.mapToResponse(feedbackGuardado);
+    }
+
+    /**
+     * Edita la calificación/comentario de un feedback propio. Misma validación de
+     * ownership que crearFeedback: solo el jugador que dejó el feedback puede editarlo
+     * (ver B10 en la auditoría).
+     *
+     * @param feedbackId ID del feedback a editar
+     * @param request DTO con la nueva puntuación y comentario
+     * @param email Email del usuario autenticado (jugador)
+     * @return FeedbackResponse con el feedback ya actualizado
+     */
+    public FeedbackResponse editarFeedback(Long feedbackId, FeedbackRequest request, String email) {
+        log.info("Iniciando edición de feedback. Feedback: {}, Email: {}", feedbackId, email);
+
+        Feedback feedback = feedbackRepository.findByIdConReservaYJugador(feedbackId)
+                .orElseThrow(() -> new EntityNotFoundException("Feedback no encontrado"));
+        Usuario usuarioAutenticado = buscarUsuarioPorEmail(email);
+        validarEsElJugador(feedback.getReserva(), usuarioAutenticado);
+
+        feedback.setPuntuacion(request.puntuacion());
+        feedback.setComentario(request.comentario());
+        Feedback feedbackActualizado = feedbackRepository.save(feedback);
+        log.info("Feedback editado con éxito. ID: {}", feedbackId);
+
+        return feedbackMapper.mapToResponse(feedbackActualizado);
+    }
+
+    /**
+     * Elimina un feedback propio. Misma validación de ownership que crearFeedback (ver
+     * B10 en la auditoría).
+     *
+     * @param feedbackId ID del feedback a eliminar
+     * @param email Email del usuario autenticado (jugador)
+     */
+    public void eliminarFeedback(Long feedbackId, String email) {
+        log.info("Iniciando eliminación de feedback. Feedback: {}, Email: {}", feedbackId, email);
+
+        Feedback feedback = feedbackRepository.findByIdConReservaYJugador(feedbackId)
+                .orElseThrow(() -> new EntityNotFoundException("Feedback no encontrado"));
+        Usuario usuarioAutenticado = buscarUsuarioPorEmail(email);
+        validarEsElJugador(feedback.getReserva(), usuarioAutenticado);
+
+        feedbackRepository.delete(feedback);
+        log.info("Feedback eliminado con éxito. ID: {}", feedbackId);
     }
 
     /**
@@ -145,6 +185,14 @@ public class FeedbackService {
         log.info("Comentario destacado removido con éxito. Feedback: {}", feedbackId);
 
         return feedbackMapper.mapToResponse(feedbackActualizado);
+    }
+
+    private void validarEsElJugador(Reserva reserva, Usuario usuarioAutenticado) {
+        boolean esElJugador = reserva.getJugador() != null && reserva.getJugador().getId().equals(usuarioAutenticado.getId());
+        if (!esElJugador) {
+            log.warn("Acceso denegado sobre feedback. Usuario: {}, Reserva: {}", usuarioAutenticado.getId(), reserva.getId());
+            throw new AccessDeniedException("No está autorizado para operar sobre el feedback de esta reserva");
+        }
     }
 
     private Usuario buscarUsuarioPorEmail(String email) {

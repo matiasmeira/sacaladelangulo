@@ -156,9 +156,10 @@ public class ReservaController {
     public ResponseEntity<Page<ReservaResponse>> obtenerReservas(
             @PathVariable Long canchaId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            @RequestParam(defaultValue = "false") boolean incluirCanceladas,
             @AuthenticationPrincipal UserDetails userDetails,
             @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
-        return ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha, pageable, userDetails.getUsername()));
+        return ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha, incluirCanceladas, pageable, userDetails.getUsername()));
     }
 
     @GetMapping("/establecimiento/{estId}")
@@ -166,9 +167,10 @@ public class ReservaController {
     public ResponseEntity<Page<ReservaResponse>> obtenerReservasPorEstablecimiento(
             @PathVariable Long estId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            @RequestParam(defaultValue = "false") boolean incluirCanceladas,
             @AuthenticationPrincipal UserDetails userDetails,
             @ParameterObject @PageableDefault(size = 10) Pageable pageable) {
-        return ResponseEntity.ok(reservaService.obtenerReservasPorEstablecimientoYFecha(estId, fecha, pageable, userDetails.getUsername()));
+        return ResponseEntity.ok(reservaService.obtenerReservasPorEstablecimientoYFecha(estId, fecha, incluirCanceladas, pageable, userDetails.getUsername()));
     }
 
     /**

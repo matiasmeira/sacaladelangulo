@@ -8,6 +8,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
@@ -123,13 +124,17 @@ public class AuthService {
      * el ID del empleado como claim para que el frontend lo muestre sin otra llamada.
      */
     public AuthResponse authenticateEmpleado(EmpleadoLoginRequest request) {
-        String claveLimite = "login-empleado:" + request.establecimientoId() + ":" + request.nombre();
+        // Normalizado antes de armar la clave de rate limit y de consultar la base, para
+        // que variar mayúsculas/espacios no sirva ni para eludir el límite de intentos
+        // ni para esquivar la búsqueda por nombre (ver B4 en la auditoría).
+        String nombre = normalizarNombre(request.nombre());
+        String claveLimite = "login-empleado:" + request.establecimientoId() + ":" + nombre;
         if (!rateLimiterService.tryConsume(claveLimite, LOGIN_EMPLEADO_INTENTOS_MAXIMOS, LOGIN_EMPLEADO_VENTANA_MILLIS)) {
             throw new RateLimitExceededException("Demasiados intentos de inicio de sesión. Intente nuevamente en unos minutos.");
         }
 
-        Usuario empleado = usuarioRepository.findByEstablecimientoIdAndNombreAndRol(
-                        request.establecimientoId(), request.nombre(), Role.EMPLOYEE)
+        Usuario empleado = usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(
+                        request.establecimientoId(), nombre, Role.EMPLOYEE)
                 .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
 
         if (!Boolean.TRUE.equals(empleado.getIsActive())) {
@@ -152,7 +157,23 @@ public class AuthService {
         return new AuthResponse(token);
     }
 
+    /**
+     * Invalida cualquier JWT ya emitido para este usuario: incrementa tokenVersion, que
+     * JwtService compara contra el claim del token en cada petición (ver B3 en la
+     * auditoría). No requiere borrar nada del lado del cliente.
+     */
+    public void logout(String email) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        usuario.setTokenVersion(usuario.getTokenVersion() + 1);
+        usuarioRepository.save(usuario);
+    }
+
     private String normalizarEmail(String email) {
         return email == null ? null : email.trim().toLowerCase();
+    }
+
+    private String normalizarNombre(String nombre) {
+        return nombre == null ? null : nombre.trim().toLowerCase();
     }
 }

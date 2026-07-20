@@ -42,6 +42,34 @@ public class FeedbackController {
     }
 
     /**
+     * Edita la puntuación/comentario de un feedback propio.
+     * Protegido: solo el jugador dueño del feedback (mismo criterio de ownership que
+     * crearFeedback, ver B10 en la auditoría).
+     */
+    @PutMapping("/api/v1/feedback/{feedbackId}")
+    @PreAuthorize("hasRole('PLAYER')")
+    public ResponseEntity<FeedbackResponse> editarFeedback(
+            @PathVariable Long feedbackId,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid FeedbackRequest request) {
+        return ResponseEntity.ok(feedbackService.editarFeedback(feedbackId, request, userDetails.getUsername()));
+    }
+
+    /**
+     * Elimina un feedback propio.
+     * Protegido: solo el jugador dueño del feedback (mismo criterio de ownership que
+     * crearFeedback, ver B10 en la auditoría).
+     */
+    @DeleteMapping("/api/v1/feedback/{feedbackId}")
+    @PreAuthorize("hasRole('PLAYER')")
+    public ResponseEntity<Void> eliminarFeedback(
+            @PathVariable Long feedbackId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        feedbackService.eliminarFeedback(feedbackId, userDetails.getUsername());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Lista los comentarios de un establecimiento.
      * Protegido: dueño real del establecimiento, administradores, y empleados con el
      * permiso FIJAR_COMENTARIO_DESTACADO.

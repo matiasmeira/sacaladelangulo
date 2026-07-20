@@ -62,6 +62,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errores);
     }
 
+    /**
+     * Decisión consciente (ver B16 en la auditoría): este handler atiende tanto el
+     * AccessDeniedException interno de Spring Security (falla de @PreAuthorize, mensaje
+     * genérico tipo "Access Denied", sin datos sensibles) como el que lanza el código de
+     * negocio en decenas de lugares (validarPropietarioOAdmin y similares) con mensajes
+     * propios ("No autorizado en este establecimiento", etc.) que la API expone a
+     * propósito. Fijar acá un mensaje único rompería esos mensajes de negocio en todo el
+     * proyecto a cambio de desacoplar un caso de bajo riesgo real; se optó por no tocarlo.
+     */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, String>> handleAccessDeniedException(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)

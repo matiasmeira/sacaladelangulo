@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -36,6 +37,22 @@ public class EmpleadoService {
 
     private static final String DOMINIO_EMAIL_SINTETICO = "empleados.sacaladelangulo.interno";
 
+    /**
+     * Defensa en profundidad adicional al rate limiting de A2: bloquea los PIN más
+     * triviales (secuencias/repeticiones obvias) para que un atacante no necesite ni
+     * agotar el rate limit para adivinar el PIN de un empleado (ver B22 en la auditoría).
+     */
+    private static final Set<String> PINES_PROHIBIDOS = construirPinesProhibidos();
+
+    private static Set<String> construirPinesProhibidos() {
+        Set<String> prohibidos = new HashSet<>();
+        for (int digito = 0; digito <= 9; digito++) {
+            prohibidos.add(String.valueOf(digito).repeat(4));
+        }
+        prohibidos.addAll(Set.of("1234", "4321", "0123", "9876", "2580", "1212", "6969"));
+        return prohibidos;
+    }
+
     private final UsuarioRepository usuarioRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final PasswordEncoder passwordEncoder;
@@ -46,14 +63,18 @@ public class EmpleadoService {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario actor = validarPropietarioOAdmin(establecimiento, email);
 
-        if (usuarioRepository.existsByEstablecimientoIdAndNombreAndRol(establecimientoId, request.nombre(), Role.EMPLOYEE)) {
+        // Trim + IgnoreCase para que "Juan" y "juan "/" JUAN" cuenten como el mismo
+        // nombre tanto acá como al loguear (ver B4 en la auditoría).
+        String nombre = request.nombre() == null ? null : request.nombre().trim();
+        if (usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimientoId, nombre, Role.EMPLOYEE)) {
             throw new IllegalArgumentException("Ya existe un empleado con ese nombre en este establecimiento");
         }
+        validarPinNoTrivial(request.pin());
 
         Usuario empleado = Usuario.builder()
                 .email(generarEmailSintetico())
                 .password(passwordEncoder.encode(request.pin()))
-                .nombre(request.nombre())
+                .nombre(nombre)
                 .rol(Role.EMPLOYEE)
                 .establecimiento(establecimiento)
                 .permisos(request.permisos() == null ? new HashSet<>() : new HashSet<>(request.permisos()))
@@ -107,8 +128,11 @@ public class EmpleadoService {
     public EmpleadoResponse cambiarPin(Long establecimientoId, Long empleadoId, CambiarPinRequest request, String email) {
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
         Usuario actor = validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
+        validarPinNoTrivial(request.pin());
 
         empleado.setPassword(passwordEncoder.encode(request.pin()));
+        // Invalida cualquier JWT de mostrador ya emitido con el PIN viejo (ver B3 en la auditoría).
+        empleado.setTokenVersion(empleado.getTokenVersion() + 1);
         Usuario empleadoActualizado = usuarioRepository.save(empleado);
         log.info("PIN actualizado. Empleado: {}", empleadoId);
 
@@ -128,6 +152,12 @@ public class EmpleadoService {
 
         registroAuditoriaService.registrarAdministrativa(actor, empleadoDesactivado, AccionAuditoria.DESACTIVAR_EMPLEADO,
                 "Empleado desactivado");
+    }
+
+    private void validarPinNoTrivial(String pin) {
+        if (PINES_PROHIBIDOS.contains(pin)) {
+            throw new IllegalArgumentException("El PIN elegido es demasiado común (secuencia o repetición obvia); elegí otro");
+        }
     }
 
     private String generarEmailSintetico() {

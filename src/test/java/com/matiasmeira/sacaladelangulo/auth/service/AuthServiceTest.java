@@ -121,7 +121,7 @@ class AuthServiceTest {
                 .authorities("ROLE_EMPLOYEE")
                 .build();
 
-        when(usuarioRepository.findByEstablecimientoIdAndNombreAndRol(10L, "Juan", Role.EMPLOYEE))
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "juan", Role.EMPLOYEE))
                 .thenReturn(Optional.of(empleado));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
@@ -137,7 +137,7 @@ class AuthServiceTest {
     @DisplayName("authenticateEmpleado_Fallo_EmpleadoNoEncontrado")
     void authenticateEmpleado_Fallo_EmpleadoNoEncontrado() {
         EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Fantasma", "1234");
-        when(usuarioRepository.findByEstablecimientoIdAndNombreAndRol(10L, "Fantasma", Role.EMPLOYEE))
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "fantasma", Role.EMPLOYEE))
                 .thenReturn(Optional.empty());
 
         BadCredentialsException exception = assertThrows(
@@ -161,7 +161,7 @@ class AuthServiceTest {
                 .isActive(false)
                 .build();
 
-        when(usuarioRepository.findByEstablecimientoIdAndNombreAndRol(10L, "Juan", Role.EMPLOYEE))
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "juan", Role.EMPLOYEE))
                 .thenReturn(Optional.of(empleadoInactivo));
 
         BadCredentialsException exception = assertThrows(
@@ -185,7 +185,7 @@ class AuthServiceTest {
                 .isActive(true)
                 .build();
 
-        when(usuarioRepository.findByEstablecimientoIdAndNombreAndRol(10L, "Juan", Role.EMPLOYEE))
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "juan", Role.EMPLOYEE))
                 .thenReturn(Optional.of(empleado));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new BadCredentialsException("Bad credentials"));
@@ -245,12 +245,42 @@ class AuthServiceTest {
     @DisplayName("authenticateEmpleado_Fallo_LimiteDeIntentosSuperado")
     void authenticateEmpleado_Fallo_LimiteDeIntentosSuperado() {
         EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Juan", "1234");
-        when(rateLimiterService.tryConsume(eq("login-empleado:10:Juan"), anyInt(), anyLong())).thenReturn(false);
+        when(rateLimiterService.tryConsume(eq("login-empleado:10:juan"), anyInt(), anyLong())).thenReturn(false);
 
         assertThrows(
                 RateLimitExceededException.class,
                 () -> authService.authenticateEmpleado(request)
         );
-        verify(usuarioRepository, never()).findByEstablecimientoIdAndNombreAndRol(any(), any(), any());
+        verify(usuarioRepository, never()).findByEstablecimientoIdAndNombreIgnoreCaseAndRol(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("logout_Exito_IncrementaTokenVersion")
+    void logout_Exito_IncrementaTokenVersion() {
+        Usuario usuario = Usuario.builder()
+                .id(1L)
+                .email("jugador@test.com")
+                .rol(Role.PLAYER)
+                .tokenVersion(3)
+                .build();
+        when(usuarioRepository.findByEmail("jugador@test.com")).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        authService.logout("jugador@test.com");
+
+        assertEquals(4, usuario.getTokenVersion());
+        verify(usuarioRepository).save(usuario);
+    }
+
+    @Test
+    @DisplayName("logout_Fallo_UsuarioNoEncontrado")
+    void logout_Fallo_UsuarioNoEncontrado() {
+        when(usuarioRepository.findByEmail("fantasma@test.com")).thenReturn(Optional.empty());
+
+        assertThrows(
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
+                () -> authService.logout("fantasma@test.com")
+        );
+        verify(usuarioRepository, never()).save(any());
     }
 }

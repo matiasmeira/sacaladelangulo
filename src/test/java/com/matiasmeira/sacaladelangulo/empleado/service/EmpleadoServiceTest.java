@@ -80,12 +80,12 @@ class EmpleadoServiceTest {
     @DisplayName("crearEmpleado_Exito")
     void crearEmpleado_Exito() {
         // Arrange
-        EmpleadoRequest request = new EmpleadoRequest("Juan", "1234", Set.of(PermisoEmpleado.CANCELAR_RESERVA));
+        EmpleadoRequest request = new EmpleadoRequest("Juan", "7392", Set.of(PermisoEmpleado.CANCELAR_RESERVA));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(usuarioRepository.existsByEstablecimientoIdAndNombreAndRol(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
-        when(passwordEncoder.encode("1234")).thenReturn("hash-1234");
+        when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
+        when(passwordEncoder.encode("7392")).thenReturn("hash-7392");
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
             Usuario empleado = invocation.getArgument(0);
             empleado.setId(50L);
@@ -107,7 +107,7 @@ class EmpleadoServiceTest {
 
     private Usuario argThatEmpleadoTieneRolYPin() {
         return org.mockito.ArgumentMatchers.argThat(u ->
-                u.getRol() == Role.EMPLOYEE && "hash-1234".equals(u.getPassword()) && u.getEmail() != null);
+                u.getRol() == Role.EMPLOYEE && "hash-7392".equals(u.getPassword()) && u.getEmail() != null);
     }
 
     @Test
@@ -118,7 +118,47 @@ class EmpleadoServiceTest {
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(usuarioRepository.existsByEstablecimientoIdAndNombreAndRol(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(true);
+        when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(true);
+
+        // Act & Assert
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> empleadoService.crearEmpleado(establecimiento.getId(), request, dueno.getEmail())
+        );
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crearEmpleado_Exito_ReutilizaNombreDeEmpleadoDesactivado")
+    void crearEmpleado_Exito_ReutilizaNombreDeEmpleadoDesactivado() {
+        // Arrange: ya existe un "Juan" desactivado, pero la validación de unicidad solo
+        // mira empleados activos (ver B18 en la auditoría).
+        EmpleadoRequest request = new EmpleadoRequest("Juan", "7392", null);
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
+        when(passwordEncoder.encode("7392")).thenReturn("hash-7392");
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
+            Usuario empleado = invocation.getArgument(0);
+            empleado.setId(51L);
+            return empleado;
+        });
+
+        // Act & Assert
+        assertDoesNotThrow(() -> empleadoService.crearEmpleado(establecimiento.getId(), request, dueno.getEmail()));
+        verify(usuarioRepository).save(any(Usuario.class));
+    }
+
+    @Test
+    @DisplayName("crearEmpleado_Fallo_PinTrivial")
+    void crearEmpleado_Fallo_PinTrivial() {
+        // Arrange
+        EmpleadoRequest request = new EmpleadoRequest("Juan", "1234", null);
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
 
         // Act & Assert
         assertThrows(
@@ -288,8 +328,36 @@ class EmpleadoServiceTest {
 
         // Assert
         assertEquals("hash-5678", empleado.getPassword());
+        assertEquals(1, empleado.getTokenVersion());
         verify(registroAuditoriaService).registrarAdministrativa(
                 eq(dueno), eq(empleado), eq(AccionAuditoria.CAMBIAR_PIN_EMPLEADO), any());
+    }
+
+    @Test
+    @DisplayName("cambiarPin_Fallo_PinTrivial")
+    void cambiarPin_Fallo_PinTrivial() {
+        // Arrange
+        Usuario empleado = Usuario.builder()
+                .id(50L)
+                .nombre("Juan")
+                .password("hash-vieja")
+                .rol(Role.EMPLOYEE)
+                .establecimiento(establecimiento)
+                .isActive(true)
+                .build();
+
+        CambiarPinRequest request = new CambiarPinRequest("0000");
+
+        when(usuarioRepository.findById(empleado.getId())).thenReturn(Optional.of(empleado));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        // Act & Assert
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> empleadoService.cambiarPin(establecimiento.getId(), empleado.getId(), request, dueno.getEmail())
+        );
+        assertEquals("hash-vieja", empleado.getPassword());
+        verify(usuarioRepository, never()).save(any());
     }
 
     @Test

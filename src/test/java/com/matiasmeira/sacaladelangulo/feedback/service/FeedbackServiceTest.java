@@ -33,6 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -158,6 +160,67 @@ class FeedbackServiceTest {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                 () -> feedbackService.crearFeedback(500L, request, jugador.getEmail()));
         assertTrue(exception.getMessage().contains("Ya calificaste"));
+    }
+
+    @Test
+    @DisplayName("editarFeedback actualiza puntuación y comentario cuando el usuario es el jugador dueño")
+    void editarFeedbackExitoCuandoUsuarioEsElJugador() {
+        Feedback feedback = Feedback.builder().id(10L).reserva(reserva).puntuacion(3).comentario("Bien").destacado(false).build();
+        FeedbackRequest request = new FeedbackRequest(5, "Excelente, corrijo mi opinión");
+
+        when(feedbackRepository.findByIdConReservaYJugador(10L)).thenReturn(Optional.of(feedback));
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(feedbackRepository.save(any(Feedback.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(feedbackMapper.mapToResponse(any(Feedback.class))).thenReturn(
+                new FeedbackResponse(10L, 500L, 100L, 2L, "Juan", 5, "Excelente, corrijo mi opinión", false, LocalDateTime.now()));
+
+        FeedbackResponse response = assertDoesNotThrow(
+                () -> feedbackService.editarFeedback(10L, request, jugador.getEmail()));
+
+        assertEquals(5, response.puntuacion());
+        assertEquals("Excelente, corrijo mi opinión", response.comentario());
+        assertEquals(5, feedback.getPuntuacion());
+        assertEquals("Excelente, corrijo mi opinión", feedback.getComentario());
+    }
+
+    @Test
+    @DisplayName("editarFeedback lanza AccessDeniedException si el usuario autenticado no es el jugador de la reserva")
+    void editarFeedbackFallaSiUsuarioNoEsElJugador() {
+        Feedback feedback = Feedback.builder().id(10L).reserva(reserva).puntuacion(3).comentario("Bien").destacado(false).build();
+        FeedbackRequest request = new FeedbackRequest(1, "Intento ajeno");
+
+        when(feedbackRepository.findByIdConReservaYJugador(10L)).thenReturn(Optional.of(feedback));
+        when(usuarioRepository.findByEmail(otroJugador.getEmail())).thenReturn(Optional.of(otroJugador));
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> feedbackService.editarFeedback(10L, request, otroJugador.getEmail()));
+        verify(feedbackRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("eliminarFeedback borra el feedback cuando el usuario es el jugador dueño")
+    void eliminarFeedbackExitoCuandoUsuarioEsElJugador() {
+        Feedback feedback = Feedback.builder().id(10L).reserva(reserva).puntuacion(3).comentario("Bien").destacado(false).build();
+
+        when(feedbackRepository.findByIdConReservaYJugador(10L)).thenReturn(Optional.of(feedback));
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+
+        assertDoesNotThrow(() -> feedbackService.eliminarFeedback(10L, jugador.getEmail()));
+
+        verify(feedbackRepository).delete(feedback);
+    }
+
+    @Test
+    @DisplayName("eliminarFeedback lanza AccessDeniedException si el usuario autenticado no es el jugador de la reserva")
+    void eliminarFeedbackFallaSiUsuarioNoEsElJugador() {
+        Feedback feedback = Feedback.builder().id(10L).reserva(reserva).puntuacion(3).comentario("Bien").destacado(false).build();
+
+        when(feedbackRepository.findByIdConReservaYJugador(10L)).thenReturn(Optional.of(feedback));
+        when(usuarioRepository.findByEmail(otroJugador.getEmail())).thenReturn(Optional.of(otroJugador));
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> feedbackService.eliminarFeedback(10L, otroJugador.getEmail()));
+        verify(feedbackRepository, never()).delete(any());
     }
 
     @Test

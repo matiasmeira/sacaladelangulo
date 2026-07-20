@@ -1,8 +1,10 @@
 package com.matiasmeira.sacaladelangulo.auth.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.List;
 
 /**
  * Construye el UserDetails de Spring Security a partir de un Usuario ya cargado en
@@ -18,11 +20,12 @@ public final class UsuarioUserDetailsMapper {
     }
 
     public static UserDetails map(Usuario usuario) {
-        return User.builder()
-                .username(usuario.getEmail())
-                .password(usuario.getPassword())
-                .disabled(!Boolean.TRUE.equals(usuario.getIsActive()))
-                .roles(usuario.getRol().name())
-                .build();
+        return new UsuarioPrincipal(
+                usuario.getEmail(),
+                usuario.getPassword(),
+                Boolean.TRUE.equals(usuario.getIsActive()),
+                List.of(new SimpleGrantedAuthority("ROLE_" + usuario.getRol().name())),
+                usuario.getTokenVersion() == null ? 0 : usuario.getTokenVersion()
+        );
     }
 }

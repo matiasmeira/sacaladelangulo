@@ -91,6 +91,20 @@ class IdempotencyFilterTest {
     }
 
     @Test
+    @DisplayName("doFilter_ClaveDemasiadoLarga_Responde400SinConsultarElRepositorio")
+    void doFilter_ClaveDemasiadoLarga_Responde400SinConsultarElRepositorio() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/reservas");
+        request.addHeader("Idempotency-Key", "x".repeat(256));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        idempotencyFilter.doFilter(request, response, filterChain);
+
+        verifyNoInteractions(filterChain);
+        verifyNoInteractions(solicitudIdempotenteRepository);
+        assertEquals(400, response.getStatus());
+    }
+
+    @Test
     @DisplayName("doFilter_ClaveNueva_EjecutaElControladorYGuardaLaRespuesta")
     void doFilter_ClaveNueva_EjecutaElControladorYGuardaLaRespuesta() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/reservas");

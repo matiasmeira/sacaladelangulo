@@ -238,6 +238,9 @@ public class ReservaService {
         if (request.jugadorId() != null) {
             jugador = usuarioRepository.findById(request.jugadorId())
                     .orElseThrow(() -> new EntityNotFoundException("Jugador no encontrado"));
+            if (jugador.getRol() != Role.PLAYER) {
+                throw new IllegalArgumentException("El jugadorId indicado no corresponde a un usuario con rol PLAYER");
+            }
         } else if (request.nombreClienteManual() == null || request.nombreClienteManual().isBlank()) {
             throw new IllegalArgumentException("Debe indicar un jugador registrado (jugadorId) o el nombre del cliente (nombreClienteManual)");
         }
@@ -713,8 +716,11 @@ public class ReservaService {
 
         validarPropietarioOAdmin(reserva.getCancha().getEstablecimiento(), email);
 
-        if (reserva.getEstado() == EstadoReserva.CANCELADA) {
-            throw new IllegalArgumentException("No se puede mover una reserva cancelada");
+        // Solo tiene sentido reasignar cancha en reservas todavía "en curso": una cancelada
+        // no debería reflotarse, y una finalizada ya representa un partido que ya se jugó
+        // en la cancha original (ver B6 en la auditoría).
+        if (reserva.getEstado() != EstadoReserva.PENDIENTE_SENA && reserva.getEstado() != EstadoReserva.CONFIRMADA) {
+            throw new IllegalArgumentException("Solo se puede mover una reserva pendiente de seña o confirmada");
         }
 
         Cancha nuevaCancha = buscarCanchaPorId(nuevaCanchaId);
@@ -806,33 +812,40 @@ public class ReservaService {
      * Lista las reservas de una cancha en una fecha dada.
      * Restringido al dueño del establecimiento o a un administrador: expone nombre e
      * identidad de los jugadores, por lo que no debe quedar accesible a cualquier usuario autenticado.
+     * Excluye canceladas por defecto; incluirCanceladas=true las trae también, para
+     * auditar cancelaciones históricas (ver B7 en la auditoría).
      */
     @Transactional(readOnly = true)
-    public Page<ReservaResponse> obtenerReservasPorCanchaYFecha(Long canchaId, LocalDate fecha, Pageable pageable, String email) {
+    public Page<ReservaResponse> obtenerReservasPorCanchaYFecha(Long canchaId, LocalDate fecha, boolean incluirCanceladas, Pageable pageable, String email) {
         Cancha cancha = buscarCanchaPorId(canchaId);
         validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
 
         LocalDateTime inicioDia = fecha.atStartOfDay();
         LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
-        return reservaRepository.findReservasEnRangoDiario(canchaId, inicioDia, finDia, EstadoReserva.CANCELADA, capPageSize(pageable))
-                .map(reservaMapper::mapToResponse);
+        Page<Reserva> reservas = incluirCanceladas
+                ? reservaRepository.findReservasEnRangoDiarioIncluyendoCanceladas(canchaId, inicioDia, finDia, capPageSize(pageable))
+                : reservaRepository.findReservasEnRangoDiario(canchaId, inicioDia, finDia, EstadoReserva.CANCELADA, capPageSize(pageable));
+        return reservas.map(reservaMapper::mapToResponse);
     }
 
     /**
      * Lista las reservas de un establecimiento en una fecha dada.
      * Restringido al dueño del establecimiento o a un administrador (ver justificación arriba).
+     * Excluye canceladas por defecto; incluirCanceladas=true las trae también (ver B7).
      */
     @Transactional(readOnly = true)
-    public Page<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, LocalDate fecha, Pageable pageable, String email) {
+    public Page<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, LocalDate fecha, boolean incluirCanceladas, Pageable pageable, String email) {
         Establecimiento establecimiento = establecimientoRepository.findById(estId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
         validarPropietarioOAdmin(establecimiento, email);
 
         LocalDateTime inicioDia = fecha.atStartOfDay();
         LocalDateTime finDia = fecha.atTime(23, 59, 59);
-        return reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
-                        estId, inicioDia, finDia, EstadoReserva.CANCELADA, capPageSize(pageable))
-                .map(reservaMapper::mapToResponse);
+        Page<Reserva> reservas = incluirCanceladas
+                ? reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(estId, inicioDia, finDia, capPageSize(pageable))
+                : reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
+                        estId, inicioDia, finDia, EstadoReserva.CANCELADA, capPageSize(pageable));
+        return reservas.map(reservaMapper::mapToResponse);
     }
 
     /**

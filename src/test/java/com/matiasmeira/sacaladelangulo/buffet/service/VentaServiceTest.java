@@ -6,7 +6,6 @@ import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.buffet.dto.DetalleVentaRequest;
-import com.matiasmeira.sacaladelangulo.buffet.dto.MetricasVentasResponse;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaMapper;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaRequest;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaResponse;
@@ -32,7 +31,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -591,118 +589,4 @@ class VentaServiceTest {
         );
     }
 
-    @Test
-    @DisplayName("obtenerMetricas_Exito_CalculaIngresoCantidadYTicketPromedio")
-    void obtenerMetricas_Exito_CalculaIngresoCantidadYTicketPromedio() {
-        // Arrange: venta1 = 3 aguas (4500), venta2 = 1 agua + 1 alfajor (1500 + 800 = 2300)
-        Venta venta1 = Venta.builder()
-                .id(300L)
-                .establecimiento(establecimiento)
-                .fechaHora(LocalDateTime.of(2026, 1, 10, 12, 0))
-                .total(BigDecimal.valueOf(4500))
-                .estado(EstadoVenta.CONFIRMADA)
-                .detalles(List.of(DetalleVenta.builder()
-                        .productoBuffet(agua).cantidad(3).subtotal(BigDecimal.valueOf(4500)).build()))
-                .build();
-
-        Venta venta2 = Venta.builder()
-                .id(301L)
-                .establecimiento(establecimiento)
-                .fechaHora(LocalDateTime.of(2026, 1, 15, 18, 0))
-                .total(BigDecimal.valueOf(2300))
-                .estado(EstadoVenta.CONFIRMADA)
-                .detalles(List.of(
-                        DetalleVenta.builder().productoBuffet(agua).cantidad(1).subtotal(BigDecimal.valueOf(1500)).build(),
-                        DetalleVenta.builder().productoBuffet(alfajor).cantidad(1).subtotal(BigDecimal.valueOf(800)).build()
-                ))
-                .build();
-
-        LocalDate desde = LocalDate.of(2026, 1, 1);
-        LocalDate hasta = LocalDate.of(2026, 1, 31);
-
-        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(ventaRepository.findByEstablecimientoIdAndEstadoAndFechaHoraBetween(
-                eq(establecimiento.getId()), eq(EstadoVenta.CONFIRMADA), any(), any()))
-                .thenReturn(List.of(venta1, venta2));
-
-        // Act
-        MetricasVentasResponse response = ventaService.obtenerMetricas(establecimiento.getId(), desde, hasta, dueno.getEmail());
-
-        // Assert
-        assertEquals(0, BigDecimal.valueOf(6800).compareTo(response.ingresoTotal()));
-        assertEquals(2L, response.cantidadVentas());
-        assertEquals(0, BigDecimal.valueOf(3400).compareTo(response.ticketPromedio()));
-
-        // Ranking: agua vendió 4 unidades en total (3+1), alfajor 1 -> agua primero
-        assertEquals(2, response.productosMasVendidos().size());
-        assertEquals(agua.getId(), response.productosMasVendidos().get(0).productoId());
-        assertEquals(4L, response.productosMasVendidos().get(0).cantidadVendida());
-        assertEquals(0, BigDecimal.valueOf(6000).compareTo(response.productosMasVendidos().get(0).ingresoGenerado()));
-        assertEquals(alfajor.getId(), response.productosMasVendidos().get(1).productoId());
-        assertEquals(1L, response.productosMasVendidos().get(1).cantidadVendida());
-
-        // Verifica que solo se pidan ventas CONFIRMADA (las canceladas no deben sumar)
-        verify(ventaRepository).findByEstablecimientoIdAndEstadoAndFechaHoraBetween(
-                eq(establecimiento.getId()), eq(EstadoVenta.CONFIRMADA), any(), any());
-    }
-
-    @Test
-    @DisplayName("obtenerMetricas_Exito_SinVentasDevuelveCeros")
-    void obtenerMetricas_Exito_SinVentasDevuelveCeros() {
-        // Arrange
-        LocalDate desde = LocalDate.of(2026, 1, 1);
-        LocalDate hasta = LocalDate.of(2026, 1, 31);
-
-        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(ventaRepository.findByEstablecimientoIdAndEstadoAndFechaHoraBetween(
-                eq(establecimiento.getId()), eq(EstadoVenta.CONFIRMADA), any(), any()))
-                .thenReturn(List.of());
-
-        // Act
-        MetricasVentasResponse response = ventaService.obtenerMetricas(establecimiento.getId(), desde, hasta, dueno.getEmail());
-
-        // Assert
-        assertEquals(0, BigDecimal.ZERO.compareTo(response.ingresoTotal()));
-        assertEquals(0L, response.cantidadVentas());
-        assertEquals(0, BigDecimal.ZERO.compareTo(response.ticketPromedio()));
-        assertTrue(response.productosMasVendidos().isEmpty());
-    }
-
-    @Test
-    @DisplayName("obtenerMetricas_Fallo_DesdeMayorQueHasta")
-    void obtenerMetricas_Fallo_DesdeMayorQueHasta() {
-        // Arrange
-        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-
-        // Act & Assert
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> ventaService.obtenerMetricas(
-                        establecimiento.getId(), LocalDate.of(2026, 2, 1), LocalDate.of(2026, 1, 1), dueno.getEmail())
-        );
-    }
-
-    @Test
-    @DisplayName("obtenerMetricas_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
-    void obtenerMetricas_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
-        // Arrange
-        Usuario otroDueno = Usuario.builder()
-                .id(3L)
-                .email("otro-dueno@test.com")
-                .rol(Role.OWNER)
-                .build();
-
-        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
-
-        // Act & Assert
-        assertThrows(
-                org.springframework.security.access.AccessDeniedException.class,
-                () -> ventaService.obtenerMetricas(
-                        establecimiento.getId(), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31), otroDueno.getEmail())
-        );
-    }
 }

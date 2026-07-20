@@ -40,7 +40,14 @@ public class SolicitudIdempotente {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    /**
+     * Largo explícito (en vez de dejar el default de Hibernate) para que
+     * IdempotencyFilter.LONGITUD_MAXIMA_CLAVE valide contra el mismo límite real de la
+     * columna, en vez de dejar que una clave demasiado larga reviente en un
+     * DataIntegrityViolationException indistinguible de una carrera de idempotencia
+     * genuina (ver B15 en la auditoría).
+     */
+    @Column(nullable = false, length = 255)
     private String clave;
 
     @Column(name = "usuario_email", nullable = false)

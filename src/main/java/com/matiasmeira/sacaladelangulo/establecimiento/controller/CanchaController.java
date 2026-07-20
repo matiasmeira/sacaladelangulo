@@ -53,4 +53,14 @@ public class CanchaController {
         CanchaResponse cancha = canchaService.actualizarCancha(establecimientoId, canchaId, request, userDetails.getUsername());
         return ResponseEntity.ok(cancha);
     }
+
+    @DeleteMapping("/{canchaId}")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<Void> desactivarCancha(
+            @PathVariable Long establecimientoId,
+            @PathVariable Long canchaId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        canchaService.desactivarCancha(establecimientoId, canchaId, userDetails.getUsername());
+        return ResponseEntity.noContent().build();
+    }
 }

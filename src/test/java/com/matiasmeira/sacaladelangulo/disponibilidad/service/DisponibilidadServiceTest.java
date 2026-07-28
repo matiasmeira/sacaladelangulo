@@ -126,7 +126,7 @@ class DisponibilidadServiceTest {
                 .thenReturn(List.of(DiaNoLaborable.builder().fecha(fecha).motivo("Feriado").build()));
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(100L)).thenReturn(List.of(cancha));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(100L), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(eq(100L), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(eq(100L), any(), any(), any())).thenReturn(List.of());
 
         DisponibilidadEstablecimientoResponse response = disponibilidadService.obtenerDisponibilidad(100L, fecha, null);
 
@@ -145,7 +145,7 @@ class DisponibilidadServiceTest {
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(100L, fecha, fecha)).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(100L)).thenReturn(List.of(cancha));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(100L), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(eq(100L), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(eq(100L), any(), any(), any())).thenReturn(List.of());
 
         DisponibilidadEstablecimientoResponse response = disponibilidadService.obtenerDisponibilidad(100L, fecha, null);
 
@@ -159,7 +159,7 @@ class DisponibilidadServiceTest {
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(100L, fecha, fecha)).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(100L)).thenReturn(List.of(cancha));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(100L), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(eq(100L), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(eq(100L), any(), any(), any())).thenReturn(List.of());
 
         DisponibilidadEstablecimientoResponse response = disponibilidadService.obtenerDisponibilidad(100L, fecha, null);
 
@@ -186,7 +186,7 @@ class DisponibilidadServiceTest {
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(100L, fecha, fecha)).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(100L)).thenReturn(List.of(cancha));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(100L), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(eq(100L), any(), any())).thenReturn(List.of(reservaExistente));
+        when(reservaRepository.findSuperpuestas(eq(100L), any(), any(), any())).thenReturn(List.of(reservaExistente));
 
         DisponibilidadEstablecimientoResponse response = disponibilidadService.obtenerDisponibilidad(100L, fecha, null);
 
@@ -209,7 +209,7 @@ class DisponibilidadServiceTest {
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(100L, fecha, fecha)).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(100L)).thenReturn(List.of(cancha));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(100L), any(), any())).thenReturn(List.of(bloqueo));
-        when(reservaRepository.findSuperpuestas(eq(100L), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(eq(100L), any(), any(), any())).thenReturn(List.of());
 
         DisponibilidadEstablecimientoResponse response = disponibilidadService.obtenerDisponibilidad(100L, fecha, null);
 

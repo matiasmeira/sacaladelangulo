@@ -68,9 +68,9 @@ public class DisponibilidadService {
         LocalDateTime rangoInicio = fechaInicio.atStartOfDay();
         LocalDateTime rangoFin = fechaFinResuelta.plusDays(1).atTime(LocalTime.MAX);
         List<BloqueoCancha> bloqueos = bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, rangoInicio, rangoFin);
-        List<Reserva> reservas = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin);
 
         LocalDateTime ahora = LocalDateTime.now();
+        List<Reserva> reservas = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin, ahora);
 
         List<DisponibilidadDiaResponse> dias = fechaInicio.datesUntil(fechaFinResuelta.plusDays(1))
                 .map(fecha -> calcularDisponibilidadDelDia(fecha, establecimiento, canchas, diasNoLaborables, bloqueos, reservas, ahora))

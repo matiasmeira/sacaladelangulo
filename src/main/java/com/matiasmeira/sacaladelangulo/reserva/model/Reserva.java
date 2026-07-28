@@ -112,6 +112,15 @@ public class Reserva {
     private LocalDateTime fechaCreacion;
 
     /**
+     * Momento en que vence la ventana de 10 minutos para confirmar/pagar la seña
+     * (ver ReservaService.crearReserva y ReservaExpiracionService). Nulo en reservas
+     * que no tienen ventana de expiración: manuales/semanales (nacen CONFIRMADA) y
+     * cualquier reserva ya CONFIRMADA (se limpia al confirmar).
+     */
+    @Column(name = "expira_en")
+    private LocalDateTime expiraEn;
+
+    /**
      * Optimistic locking sobre updates a esta fila ya persistida (ver comentario de
      * clase para el alcance real: no cubre la creación de reservas solapadas).
      */

@@ -21,6 +21,7 @@ public record ReservaResponse(
         BigDecimal senaPagada,
         String nombreClienteManual,
         String telefonoClienteManual,
-        Deporte deporteSeleccionado
+        Deporte deporteSeleccionado,
+        LocalDateTime expiraEn
 ) {
 }

@@ -89,6 +89,18 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(JugadorBloqueadoException.class)
+    public ResponseEntity<Map<String, String>> handleJugadorBloqueadoException(JugadorBloqueadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(ReservaExpiradaException.class)
+    public ResponseEntity<Map<String, String>> handleReservaExpiradaException(ReservaExpiradaException ex) {
+        return ResponseEntity.status(HttpStatus.GONE)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
     @ExceptionHandler(RateLimitExceededException.class)
     public ResponseEntity<Map<String, String>> handleRateLimitExceededException(RateLimitExceededException ex) {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)

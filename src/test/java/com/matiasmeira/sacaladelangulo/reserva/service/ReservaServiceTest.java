@@ -4,6 +4,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.core.exception.JugadorBloqueadoException;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
@@ -11,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugadorRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
@@ -68,6 +70,9 @@ class ReservaServiceTest {
 
     @Mock
     private BloqueoCanchaRepository bloqueoCanchaRepository;
+
+    @Mock
+    private BloqueoJugadorRepository bloqueoJugadorRepository;
 
     @Mock
     private DiaNoLaborableRepository diaNoLaborableRepository;
@@ -188,7 +193,8 @@ class ReservaServiceTest {
                     reserva.getSenaPagada(),
                     reserva.getNombreClienteManual(),
                     reserva.getTelefonoClienteManual(),
-                    reserva.getDeporteSeleccionado()
+                    reserva.getDeporteSeleccionado(),
+                    reserva.getExpiraEn()
             );
         });
 
@@ -196,6 +202,9 @@ class ReservaServiceTest {
         // la autorización como si la hiciera el dueño real. Los tests que necesiten otro
         // comportamiento (acceso denegado, empleado con/sin permiso) lo overridean.
         lenient().when(autorizacionEmpleadoService.validarAccion(any(), any(), any())).thenReturn(dueno);
+
+        // Default: ningún jugador está bloqueado. Los tests de bloqueo lo overridean.
+        lenient().when(bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(any(), any())).thenReturn(false);
     }
 
     @Test
@@ -219,7 +228,7 @@ class ReservaServiceTest {
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
 
@@ -229,6 +238,28 @@ class ReservaServiceTest {
         // Assert
         assert response != null;
         verify(reservaRepository).save(any(Reserva.class));
+    }
+
+    @Test
+    @DisplayName("crearReserva_Fallo_JugadorBloqueado")
+    void crearReserva_Fallo_JugadorBloqueado() {
+        // Arrange
+        LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
+        LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(establecimiento.getId(), jugador.getId()))
+                .thenReturn(true);
+
+        // Act & Assert
+        JugadorBloqueadoException exception = assertThrows(
+                JugadorBloqueadoException.class,
+                () -> reservaService.crearReserva(request, jugador.getEmail())
+        );
+        assert exception.getMessage().contains("permitido");
+        verify(reservaRepository, never()).save(any());
     }
 
     @Test
@@ -272,7 +303,7 @@ class ReservaServiceTest {
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of(reservaExistente));
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of(reservaExistente));
 
         // Act
         IllegalArgumentException exception = assertThrows(
@@ -305,7 +336,7 @@ class ReservaServiceTest {
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
 
@@ -394,7 +425,7 @@ class ReservaServiceTest {
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(canchaLogica.getId())).thenReturn(Optional.of(canchaLogica));
-        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of(reservaFisicaUno, reservaFisicaDos));
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of(reservaFisicaUno, reservaFisicaDos));
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(canchaLogica, canchaFisicaUno, canchaFisicaDos));
 
         // Act
@@ -465,7 +496,7 @@ class ReservaServiceTest {
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(bloqueoCanchaRepository.findOverlappingBloqueos(cancha.getId(), fechaInicio, fechaFin))
                 .thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin))
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any()))
                 .thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
                 .thenReturn(List.of(cancha));
@@ -534,7 +565,7 @@ class ReservaServiceTest {
                 .build();
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin)).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
 
@@ -547,6 +578,9 @@ class ReservaServiceTest {
         assert response.jugadorId() == null;
         assert response.nombreClienteManual().equals("Cliente Mostrador");
         verify(reservaRepository).save(argThat(r -> r.getEstado() == EstadoReserva.CONFIRMADA && r.getJugador() == null));
+        // El bloqueo de jugadores solo aplica al autoservicio (crearReserva), no a las
+        // reservas de mostrador que carga el propio dueño.
+        verify(bloqueoJugadorRepository, never()).existsByEstablecimientoIdAndJugadorId(any(), any());
     }
 
     @Test
@@ -597,7 +631,7 @@ class ReservaServiceTest {
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -611,6 +645,9 @@ class ReservaServiceTest {
         assert responses.stream().allMatch(r -> r.jugadorId() == null);
         assert responses.stream().allMatch(r -> r.nombreClienteManual().equals("Cliente Fijo"));
         verify(reservaRepository).saveAll(argThat(list -> ((List<?>) list).size() == 3));
+        // El bloqueo de jugadores solo aplica al autoservicio (crearReserva): el dueño puede
+        // cargarle igual un turno fijo semanal a un jugador que él mismo haya bloqueado.
+        verify(bloqueoJugadorRepository, never()).existsByEstablecimientoIdAndJugadorId(any(), any());
     }
 
     @Test
@@ -667,7 +704,7 @@ class ReservaServiceTest {
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of(bloqueo));
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
 
         // Act
         IllegalArgumentException exception = assertThrows(
@@ -748,7 +785,7 @@ class ReservaServiceTest {
                 .thenReturn(Optional.of(reservaOriginal));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(canchaRepository.findById(canchaDestino.getId())).thenReturn(Optional.of(canchaDestino));
-        when(reservaRepository.findSuperpuestas(establecimiento.getId(), fechaInicio, fechaFin))
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any()))
                 .thenReturn(List.of(reservaOriginal));
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
                 .thenReturn(List.of(cancha, canchaDestino));
@@ -964,7 +1001,7 @@ class ReservaServiceTest {
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of(diaNoLaborable));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
 
         // Act & Assert: todo-o-nada, no debe guardarse nada aunque el 08 era válido
         IllegalArgumentException exception = assertThrows(
@@ -1318,7 +1355,7 @@ class ReservaServiceTest {
         ReservaResponse response = new ReservaResponse(
                 reserva.getId(), jugador.getId(), jugador.getNombre(), cancha.getId(), cancha.getNombre(),
                 reserva.getFechaHoraInicio(), reserva.getFechaHoraFin(), "CONFIRMADA",
-                reserva.getPrecioTotal(), reserva.getSenaPagada(), null, null, null);
+                reserva.getPrecioTotal(), reserva.getSenaPagada(), null, null, null, null);
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(reservaRepository.findByJugadorId(jugador.getId(), pageable)).thenReturn(pageReservas);
@@ -1364,8 +1401,9 @@ class ReservaServiceTest {
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        List<EstadoReserva> estadosCancelados = List.of(EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
         when(reservaRepository.findReservasEnRangoDiario(
-                eq(cancha.getId()), any(), any(), eq(EstadoReserva.CANCELADA), eq(pageable)))
+                eq(cancha.getId()), any(), any(), eq(estadosCancelados), eq(pageable)))
                 .thenReturn(pageVacia);
 
         // Act
@@ -1374,7 +1412,7 @@ class ReservaServiceTest {
 
         // Assert
         assert resultado.getTotalElements() == 0;
-        verify(reservaRepository).findReservasEnRangoDiario(eq(cancha.getId()), any(), any(), eq(EstadoReserva.CANCELADA), eq(pageable));
+        verify(reservaRepository).findReservasEnRangoDiario(eq(cancha.getId()), any(), any(), eq(estadosCancelados), eq(pageable));
         verify(reservaRepository, never()).findReservasEnRangoDiarioIncluyendoCanceladas(any(), any(), any(), any());
     }
 
@@ -1411,8 +1449,9 @@ class ReservaServiceTest {
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
-                eq(establecimiento.getId()), any(), any(), eq(EstadoReserva.CANCELADA), eq(pageable)))
+        List<EstadoReserva> estadosCancelados = List.of(EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
+        when(reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn(
+                eq(establecimiento.getId()), any(), any(), eq(estadosCancelados), eq(pageable)))
                 .thenReturn(pageVacia);
 
         // Act
@@ -1421,8 +1460,8 @@ class ReservaServiceTest {
 
         // Assert
         assert resultado.getTotalElements() == 0;
-        verify(reservaRepository).findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
-                eq(establecimiento.getId()), any(), any(), eq(EstadoReserva.CANCELADA), eq(pageable));
+        verify(reservaRepository).findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn(
+                eq(establecimiento.getId()), any(), any(), eq(estadosCancelados), eq(pageable));
         verify(reservaRepository, never()).findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(any(), any(), any(), any());
     }
 
@@ -1448,7 +1487,7 @@ class ReservaServiceTest {
         assert resultado.getTotalElements() == 0;
         verify(reservaRepository).findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(
                 eq(establecimiento.getId()), any(), any(), eq(pageable));
-        verify(reservaRepository, never()).findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(any(), any(), any(), any(), any());
+        verify(reservaRepository, never()).findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn(any(), any(), any(), any(), any());
     }
 
     private void canchasInEstablecimientoWithHorarioNocturno() {

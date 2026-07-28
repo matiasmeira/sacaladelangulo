@@ -5,6 +5,8 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.core.exception.JugadorBloqueadoException;
+import com.matiasmeira.sacaladelangulo.core.exception.ReservaExpiradaException;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
@@ -16,6 +18,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.PoolCanchaCalculator;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugadorRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
@@ -68,9 +71,25 @@ public class ReservaService {
      */
     private static final int LIMITE_ANTICIPACION_DIAS = 31;
 
+    /**
+     * Ventana de gracia para confirmar/pagar la seña de una reserva de jugador antes de
+     * que se libere automáticamente (ver crearReserva, confirmarReserva y
+     * ReservaExpiracionService).
+     */
+    private static final long TIEMPO_EXPIRACION_MINUTOS = 10;
+
+    /**
+     * Estados que no deben contarse como "reserva activa" en los listados por defecto
+     * (incluirCanceladas=false): tanto una cancelación explícita como una liberación
+     * automática por vencimiento de la ventana de 10 minutos.
+     */
+    private static final List<EstadoReserva> ESTADOS_CANCELADOS =
+            List.of(EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
+
     private final ReservaRepository reservaRepository;
     private final CanchaRepository canchaRepository;
     private final BloqueoCanchaRepository bloqueoCanchaRepository;
+    private final BloqueoJugadorRepository bloqueoJugadorRepository;
     private final DiaNoLaborableRepository diaNoLaborableRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
@@ -91,6 +110,12 @@ public class ReservaService {
 
         Usuario jugador = buscarUsuarioPorEmail(email);
         Cancha cancha = buscarCanchaPorId(request.canchaId());
+
+        if (bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(cancha.getEstablecimiento().getId(), jugador.getId())) {
+            log.warn("Jugador bloqueado intentó reservar. Jugador: {}, Establecimiento: {}", jugador.getId(), cancha.getEstablecimiento().getId());
+            throw new JugadorBloqueadoException("No tenés permitido realizar reservas en este establecimiento");
+        }
+
         validarDeporteSoportado(request.deporteSeleccionado(), cancha);
 
         validarFechas(request);
@@ -107,7 +132,8 @@ public class ReservaService {
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(
                 cancha.getEstablecimiento().getId(),
                 request.fechaHoraInicio(),
-                request.fechaHoraFin()
+                request.fechaHoraFin(),
+                LocalDateTime.now()
         );
         log.debug("Se encontraron {} reservas solapadas en el predio", solapadas.size());
 
@@ -125,6 +151,7 @@ public class ReservaService {
                 .estado(EstadoReserva.PENDIENTE_SENA)
                 .precioTotal(precioCalculado)
                 .senaPagada(BigDecimal.ZERO)
+                .expiraEn(LocalDateTime.now().plusMinutes(TIEMPO_EXPIRACION_MINUTOS))
                 .build();
 
         Reserva reservaGuardada = reservaRepository.save(reserva);
@@ -169,7 +196,8 @@ public class ReservaService {
             List<Reserva> solapadas = reservaRepository.findSuperpuestas(
                     cancha.getEstablecimiento().getId(),
                     request.fechaHoraInicio(),
-                    request.fechaHoraFin()
+                    request.fechaHoraFin(),
+                    LocalDateTime.now()
             );
             log.debug("Se encontraron {} reservas solapadas en el predio", solapadas.size());
 
@@ -269,7 +297,7 @@ public class ReservaService {
         List<DiaNoLaborable> diasNoLaborables = diaNoLaborableRepository
                 .findByEstablecimientoIdAndFechaBetween(establecimientoId, primeraFecha, ultimaFecha);
         List<BloqueoCancha> bloqueosEnRango = bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, rangoInicio, rangoFin);
-        List<Reserva> reservasEnRango = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin);
+        List<Reserva> reservasEnRango = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin, LocalDateTime.now());
 
         List<Reserva> reservasAGuardar = new ArrayList<>();
         for (LocalDate fecha : fechasDelPeriodo) {
@@ -586,7 +614,14 @@ public class ReservaService {
                     "Solo se puede confirmar una reserva en estado PENDIENTE_SENA (actual: " + reserva.getEstado() + ")");
         }
 
+        if (reserva.getExpiraEn() != null && reserva.getExpiraEn().isBefore(LocalDateTime.now())) {
+            log.warn("Intento de confirmar una reserva ya vencida. ID: {}, Venció: {}", reservaId, reserva.getExpiraEn());
+            throw new ReservaExpiradaException(
+                    "La ventana de 10 minutos para confirmar esta reserva ya venció. Debe realizar una nueva reserva.");
+        }
+
         reserva.setEstado(EstadoReserva.CONFIRMADA);
+        reserva.setExpiraEn(null);
         Reserva reservaActualizada = reservaRepository.save(reserva);
         log.info("Reserva confirmada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
 
@@ -743,7 +778,7 @@ public class ReservaService {
         bloquearCanchasRelacionadas(nuevaCancha, todasLasCanchas);
 
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(
-                        nuevaCancha.getEstablecimiento().getId(), inicio, fin).stream()
+                        nuevaCancha.getEstablecimiento().getId(), inicio, fin, LocalDateTime.now()).stream()
                 .filter(r -> !r.getId().equals(reserva.getId()))
                 .toList();
         validarCanchaExactaLibre(nuevaCancha, solapadas);
@@ -824,7 +859,7 @@ public class ReservaService {
         LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
         Page<Reserva> reservas = incluirCanceladas
                 ? reservaRepository.findReservasEnRangoDiarioIncluyendoCanceladas(canchaId, inicioDia, finDia, capPageSize(pageable))
-                : reservaRepository.findReservasEnRangoDiario(canchaId, inicioDia, finDia, EstadoReserva.CANCELADA, capPageSize(pageable));
+                : reservaRepository.findReservasEnRangoDiario(canchaId, inicioDia, finDia, ESTADOS_CANCELADOS, capPageSize(pageable));
         return reservas.map(reservaMapper::mapToResponse);
     }
 
@@ -843,8 +878,8 @@ public class ReservaService {
         LocalDateTime finDia = fecha.atTime(23, 59, 59);
         Page<Reserva> reservas = incluirCanceladas
                 ? reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(estId, inicioDia, finDia, capPageSize(pageable))
-                : reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
-                        estId, inicioDia, finDia, EstadoReserva.CANCELADA, capPageSize(pageable));
+                : reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn(
+                        estId, inicioDia, finDia, ESTADOS_CANCELADOS, capPageSize(pageable));
         return reservas.map(reservaMapper::mapToResponse);
     }
 

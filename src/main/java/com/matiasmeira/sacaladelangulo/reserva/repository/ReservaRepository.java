@@ -1,7 +1,9 @@
 package com.matiasmeira.sacaladelangulo.reserva.repository;
 
+import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,29 +20,35 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     /**
      * Obtiene todas las reservas solapadas de un predio (establecimiento).
-     * Excluye reservas canceladas y trae las canchas asociadas.
+     * Excluye reservas canceladas (CANCELADA y CANCELADA_PRERESERVA) y trae las
+     * canchas asociadas. Una PENDIENTE_SENA cuya ventana de 10 minutos ya venció
+     * (expiraEn < ahora) tampoco cuenta como solapamiento: así el turno queda libre
+     * apenas vence, sin esperar a que corra ReservaExpiracionService.
      *
      * @param estId ID del establecimiento
      * @param inicio Fecha y hora de inicio del período
      * @param fin Fecha y hora de fin del período
+     * @param ahora Momento actual, usado para descartar PENDIENTE_SENA ya vencidas
      * @return Lista de reservas solapadas en el predio
      */
     @Query("SELECT r FROM Reserva r JOIN FETCH r.cancha c " +
            "WHERE c.establecimiento.id = :estId " +
-           "AND r.estado != 'CANCELADA' " +
+           "AND r.estado NOT IN ('CANCELADA', 'CANCELADA_PRERESERVA') " +
+           "AND (r.estado != 'PENDIENTE_SENA' OR r.expiraEn IS NULL OR r.expiraEn > :ahora) " +
            "AND r.fechaHoraInicio < :fin AND r.fechaHoraFin > :inicio")
     List<Reserva> findSuperpuestas(
             @Param("estId") Long estId,
             @Param("inicio") LocalDateTime inicio,
-            @Param("fin") LocalDateTime fin
+            @Param("fin") LocalDateTime fin,
+            @Param("ahora") LocalDateTime ahora
     );
 
-    @org.springframework.data.jpa.repository.Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId AND r.fechaHoraInicio < :finDia AND r.fechaHoraFin > :inicioDia AND r.estado != :estado")
+    @org.springframework.data.jpa.repository.Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId AND r.fechaHoraInicio < :finDia AND r.fechaHoraFin > :inicioDia AND r.estado NOT IN :estadosExcluidos")
     org.springframework.data.domain.Page<Reserva> findReservasEnRangoDiario(
             @org.springframework.data.repository.query.Param("canchaId") Long canchaId,
             @org.springframework.data.repository.query.Param("inicioDia") java.time.LocalDateTime inicioDia,
             @org.springframework.data.repository.query.Param("finDia") java.time.LocalDateTime finDia,
-            @org.springframework.data.repository.query.Param("estado") com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
+            @org.springframework.data.repository.query.Param("estadosExcluidos") List<EstadoReserva> estadosExcluidos,
             org.springframework.data.domain.Pageable pageable);
 
     /**
@@ -56,7 +64,7 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             org.springframework.data.domain.Pageable pageable);
 
     @Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId " +
-           "AND r.estado != 'CANCELADA' " +
+           "AND r.estado NOT IN ('CANCELADA', 'CANCELADA_PRERESERVA') " +
            "AND r.fechaHoraInicio < :fin AND r.fechaHoraFin > :inicio")
     List<Reserva> findOverlappingByCanchaId(
             @Param("canchaId") Long canchaId,
@@ -64,16 +72,19 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             @Param("fin") LocalDateTime fin
     );
 
-    org.springframework.data.domain.Page<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot(
-            Long estId,
-            LocalDateTime inicio,
-            LocalDateTime fin,
-            com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
+    @Query("SELECT r FROM Reserva r WHERE r.cancha.establecimiento.id = :estId " +
+           "AND r.fechaHoraInicio BETWEEN :inicio AND :fin " +
+           "AND r.estado NOT IN :estadosExcluidos")
+    org.springframework.data.domain.Page<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn(
+            @Param("estId") Long estId,
+            @Param("inicio") LocalDateTime inicio,
+            @Param("fin") LocalDateTime fin,
+            @Param("estadosExcluidos") List<EstadoReserva> estadosExcluidos,
             org.springframework.data.domain.Pageable pageable
     );
 
     /**
-     * Misma consulta que findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNot
+     * Misma consulta que findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn
      * pero sin excluir ningún estado (ver B7 en la auditoría).
      */
     org.springframework.data.domain.Page<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(
@@ -98,13 +109,26 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
      */
     @Query("SELECT DISTINCT r.cancha.id FROM Reserva r " +
            "WHERE r.cancha.id IN :canchaIds " +
-           "AND r.estado != 'CANCELADA' " +
+           "AND r.estado NOT IN ('CANCELADA', 'CANCELADA_PRERESERVA') " +
            "AND r.fechaHoraInicio < :fin AND r.fechaHoraFin > :inicio")
     List<Long> findCanchaIdsConSolapamiento(
             @Param("canchaIds") List<Long> canchaIds,
             @Param("inicio") LocalDateTime inicio,
             @Param("fin") LocalDateTime fin
     );
+
+    /**
+     * Libera (pasa a CANCELADA_PRERESERVA) todas las reservas PENDIENTE_SENA cuya
+     * ventana de 10 minutos ya venció. Usado por ReservaExpiracionService; mismo
+     * patrón de bulk-update que SolicitudIdempotenteRepository.borrarExpiradas.
+     *
+     * @param ahora Momento actual, contra el que se compara expiraEn
+     * @return Cantidad de reservas liberadas
+     */
+    @Modifying
+    @Query("UPDATE Reserva r SET r.estado = 'CANCELADA_PRERESERVA' " +
+           "WHERE r.estado = 'PENDIENTE_SENA' AND r.expiraEn < :ahora")
+    int liberarReservasVencidas(@Param("ahora") LocalDateTime ahora);
 
     /**
      * Trae la reserva junto con cancha -> establecimiento -> dueño y jugador en una sola

@@ -15,9 +15,17 @@ public enum EstadoReserva {
     CONFIRMADA,
 
     /**
-     * Reserva cancelada.
+     * Reserva cancelada (por el jugador, el dueño o un empleado autorizado).
      */
     CANCELADA,
+
+    /**
+     * Reserva liberada automáticamente porque venció la ventana de 10 minutos para
+     * confirmar/pagar la seña (ver Reserva.expiraEn y ReservaExpiracionService). Se
+     * distingue de CANCELADA para que la auditoría pueda diferenciar un abandono
+     * (nadie confirmó a tiempo) de una cancelación explícita.
+     */
+    CANCELADA_PRERESERVA,
 
     /**
      * Reserva finalizada (servicio completado).

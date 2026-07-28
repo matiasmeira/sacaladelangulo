@@ -95,7 +95,7 @@ public class BloqueoCanchaService {
                 .map(Reserva::getFechaHoraFin).max(LocalDateTime::compareTo).orElseThrow();
 
         List<BloqueoCancha> bloqueosEnRango = bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, rangoInicio, rangoFin);
-        List<Reserva> reservasEnRango = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin);
+        List<Reserva> reservasEnRango = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin, LocalDateTime.now());
 
         return reservasAfectadas.stream()
                 .map(reserva -> new ReservaAfectadaResponse(

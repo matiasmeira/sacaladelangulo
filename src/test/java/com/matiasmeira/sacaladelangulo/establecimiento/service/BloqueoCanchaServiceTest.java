@@ -151,7 +151,8 @@ class BloqueoCanchaServiceTest {
                     reserva.getSenaPagada(),
                     reserva.getNombreClienteManual(),
                     reserva.getTelefonoClienteManual(),
-                    reserva.getDeporteSeleccionado()
+                    reserva.getDeporteSeleccionado(),
+                    reserva.getExpiraEn()
             );
         });
 
@@ -257,7 +258,7 @@ class BloqueoCanchaServiceTest {
                 .thenReturn(List.of(cancha5A, cancha5B));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
                 .thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), any(), any()))
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), any(), any(), any()))
                 .thenReturn(List.of());
 
         // Act
@@ -309,7 +310,7 @@ class BloqueoCanchaServiceTest {
                 .thenReturn(List.of(cancha5A, cancha5B));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
                 .thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), any(), any()))
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), any(), any(), any()))
                 .thenReturn(List.of(otraReservaEnCancha5B));
 
         // Act

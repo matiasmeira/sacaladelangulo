@@ -89,6 +89,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(WebhookFirmaInvalidaException.class)
+    public ResponseEntity<Map<String, String>> handleWebhookFirmaInvalidaException(WebhookFirmaInvalidaException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
     @ExceptionHandler(JugadorBloqueadoException.class)
     public ResponseEntity<Map<String, String>> handleJugadorBloqueadoException(JugadorBloqueadoException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)

@@ -22,6 +22,7 @@ public record ReservaResponse(
         String nombreClienteManual,
         String telefonoClienteManual,
         Deporte deporteSeleccionado,
-        LocalDateTime expiraEn
+        LocalDateTime expiraEn,
+        String metodoPago
 ) {
 }

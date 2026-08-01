@@ -10,6 +10,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.TarifaDto;
@@ -36,6 +37,14 @@ public record CanchaRequest(
         BigDecimal montoSena,
 
         List<Integer> duracionesPermitidas,
+
+        /**
+         * Precio exacto opcional por duración (minutos -> precio) a nivel de la cancha,
+         * usado cuando no hay ninguna Tarifa aplicable para el día/horario de la reserva.
+         * Si se omite o no incluye una duración, esa duración se calcula proporcional
+         * sobre precioBase (comportamiento actual sin cambios).
+         */
+        Map<Integer, BigDecimal> preciosPorDuracion,
 
         Boolean permiteInicioMediaHora,
 

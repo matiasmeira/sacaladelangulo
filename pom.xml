@@ -102,6 +102,11 @@
 			<artifactId>h2</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>com.resend</groupId>
+			<artifactId>resend-java</artifactId>
+			<version>4.4.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>

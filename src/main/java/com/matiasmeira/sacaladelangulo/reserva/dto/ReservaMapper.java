@@ -23,7 +23,8 @@ public class ReservaMapper {
                 reserva.getNombreClienteManual(),
                 reserva.getTelefonoClienteManual(),
                 reserva.getDeporteSeleccionado(),
-                reserva.getExpiraEn()
+                reserva.getExpiraEn(),
+                reserva.getMetodoPago() != null ? reserva.getMetodoPago().name() : null
         );
     }
 }

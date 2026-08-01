@@ -10,6 +10,8 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Entidad que representa una tarifa de precio dinámico para una cancha.
@@ -43,4 +45,16 @@ public class Tarifa {
 
     @Column(nullable = false)
     private BigDecimal precio;
+
+    /**
+     * Precio exacto (no proporcional) para una duración puntual dentro de esta franja
+     * horaria/día. Mismo criterio de fallback que Cancha.preciosPorDuracion: si la
+     * duración reservada no tiene entrada acá, se calcula proporcional sobre precio.
+     */
+    @ElementCollection
+    @CollectionTable(name = "tarifa_precios_duracion", joinColumns = @JoinColumn(name = "tarifa_id"))
+    @MapKeyColumn(name = "duracion_minutos")
+    @Column(name = "precio")
+    @Builder.Default
+    private Map<Integer, BigDecimal> preciosPorDuracion = new HashMap<>();
 }

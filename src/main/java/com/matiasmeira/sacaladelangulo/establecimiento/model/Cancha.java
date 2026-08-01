@@ -10,8 +10,10 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -82,6 +84,19 @@ public class Cancha {
     @Column(name = "duracion_minutos")
     @Builder.Default
     private List<Integer> duracionesPermitidas = new ArrayList<>();
+
+    /**
+     * Precio exacto (no proporcional) para una duración puntual, en minutos, ej. {120: 30000}.
+     * Si una duración reservada no tiene entrada acá, se sigue calculando de forma
+     * proporcional sobre precioBase (ver PrecioReservaCalculator) — permite migrar cancha
+     * por cancha, y duración por duración, sin romper la configuración existente.
+     */
+    @ElementCollection
+    @CollectionTable(name = "cancha_precios_duracion", joinColumns = @JoinColumn(name = "cancha_id"))
+    @MapKeyColumn(name = "duracion_minutos")
+    @Column(name = "precio")
+    @Builder.Default
+    private Map<Integer, BigDecimal> preciosPorDuracion = new HashMap<>();
 
     @Column(name = "permite_inicio_media_hora")
     @Builder.Default

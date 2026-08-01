@@ -121,6 +121,14 @@ public class Reserva {
     private LocalDateTime expiraEn;
 
     /**
+     * Método de pago con el que se saldó la reserva. Nulo hasta que se finaliza (ver
+     * ReservaService.finalizarReserva).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metodo_pago")
+    private MetodoPago metodoPago;
+
+    /**
      * Optimistic locking sobre updates a esta fila ya persistida (ver comentario de
      * clase para el alcance real: no cubre la creación de reservas solapadas).
      */

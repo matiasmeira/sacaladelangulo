@@ -4,6 +4,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.TarifaDto;
@@ -21,6 +22,7 @@ public record CanchaResponse(
         BigDecimal precioBase,
         BigDecimal montoSena,
         List<Integer> duracionesPermitidas,
+        Map<Integer, BigDecimal> preciosPorDuracion,
         Boolean permiteInicioMediaHora,
         List<TarifaDto> tarifas,
         List<Long> canchasFisicasIds,

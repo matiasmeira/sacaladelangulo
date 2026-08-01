@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.reserva.controller;
 
+import com.matiasmeira.sacaladelangulo.reserva.dto.FinalizarReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.MoverReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
@@ -115,19 +116,22 @@ public class ReservaController {
     }
 
     /**
-     * Finaliza una reserva (el turno ya se jugó).
+     * Finaliza una reserva (el turno ya se jugó), registrando el método de pago con el
+     * que se saldó.
      * Protegido: propietarios, administradores, y empleados con el permiso FINALIZAR_RESERVA.
      *
      * @param id ID de la reserva a finalizar
      * @param userDetails Detalles del usuario autenticado
+     * @param request DTO con el método de pago utilizado
      * @return ReservaResponse con la reserva finalizada
      */
-    @PutMapping("/{id}/finalizar")
+    @PatchMapping("/{id}/finalizar")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<ReservaResponse> finalizarReserva(
             @PathVariable Long id,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        ReservaResponse reserva = reservaService.finalizarReserva(id, userDetails.getUsername());
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid FinalizarReservaRequest request) {
+        ReservaResponse reserva = reservaService.finalizarReserva(id, request.metodoPago(), userDetails.getUsername());
         return ResponseEntity.ok(reserva);
     }
 

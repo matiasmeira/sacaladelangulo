@@ -17,6 +17,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.PoolCanchaCalculator;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.PrecioReservaCalculator;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugadorRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
@@ -28,6 +29,7 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
+import com.matiasmeira.sacaladelangulo.reserva.model.MetodoPago;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +42,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -562,18 +563,7 @@ public class ReservaService {
     }
 
     private BigDecimal calcularPrecio(Cancha cancha, LocalDateTime fechaHoraInicio, long duracionMinutos) {
-        BigDecimal duracionHoras = BigDecimal.valueOf(duracionMinutos)
-                .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
-        BigDecimal precioPorHora = cancha.getPrecioBase();
-        for (var tarifa : cancha.getTarifas()) {
-            if (tarifa.getDiaSemana() == fechaHoraInicio.getDayOfWeek() &&
-                    !fechaHoraInicio.toLocalTime().isBefore(tarifa.getHoraInicio()) &&
-                    fechaHoraInicio.toLocalTime().isBefore(tarifa.getHoraFin())) {
-                precioPorHora = tarifa.getPrecio();
-                break;
-            }
-        }
-        return precioPorHora.multiply(duracionHoras);
+        return PrecioReservaCalculator.calcularPrecio(cancha, fechaHoraInicio, duracionMinutos);
     }
 
     /**
@@ -682,10 +672,11 @@ public class ReservaService {
      * no hace nada.
      *
      * @param reservaId ID de la reserva a finalizar
+     * @param metodoPago Método de pago con el que se saldó la reserva
      * @param email Email del usuario autenticado
      * @return ReservaResponse con los datos actualizados
      */
-    public ReservaResponse finalizarReserva(Long reservaId, String email) {
+    public ReservaResponse finalizarReserva(Long reservaId, MetodoPago metodoPago, String email) {
         log.info("Iniciando finalización de reserva. ID: {}, Email: {}", reservaId, email);
 
         Reserva reserva = reservaRepository.findByIdConEstablecimientoYDueno(reservaId)
@@ -712,6 +703,7 @@ public class ReservaService {
             }
 
             reserva.setEstado(EstadoReserva.FINALIZADA);
+            reserva.setMetodoPago(metodoPago);
             Reserva reservaActualizada = reservaRepository.save(reserva);
             log.info("Reserva finalizada con éxito. ID: {}", reservaId);
 

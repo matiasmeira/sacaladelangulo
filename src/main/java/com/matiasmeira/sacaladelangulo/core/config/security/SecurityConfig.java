@@ -66,6 +66,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/establecimientos/buscar").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/establecimientos/*/empleados/activos").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/webhooks/resend").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

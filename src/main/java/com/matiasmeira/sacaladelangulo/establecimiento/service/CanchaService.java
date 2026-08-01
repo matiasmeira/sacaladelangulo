@@ -20,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -50,6 +52,8 @@ public class CanchaService {
                 ? DURACIONES_POR_DEFECTO
                 : request.duracionesPermitidas();
 
+        validarPreciosPorDuracion(request.preciosPorDuracion(), request.tarifas(), duracionesPermitidas);
+
         Cancha cancha = Cancha.builder()
                 .nombre(request.nombre())
                 .deportes(request.deportes())
@@ -57,6 +61,7 @@ public class CanchaService {
                 .precioBase(request.precioBase())
                 .montoSena(montoSena)
                 .duracionesPermitidas(duracionesPermitidas)
+                .preciosPorDuracion(normalizarPrecios(request.preciosPorDuracion()))
                 .permiteInicioMediaHora(request.permiteInicioMediaHora() != null ? request.permiteInicioMediaHora() : true)
                 .isActive(true)
                 .establecimiento(establecimiento)
@@ -95,15 +100,19 @@ public class CanchaService {
         }
 
         BigDecimal montoSena = validarMontoSena(request.montoSena(), usuarioAutenticado.getPlanSuscripcion());
+        List<Integer> duracionesPermitidas = request.duracionesPermitidas() == null || request.duracionesPermitidas().isEmpty()
+                ? DURACIONES_POR_DEFECTO
+                : request.duracionesPermitidas();
+
+        validarPreciosPorDuracion(request.preciosPorDuracion(), request.tarifas(), duracionesPermitidas);
 
         cancha.setNombre(request.nombre());
         cancha.setDeportes(request.deportes());
         cancha.setCapacidad(request.capacidad());
         cancha.setPrecioBase(request.precioBase());
         cancha.setMontoSena(montoSena);
-        cancha.setDuracionesPermitidas(request.duracionesPermitidas() == null || request.duracionesPermitidas().isEmpty()
-                ? DURACIONES_POR_DEFECTO
-                : request.duracionesPermitidas());
+        cancha.setDuracionesPermitidas(duracionesPermitidas);
+        cancha.setPreciosPorDuracion(normalizarPrecios(request.preciosPorDuracion()));
         cancha.setPermiteInicioMediaHora(request.permiteInicioMediaHora() != null ? request.permiteInicioMediaHora() : true);
         cancha.setCanchasNecesarias(calcularCanchasNecesarias(request.canchasFisicasIds(), request.cantidadCanchasNecesarias()));
         cancha.setCanchasFisicas(resolverCanchasFisicas(request.canchasFisicasIds()));
@@ -203,8 +212,13 @@ public class CanchaService {
                         .horaInicio(dto.horaInicio())
                         .horaFin(dto.horaFin())
                         .precio(dto.precio())
+                        .preciosPorDuracion(normalizarPrecios(dto.preciosPorDuracion()))
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    private Map<Integer, BigDecimal> normalizarPrecios(Map<Integer, BigDecimal> precios) {
+        return precios == null ? new HashMap<>() : new HashMap<>(precios);
     }
 
     private Establecimiento buscarEstablecimientoPorId(Long establecimientoId) {
@@ -217,7 +231,8 @@ public class CanchaService {
                 tarifa.getDiaSemana(),
                 tarifa.getHoraInicio(),
                 tarifa.getHoraFin(),
-                tarifa.getPrecio()
+                tarifa.getPrecio(),
+                tarifa.getPreciosPorDuracion()
         );
     }
 
@@ -232,6 +247,7 @@ public class CanchaService {
                 cancha.getPrecioBase(),
                 cancha.getMontoSena(),
                 cancha.getDuracionesPermitidas(),
+                cancha.getPreciosPorDuracion(),
                 cancha.getPermiteInicioMediaHora(),
                 cancha.getTarifas().stream().map(this::mapToTarifaDto).collect(Collectors.toList()),
                 cancha.getCanchasFisicas().stream().map(Cancha::getId).toList(),
@@ -261,6 +277,36 @@ public class CanchaService {
                         ));
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Los precios por duración (a nivel cancha y a nivel de cada tarifa) sólo tienen
+     * sentido para una duración que la cancha efectivamente permite reservar, y deben ser
+     * positivos como cualquier otro precio del dominio.
+     */
+    private void validarPreciosPorDuracion(Map<Integer, BigDecimal> preciosCancha, List<TarifaDto> tarifasDto, List<Integer> duracionesPermitidas) {
+        validarPreciosPorDuracion(preciosCancha, duracionesPermitidas, "de la cancha");
+
+        if (tarifasDto == null) return;
+        for (TarifaDto tarifa : tarifasDto) {
+            validarPreciosPorDuracion(tarifa.preciosPorDuracion(), duracionesPermitidas, "de la tarifa del día " + tarifa.diaSemana());
+        }
+    }
+
+    private void validarPreciosPorDuracion(Map<Integer, BigDecimal> precios, List<Integer> duracionesPermitidas, String contexto) {
+        if (precios == null || precios.isEmpty()) return;
+
+        for (Map.Entry<Integer, BigDecimal> entry : precios.entrySet()) {
+            if (!duracionesPermitidas.contains(entry.getKey())) {
+                throw new IllegalArgumentException(
+                        "El precio por duración " + contexto + " incluye " + entry.getKey()
+                                + " minutos, que no está entre las duraciones permitidas " + duracionesPermitidas);
+            }
+            if (entry.getValue() == null || entry.getValue().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException(
+                        "El precio por duración " + contexto + " para " + entry.getKey() + " minutos debe ser mayor a 0");
             }
         }
     }

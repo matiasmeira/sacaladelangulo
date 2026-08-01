@@ -24,6 +24,7 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
+import com.matiasmeira.sacaladelangulo.reserva.model.MetodoPago;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -194,7 +195,8 @@ class ReservaServiceTest {
                     reserva.getNombreClienteManual(),
                     reserva.getTelefonoClienteManual(),
                     reserva.getDeporteSeleccionado(),
-                    reserva.getExpiraEn()
+                    reserva.getExpiraEn(),
+                    reserva.getMetodoPago() != null ? reserva.getMetodoPago().name() : null
             );
         });
 
@@ -1135,17 +1137,17 @@ class ReservaServiceTest {
 
         // Act
         ReservaResponse response = assertDoesNotThrow(
-                () -> reservaService.finalizarReserva(reservaConfirmada.getId(), dueno.getEmail()));
+                () -> reservaService.finalizarReserva(reservaConfirmada.getId(), MetodoPago.EFECTIVO, dueno.getEmail()));
 
         // Assert
         assert response.estado().equals("FINALIZADA");
-        verify(reservaRepository).save(argThat(r -> r.getEstado() == EstadoReserva.FINALIZADA));
+        verify(reservaRepository).save(argThat(r -> r.getEstado() == EstadoReserva.FINALIZADA && r.getMetodoPago() == MetodoPago.EFECTIVO));
     }
 
     @Test
     @DisplayName("finalizarReserva_Exito_EsIdempotenteSiYaEstaFinalizada")
     void finalizarReserva_Exito_EsIdempotenteSiYaEstaFinalizada() {
-        // Arrange
+        // Arrange: ya estaba finalizada con un método de pago distinto al que se manda ahora
         Reserva reservaFinalizada = Reserva.builder()
                 .id(51L)
                 .jugador(jugador)
@@ -1155,6 +1157,7 @@ class ReservaServiceTest {
                 .estado(EstadoReserva.FINALIZADA)
                 .precioTotal(BigDecimal.valueOf(1500))
                 .senaPagada(BigDecimal.valueOf(500))
+                .metodoPago(MetodoPago.EFECTIVO)
                 .build();
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaFinalizada.getId()))
@@ -1162,10 +1165,11 @@ class ReservaServiceTest {
 
         // Act
         ReservaResponse response = assertDoesNotThrow(
-                () -> reservaService.finalizarReserva(reservaFinalizada.getId(), dueno.getEmail()));
+                () -> reservaService.finalizarReserva(reservaFinalizada.getId(), MetodoPago.TRANSFERENCIA, dueno.getEmail()));
 
-        // Assert
+        // Assert: no-op idempotente, ni el estado ni el método de pago original cambian
         assert response.estado().equals("FINALIZADA");
+        assert response.metodoPago().equals("EFECTIVO");
         verify(reservaRepository, never()).save(any());
     }
 
@@ -1190,7 +1194,7 @@ class ReservaServiceTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> reservaService.finalizarReserva(reservaCancelada.getId(), dueno.getEmail())
+                () -> reservaService.finalizarReserva(reservaCancelada.getId(), MetodoPago.EFECTIVO, dueno.getEmail())
         );
         assert exception.getMessage().contains("cancelada");
         verify(reservaRepository, never()).save(any());
@@ -1217,7 +1221,7 @@ class ReservaServiceTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> reservaService.finalizarReserva(reservaPendiente.getId(), dueno.getEmail())
+                () -> reservaService.finalizarReserva(reservaPendiente.getId(), MetodoPago.EFECTIVO, dueno.getEmail())
         );
         assert exception.getMessage().contains("confirmada");
         verify(reservaRepository, never()).save(any());
@@ -1248,7 +1252,7 @@ class ReservaServiceTest {
         // Act & Assert
         assertThrows(
                 org.springframework.security.access.AccessDeniedException.class,
-                () -> reservaService.finalizarReserva(reservaConfirmada.getId(), otroDueno.getEmail())
+                () -> reservaService.finalizarReserva(reservaConfirmada.getId(), MetodoPago.EFECTIVO, otroDueno.getEmail())
         );
         verify(reservaRepository, never()).save(any());
     }
@@ -1355,7 +1359,7 @@ class ReservaServiceTest {
         ReservaResponse response = new ReservaResponse(
                 reserva.getId(), jugador.getId(), jugador.getNombre(), cancha.getId(), cancha.getNombre(),
                 reserva.getFechaHoraInicio(), reserva.getFechaHoraFin(), "CONFIRMADA",
-                reserva.getPrecioTotal(), reserva.getSenaPagada(), null, null, null, null);
+                reserva.getPrecioTotal(), reserva.getSenaPagada(), null, null, null, null, null);
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(reservaRepository.findByJugadorId(jugador.getId(), pageable)).thenReturn(pageReservas);

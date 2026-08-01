@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.reserva.repository;
 
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -143,4 +144,65 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
            "JOIN FETCH e.dueno " +
            "WHERE r.id = :id")
     java.util.Optional<Reserva> findByIdConEstablecimientoYDueno(@Param("id") Long id);
+
+    // ===== Reportes agregados (panel del dueño) =====
+    // Solo cuentan reservas FINALIZADA: es el único estado que representa dinero/turno
+    // efectivamente cerrado (decisión de negocio explícita, ver spec de reportes).
+
+    /**
+     * Desglose de facturación por método de pago real (no hay distinción online/mostrador
+     * confiable en el modelo: MetodoPago se elige recién al finalizar y puede cobrarse por
+     * cualquier canal, incluso Mercado Pago en el mostrador).
+     */
+    @Query("SELECT r.metodoPago, SUM(r.precioTotal), COUNT(r) FROM Reserva r " +
+           "WHERE r.cancha.establecimiento.id = :estId AND r.estado = 'FINALIZADA' " +
+           "AND r.fechaHoraInicio BETWEEN :inicio AND :fin GROUP BY r.metodoPago")
+    List<Object[]> sumFacturacionPorMetodoPago(@Param("estId") Long estId, @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
+
+    /**
+     * Proyección liviana (fecha + precio, no la entidad completa) para armar la serie
+     * temporal diaria de facturación: se evita agrupar por fecha en JPQL (CAST/FUNCTION de
+     * truncado de fecha tiene comportamiento de tipo de retorno poco predecible entre
+     * versiones de Hibernate) y se agrupa por día en memoria, sobre un dataset acotado.
+     */
+    @Query("SELECT r.fechaHoraInicio, r.precioTotal FROM Reserva r " +
+           "WHERE r.cancha.establecimiento.id = :estId AND r.estado = 'FINALIZADA' " +
+           "AND r.fechaHoraInicio BETWEEN :inicio AND :fin")
+    List<Object[]> findFechaYPrecioParaSerieTemporal(@Param("estId") Long estId, @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
+
+    /**
+     * Proyección liviana (solo fechaHoraInicio, no la entidad completa) para el ranking de
+     * horarios más pedidos: agrupar por día de semana + hora vía EXTRACT(DOW ...) no es
+     * portable en JPQL (el nombre de campo "DOW" no es un extract field estándar reconocido
+     * por el parser de Hibernate, aunque sí es válido en Postgres nativo) — se agrupa en
+     * memoria con java.time.DayOfWeek/getHour(), sobre un dataset acotado al rango pedido.
+     */
+    @Query("SELECT r.fechaHoraInicio FROM Reserva r WHERE r.cancha.establecimiento.id = :estId AND r.estado = 'FINALIZADA' " +
+           "AND r.fechaHoraInicio BETWEEN :inicio AND :fin")
+    List<LocalDateTime> findFechasParaHorariosPedidos(@Param("estId") Long estId, @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
+
+    /**
+     * Primera reserva FINALIZADA de cada jugador en este establecimiento, considerando TODO
+     * el historial (no solo el rango pedido): es la única forma de saber si la primera
+     * reserva de un jugador cae dentro del rango o es anterior (cliente "nuevo" vs. viejo).
+     */
+    @Query("SELECT r.jugador.id, MIN(r.fechaHoraInicio) FROM Reserva r " +
+           "WHERE r.cancha.establecimiento.id = :estId AND r.estado = 'FINALIZADA' AND r.jugador IS NOT NULL " +
+           "GROUP BY r.jugador.id")
+    List<Object[]> primeraReservaPorJugador(@Param("estId") Long estId);
+
+    @Query("SELECT r.jugador.id, r.jugador.nombre, COUNT(r) FROM Reserva r " +
+           "WHERE r.cancha.establecimiento.id = :estId AND r.estado = 'FINALIZADA' AND r.jugador IS NOT NULL " +
+           "AND r.fechaHoraInicio BETWEEN :inicio AND :fin GROUP BY r.jugador.id, r.jugador.nombre ORDER BY COUNT(r) DESC")
+    List<Object[]> topClientesPorReservas(@Param("estId") Long estId, @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin, Pageable pageable);
+
+    /**
+     * Proyección liviana para el reporte de ocupación (ver ReservaOcupacionProjection):
+     * el prorrateo por franja horaria y horario de atención se calcula en memoria en
+     * OcupacionCalculator, no acá.
+     */
+    @Query("SELECT r.cancha.id AS canchaId, r.fechaHoraInicio AS fechaHoraInicio, r.fechaHoraFin AS fechaHoraFin " +
+           "FROM Reserva r WHERE r.cancha.establecimiento.id = :estId AND r.estado = 'FINALIZADA' " +
+           "AND r.fechaHoraInicio BETWEEN :inicio AND :fin")
+    List<ReservaOcupacionProjection> findProyeccionOcupacion(@Param("estId") Long estId, @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
  }

@@ -1,15 +1,19 @@
 package com.matiasmeira.sacaladelangulo.empleado.controller;
 
+import com.matiasmeira.sacaladelangulo.caja.model.DispositivoCaja;
+import com.matiasmeira.sacaladelangulo.caja.service.DispositivoCajaGate;
 import com.matiasmeira.sacaladelangulo.empleado.dto.ActualizarPermisosRequest;
 import com.matiasmeira.sacaladelangulo.empleado.dto.CambiarPinRequest;
 import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoNombreResponse;
 import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoRequest;
 import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoResponse;
 import com.matiasmeira.sacaladelangulo.empleado.service.EmpleadoService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -26,6 +30,7 @@ import java.util.List;
 public class EmpleadoController {
 
     private final EmpleadoService empleadoService;
+    private final DispositivoCajaGate dispositivoCajaGate;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
@@ -46,12 +51,19 @@ public class EmpleadoController {
     }
 
     /**
-     * Listado público (sin autenticación) para la pantalla de mostrador: el dueño
-     * activa el "modo caja" y esta lista permite que el empleado toque su nombre
-     * antes de ingresar el PIN, sin necesitar el token del dueño.
+     * Listado para la pantalla de mostrador: permite que el empleado toque su nombre
+     * antes de ingresar el PIN, sin necesitar el token del dueño. Requiere una cookie de
+     * dispositivo de caja válida para ESTE establecimiento (ver DispositivoCajaGate):
+     * ya no es público, para no exponer nombres de empleados a cualquiera que adivine
+     * un establecimientoId.
      */
     @GetMapping("/activos")
-    public ResponseEntity<List<EmpleadoNombreResponse>> listarNombresActivos(@PathVariable Long establecimientoId) {
+    public ResponseEntity<List<EmpleadoNombreResponse>> listarNombresActivos(
+            @PathVariable Long establecimientoId, HttpServletRequest request) {
+        DispositivoCaja dispositivo = dispositivoCajaGate.exigirDispositivo(request);
+        if (!dispositivo.getEstablecimiento().getId().equals(establecimientoId)) {
+            throw new AccessDeniedException("Dispositivo no autorizado");
+        }
         return ResponseEntity.ok(empleadoService.listarNombresActivos(establecimientoId));
     }
 

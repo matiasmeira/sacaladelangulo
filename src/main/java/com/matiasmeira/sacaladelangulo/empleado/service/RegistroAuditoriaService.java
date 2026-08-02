@@ -75,6 +75,29 @@ public class RegistroAuditoriaService {
                 actor.getId(), empleadoAfectado.getId(), accion);
     }
 
+    /**
+     * Audita un evento del ciclo de vida de un dispositivo de caja (activación,
+     * emparejamiento, revocación). A diferencia de {@link #registrar} y
+     * {@link #registrarAdministrativa}, acá no hay ningún empleado afectado: el sujeto
+     * de la acción es el dispositivo, identificado por {@code entidadAfectadaId}.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void registrarDispositivo(Usuario actor, Establecimiento establecimiento, AccionAuditoria accion, Long entidadAfectadaId, String detalle) {
+        RegistroAuditoria registro = RegistroAuditoria.builder()
+                .actorId(actor.getId())
+                .establecimiento(establecimiento)
+                .accion(accion)
+                .entidadAfectadaId(entidadAfectadaId)
+                .exitoso(true)
+                .detalle(detalle)
+                .fechaHora(LocalDateTime.now())
+                .build();
+
+        registroAuditoriaRepository.save(registro);
+        log.info("Auditoría de dispositivo registrada. Actor: {}, Establecimiento: {}, Acción: {}",
+                actor.getId(), establecimiento.getId(), accion);
+    }
+
     @Transactional(readOnly = true)
     public Page<RegistroAuditoriaResponse> listarPorEstablecimiento(Long establecimientoId, Pageable pageable, String email) {
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
@@ -86,10 +109,11 @@ public class RegistroAuditoriaService {
     }
 
     private RegistroAuditoriaResponse mapToResponse(RegistroAuditoria registro) {
+        Usuario empleado = registro.getEmpleado();
         return new RegistroAuditoriaResponse(
                 registro.getId(),
-                registro.getEmpleado().getId(),
-                registro.getEmpleado().getNombre(),
+                empleado == null ? null : empleado.getId(),
+                empleado == null ? null : empleado.getNombre(),
                 registro.getActorId(),
                 registro.getAccion().name(),
                 registro.getEntidadAfectadaId(),

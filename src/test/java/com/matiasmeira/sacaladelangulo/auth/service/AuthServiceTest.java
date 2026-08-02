@@ -127,7 +127,7 @@ class AuthServiceTest {
                 .thenReturn(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
         when(jwtService.generateToken(eq(userDetails), anyMap(), anyLong())).thenReturn("jwt-token-empleado");
 
-        AuthResponse response = authService.authenticateEmpleado(request);
+        AuthResponse response = authService.authenticateEmpleado(request, 10L);
 
         assertEquals("jwt-token-empleado", response.token());
         verify(jwtService).generateToken(eq(userDetails), eq(Map.of("empleadoId", empleado.getId())), anyLong());
@@ -142,7 +142,7 @@ class AuthServiceTest {
 
         BadCredentialsException exception = assertThrows(
                 BadCredentialsException.class,
-                () -> authService.authenticateEmpleado(request)
+                () -> authService.authenticateEmpleado(request, 10L)
         );
 
         assertEquals("Credenciales inválidas", exception.getMessage());
@@ -166,7 +166,7 @@ class AuthServiceTest {
 
         BadCredentialsException exception = assertThrows(
                 BadCredentialsException.class,
-                () -> authService.authenticateEmpleado(request)
+                () -> authService.authenticateEmpleado(request, 10L)
         );
 
         assertEquals("Credenciales inválidas", exception.getMessage());
@@ -192,7 +192,7 @@ class AuthServiceTest {
 
         BadCredentialsException exception = assertThrows(
                 BadCredentialsException.class,
-                () -> authService.authenticateEmpleado(request)
+                () -> authService.authenticateEmpleado(request, 10L)
         );
 
         assertEquals("Credenciales inválidas", exception.getMessage());
@@ -249,9 +249,54 @@ class AuthServiceTest {
 
         assertThrows(
                 RateLimitExceededException.class,
-                () -> authService.authenticateEmpleado(request)
+                () -> authService.authenticateEmpleado(request, 10L)
         );
         verify(usuarioRepository, never()).findByEstablecimientoIdAndNombreIgnoreCaseAndRol(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("authenticateEmpleado_Fallo_EstablecimientoIdDelBodyNoCoincideConElDelDispositivo")
+    void authenticateEmpleado_Fallo_EstablecimientoIdDelBodyNoCoincideConElDelDispositivo() {
+        // El body trae establecimientoId=10, pero el dispositivo de caja (fuente de
+        // verdad) resolvió establecimientoId=20: se rechaza sin siquiera consultar rate
+        // limit/base, con el mismo error genérico que cualquier otro fallo de login.
+        EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Juan", "1234");
+
+        BadCredentialsException exception = assertThrows(
+                BadCredentialsException.class,
+                () -> authService.authenticateEmpleado(request, 20L)
+        );
+
+        assertEquals("Credenciales inválidas", exception.getMessage());
+        verify(usuarioRepository, never()).findByEstablecimientoIdAndNombreIgnoreCaseAndRol(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("authenticateEmpleado_Exito_SinEstablecimientoIdEnElBody_UsaElDelDispositivo")
+    void authenticateEmpleado_Exito_SinEstablecimientoIdEnElBody_UsaElDelDispositivo() {
+        EmpleadoLoginRequest request = new EmpleadoLoginRequest(null, "Juan", "1234");
+        Usuario empleado = Usuario.builder()
+                .id(5L)
+                .email("empleado-uuid@empleados.sacaladelangulo.interno")
+                .nombre("Juan")
+                .rol(Role.EMPLOYEE)
+                .isActive(true)
+                .build();
+        UserDetails userDetails = org.springframework.security.core.userdetails.User
+                .withUsername(empleado.getEmail())
+                .password("hash-1234")
+                .authorities("ROLE_EMPLOYEE")
+                .build();
+
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "juan", Role.EMPLOYEE))
+                .thenReturn(Optional.of(empleado));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
+        when(jwtService.generateToken(eq(userDetails), anyMap(), anyLong())).thenReturn("jwt-token-empleado");
+
+        AuthResponse response = authService.authenticateEmpleado(request, 10L);
+
+        assertEquals("jwt-token-empleado", response.token());
     }
 
     @Test

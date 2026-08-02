@@ -38,8 +38,13 @@ public class RegistroAuditoria {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Nulo para eventos de dispositivo de caja (alta/emparejamiento/revocación): no hay
+     * ningún empleado afectado, el sujeto de esas acciones es el propio dispositivo (ver
+     * RegistroAuditoriaService.registrarDispositivo).
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "empleado_id", nullable = false)
+    @JoinColumn(name = "empleado_id")
     private Usuario empleado;
 
     /**

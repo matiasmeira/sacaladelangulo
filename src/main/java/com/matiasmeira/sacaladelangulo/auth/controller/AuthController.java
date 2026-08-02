@@ -9,6 +9,9 @@ import com.matiasmeira.sacaladelangulo.auth.dto.RegisterRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarTokenResponse;
 import com.matiasmeira.sacaladelangulo.auth.service.AuthService;
 import com.matiasmeira.sacaladelangulo.auth.service.RegistroVerificacionService;
+import com.matiasmeira.sacaladelangulo.caja.model.DispositivoCaja;
+import com.matiasmeira.sacaladelangulo.caja.service.DispositivoCajaGate;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,6 +32,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final RegistroVerificacionService registroVerificacionService;
+    private final DispositivoCajaGate dispositivoCajaGate;
 
     /**
      * Endpoint de registro de jugadores en 1 solo paso, deprecado: permitía crear la
@@ -71,10 +75,13 @@ public class AuthController {
     /**
      * Login de mostrador: nombre del empleado (dentro del establecimiento) + PIN de
      * 4 dígitos. Emite un token de vida corta e independiente de la sesión del dueño.
+     * Requiere una cookie de dispositivo de caja válida (ver DispositivoCajaGate): el
+     * establecimiento efectivo se toma del dispositivo, no del body.
      */
     @PostMapping("/empleados/login")
-    public ResponseEntity<AuthResponse> loginEmpleado(@RequestBody @Valid EmpleadoLoginRequest request) {
-        AuthResponse response = authService.authenticateEmpleado(request);
+    public ResponseEntity<AuthResponse> loginEmpleado(@RequestBody @Valid EmpleadoLoginRequest request, HttpServletRequest httpRequest) {
+        DispositivoCaja dispositivo = dispositivoCajaGate.exigirDispositivo(httpRequest);
+        AuthResponse response = authService.authenticateEmpleado(request, dispositivo.getEstablecimiento().getId());
         return ResponseEntity.ok(response);
     }
 

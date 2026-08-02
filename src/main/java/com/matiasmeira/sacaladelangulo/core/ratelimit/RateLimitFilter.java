@@ -37,7 +37,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     public static final Map<String, Limite> LIMITES_POR_RUTA = Map.of(
             "/api/v1/auth/login", new Limite(15, Duration.ofMinutes(5).toMillis()),
             "/api/v1/auth/empleados/login", new Limite(30, Duration.ofMinutes(5).toMillis()),
-            "/api/v1/auth/register/owner", new Limite(5, Duration.ofMinutes(10).toMillis())
+            "/api/v1/auth/register/owner", new Limite(5, Duration.ofMinutes(10).toMillis()),
+            "/api/v1/caja/emparejar", new Limite(10, Duration.ofMinutes(5).toMillis())
     );
 
     private final RateLimiterService rateLimiterService;

@@ -122,19 +122,30 @@ public class AuthService {
      * dígitos. Reutiliza el mismo AuthenticationManager/BCrypt que el login normal,
      * pero emite un token de vida corta (independiente de la sesión del dueño) con
      * el ID del empleado como claim para que el frontend lo muestre sin otra llamada.
+     *
+     * @param establecimientoIdDispositivo establecimiento derivado de la cookie de
+     *                                      dispositivo de caja (fuente de verdad, ver
+     *                                      DispositivoCajaGate): si el body trae su
+     *                                      propio establecimientoId y no coincide, se
+     *                                      rechaza con el mismo error genérico que
+     *                                      cualquier otro fallo de login.
      */
-    public AuthResponse authenticateEmpleado(EmpleadoLoginRequest request) {
+    public AuthResponse authenticateEmpleado(EmpleadoLoginRequest request, Long establecimientoIdDispositivo) {
+        if (request.establecimientoId() != null && !request.establecimientoId().equals(establecimientoIdDispositivo)) {
+            throw new BadCredentialsException("Credenciales inválidas");
+        }
+
         // Normalizado antes de armar la clave de rate limit y de consultar la base, para
         // que variar mayúsculas/espacios no sirva ni para eludir el límite de intentos
         // ni para esquivar la búsqueda por nombre (ver B4 en la auditoría).
         String nombre = normalizarNombre(request.nombre());
-        String claveLimite = "login-empleado:" + request.establecimientoId() + ":" + nombre;
+        String claveLimite = "login-empleado:" + establecimientoIdDispositivo + ":" + nombre;
         if (!rateLimiterService.tryConsume(claveLimite, LOGIN_EMPLEADO_INTENTOS_MAXIMOS, LOGIN_EMPLEADO_VENTANA_MILLIS)) {
             throw new RateLimitExceededException("Demasiados intentos de inicio de sesión. Intente nuevamente en unos minutos.");
         }
 
         Usuario empleado = usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(
-                        request.establecimientoId(), nombre, Role.EMPLOYEE)
+                        establecimientoIdDispositivo, nombre, Role.EMPLOYEE)
                 .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
 
         if (!Boolean.TRUE.equals(empleado.getIsActive())) {

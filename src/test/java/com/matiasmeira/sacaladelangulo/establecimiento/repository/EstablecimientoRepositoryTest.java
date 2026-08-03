@@ -24,7 +24,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @DataJpaTest
 // ddl-auto=validate es el default de la config base (ver A10): la base embebida que usa
 // @DataJpaTest arranca vacía, así que acá hace falta create-drop para generar el esquema.
-@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
+// spring.flyway.enabled=false evita que FlywayAutoConfiguration corra las migraciones de
+// Postgres (ver db/migration/V1__baseline.sql) contra este H2 en memoria.
+@TestPropertySource(properties = {
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.flyway.enabled=false"
+})
 @DisplayName("EstablecimientoRepository - Búsqueda geográfica (ver M29)")
 class EstablecimientoRepositoryTest {
 

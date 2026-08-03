@@ -2,9 +2,12 @@ package com.matiasmeira.sacaladelangulo.auth.repository;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,4 +39,29 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     List<Usuario> findByEstablecimientoIdAndRol(Long establecimientoId, Role rol);
 
     List<Usuario> findByEstablecimientoIdAndRolAndIsActiveTrue(Long establecimientoId, Role rol);
+
+    /**
+     * Usuarios cuya prueba gratuita vence dentro de la ventana [desde, hasta) y que todavía
+     * no recibieron el aviso de ese umbral (ver AvisoFinPruebaService, Fase 5): el llamador
+     * pasa el rango correspondiente al día calendario que cae exactamente N días desde hoy.
+     */
+    List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse(LocalDateTime desde, LocalDateTime hasta);
+
+    List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalse(LocalDateTime desde, LocalDateTime hasta);
+
+    List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalse(LocalDateTime desde, LocalDateTime hasta);
+
+    /**
+     * Usado para resolver el token del link de "darme de baja" de un email de marketing
+     * (ver Fase 6): no requiere autenticación, así que el token opaco es la única forma
+     * de identificar al usuario.
+     */
+    Optional<Usuario> findByUnsubscribeToken(String token);
+
+    /**
+     * Paginado porque el broadcast de ofertas (ver OfertaMarketingBatchSender) puede
+     * recorrer potencialmente todos los usuarios con opt-in: cargarlos todos de una vez
+     * en memoria no escala.
+     */
+    Page<Usuario> findByAceptaMarketingTrue(Pageable pageable);
 }

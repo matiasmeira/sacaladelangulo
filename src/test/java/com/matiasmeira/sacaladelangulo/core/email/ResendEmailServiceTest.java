@@ -36,20 +36,20 @@ class ResendEmailServiceTest {
     }
 
     @Test
-    @DisplayName("enviarEmailVerificacion_Exito_LlamaAlClienteDeResend")
-    void enviarEmailVerificacion_Exito_LlamaAlClienteDeResend() throws ResendException {
+    @DisplayName("enviar_Exito_LlamaAlClienteDeResend")
+    void enviar_Exito_LlamaAlClienteDeResend() throws ResendException {
         // Arrange
         when(resendClient.emails()).thenReturn(emails);
         when(emails.send(any(CreateEmailOptions.class))).thenReturn(new CreateEmailResponse());
 
         // Act & Assert
-        assertDoesNotThrow(() -> resendEmailService.enviarEmailVerificacion("jugador@test.com", "https://front/verificar?token=abc"));
+        assertDoesNotThrow(() -> resendEmailService.enviar("jugador@test.com", "Verificá tu cuenta", "<p>Hola</p>"));
         verify(emails).send(any(CreateEmailOptions.class));
     }
 
     @Test
-    @DisplayName("enviarEmailVerificacion_Fallo_PropagaComoRuntimeExceptionParaElAsyncUncaughtHandler")
-    void enviarEmailVerificacion_Fallo_PropagaComoRuntimeExceptionParaElAsyncUncaughtHandler() throws ResendException {
+    @DisplayName("enviar_Fallo_PropagaComoRuntimeExceptionParaElAsyncUncaughtHandler")
+    void enviar_Fallo_PropagaComoRuntimeExceptionParaElAsyncUncaughtHandler() throws ResendException {
         // Arrange: simula una falla de la API de Resend (ej. credenciales inválidas, rate limit)
         when(resendClient.emails()).thenReturn(emails);
         when(emails.send(any(CreateEmailOptions.class))).thenThrow(new ResendException("Falla simulada de Resend", null));
@@ -57,6 +57,6 @@ class ResendEmailServiceTest {
         // Act & Assert: no debe perderse silenciosamente; el listener @Async la deja
         // subir para que la capture el AsyncUncaughtExceptionHandler de AsyncConfig.
         assertThrows(RuntimeException.class,
-                () -> resendEmailService.enviarEmailVerificacion("jugador@test.com", "https://front/verificar?token=abc"));
+                () -> resendEmailService.enviar("jugador@test.com", "Verificá tu cuenta", "<p>Hola</p>"));
     }
 }

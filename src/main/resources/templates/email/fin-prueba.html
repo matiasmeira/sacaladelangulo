@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Tu prueba gratuita está por terminar</title>
+</head>
+<body>
+
+<div th:replace="~{layout :: email(titulo=|Tu prueba termina en ${diasRestantes} día(s)|, contenidoHtml=~{::#contenido})}">
+
+    <div id="contenido">
+        <p style="margin:0 0 16px 0;">
+            Hola <span th:text="${nombre}">Jugador</span>, te quedan
+            <span th:text="${diasRestantes}">7</span> día(s) de prueba gratuita en Saque.
+        </p>
+        <p style="margin:0 0 24px 0;">
+            Para que no pierdas acceso a tus canchas, reservas y turnos, contactanos antes de
+            que termine tu período de prueba para seguir usando la app sin interrupciones.
+        </p>
+    </div>
+
+</div>
+
+</body>
+</html>

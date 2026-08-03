@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Verificá tu cuenta</title>
+</head>
+<body>
+
+<div th:replace="~{layout :: email(titulo='Verificá tu cuenta', contenidoHtml=~{::#contenido})}">
+
+    <div id="contenido">
+        <p style="margin:0 0 24px 0;">
+            Gracias por registrarte en Saque. Para terminar de crear tu cuenta y empezar a
+            reservar canchas, confirmá que esta dirección de email te pertenece.
+        </p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+                <td style="border-radius:10px;background-color:#0e56c9;">
+                    <a th:href="${linkVerificacion}" href="#"
+                       style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">
+                        Verificar mi cuenta
+                    </a>
+                </td>
+            </tr>
+        </table>
+
+        <p style="margin:24px 0 0 0;font-size:13px;color:#5b6472;">
+            Si el botón no funciona, copiá y pegá este link en tu navegador:<br/>
+            <a th:href="${linkVerificacion}" th:text="${linkVerificacion}" href="#"
+               style="color:#0e56c9;word-break:break-all;">https://saque.app/verificar?token=...</a>
+        </p>
+
+        <p style="margin:32px 0 8px 0;font-size:13px;color:#5b6472;">
+            O ingresá este código en la app:
+        </p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+                <td style="border-radius:10px;background-color:#f6f9fc;border:1px solid #eef1f6;padding:16px 24px;">
+                    <span th:text="${codigo}"
+                          style="display:inline-block;font-family:'Courier New',Courier,monospace;font-size:28px;font-weight:700;letter-spacing:8px;color:#0a1f3d;">123456</span>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+</div>
+
+</body>
+</html>

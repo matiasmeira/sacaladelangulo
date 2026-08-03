@@ -29,7 +29,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "jwt.secret=TestSecretKeyQueSeaSuficientementeLargaParaValidarElTest123",
-        "spring.config.import="
+        "spring.config.import=",
+        // Ver comentario equivalente en SacaladelanguloApplicationTests: evita que
+        // FlywayAutoConfiguration corra las migraciones de Postgres contra este H2.
+        "spring.flyway.enabled=false"
 })
 @DisplayName("Rutas hardcodeadas en IdempotencyFilter/RateLimitFilter siguen mapeadas a un controller real (ver M26)")
 class RutasProtegidasCoincidenConControllersTest {

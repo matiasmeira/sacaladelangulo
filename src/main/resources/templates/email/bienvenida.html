@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>¡Bienvenido a Saque!</title>
+</head>
+<body>
+
+<div th:replace="~{layout :: email(titulo='¡Bienvenido a Saque!', contenidoHtml=~{::#contenido})}">
+
+    <div id="contenido">
+        <p style="margin:0 0 16px 0;">
+            Hola <span th:text="${nombre}">Jugador</span>, ¡tu cuenta ya está lista!
+        </p>
+        <p style="margin:0 0 24px 0;">
+            Gracias por sumarte a Saque. Ya podés buscar canchas, reservar tu turno y
+            gestionar tus partidos desde la app.
+        </p>
+    </div>
+
+</div>
+
+</body>
+</html>

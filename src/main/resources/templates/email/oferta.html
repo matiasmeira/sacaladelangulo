@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Oferta especial</title>
+</head>
+<body>
+
+<div th:replace="~{layout :: email(titulo='Oferta especial', contenidoHtml=~{::#contenido})}">
+
+    <div id="contenido">
+        <div th:utext="${cuerpoHtml}">
+            Cuerpo de la oferta.
+        </div>
+
+        <p style="margin:24px 0 0 0;font-size:12px;color:#8a94a6;">
+            ¿No querés recibir más estas ofertas?
+            <a th:href="${unsubscribeLink}" style="color:#0e56c9;">Darte de baja</a>
+        </p>
+    </div>
+
+</div>
+
+</body>
+</html>

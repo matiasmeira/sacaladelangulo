@@ -36,4 +36,11 @@ public class TokenVerificacionEmail {
 
     @Column(nullable = false)
     private LocalDateTime fechaExpiracion;
+
+    @Column(nullable = false)
+    private String codigo;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer intentos = 0;
 }

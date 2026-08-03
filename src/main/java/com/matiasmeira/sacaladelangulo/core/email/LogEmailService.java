@@ -22,7 +22,14 @@ import org.springframework.stereotype.Service;
 public class LogEmailService implements EmailService {
 
     @Override
-    public void enviarEmailVerificacion(String destinatario, String linkVerificacion) {
-        log.info("[EMAIL SIMULADO] Para: {} | Verificá tu cuenta: {}", destinatario, linkVerificacion);
+    public void enviar(String destinatario, String asunto, String htmlBody) {
+        log.info("[EMAIL SIMULADO] Para: {} | Asunto: {} | Preview: {}", destinatario, asunto, preview(htmlBody));
+    }
+
+    private String preview(String htmlBody) {
+        if (htmlBody == null) {
+            return "";
+        }
+        return htmlBody.length() > 120 ? htmlBody.substring(0, 120) + "..." : htmlBody;
     }
 }

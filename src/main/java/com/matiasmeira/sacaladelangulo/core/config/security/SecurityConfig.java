@@ -72,6 +72,9 @@ public class SecurityConfig {
                         // salvo que sea explícitamente permitAll, cosa que dejó de ser correcta.
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/caja/emparejar").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/webhooks/resend").permitAll()
+                        // Sin autenticación a propósito: el link de "darme de baja" de un email de
+                        // marketing lo identifica el token opaco del body, no una sesión (ver Fase 6).
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/mails/baja").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

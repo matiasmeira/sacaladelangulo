@@ -38,18 +38,18 @@ public class ResendEmailService implements EmailService {
     }
 
     @Override
-    public void enviarEmailVerificacion(String destinatario, String linkVerificacion) {
+    public void enviar(String destinatario, String asunto, String htmlBody) {
         CreateEmailOptions params = CreateEmailOptions.builder()
                 .from(remitente)
                 .to(destinatario)
-                .subject("Verificá tu cuenta")
-                .html("<p>Hacé click para verificar tu cuenta: <a href=\"" + linkVerificacion + "\">" + linkVerificacion + "</a></p>")
+                .subject(asunto)
+                .html(htmlBody)
                 .build();
         try {
             resendClient.emails().send(params);
         } catch (ResendException e) {
-            log.error("Fallo al enviar email de verificación a {} vía Resend", destinatario, e);
-            throw new RuntimeException("No se pudo enviar el email de verificación", e);
+            log.error("Fallo al enviar email a {} vía Resend", destinatario, e);
+            throw new RuntimeException("No se pudo enviar el email", e);
         }
     }
 }

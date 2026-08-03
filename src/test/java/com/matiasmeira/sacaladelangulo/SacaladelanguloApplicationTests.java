@@ -13,7 +13,12 @@ import org.springframework.test.context.TestPropertySource;
     "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
     "spring.jpa.hibernate.ddl-auto=create-drop",
     "jwt.secret=TestSecretKeyQueSeaSuficientementeLargaParaValidarElTest123",
-    "spring.config.import=" // Anula la carga del .env para evitar colisiones
+    "spring.config.import=", // Anula la carga del .env para evitar colisiones
+    // spring-boot-starter-flyway está en el classpath desde Fase 0 (ver db/migration/
+    // V1__baseline.sql, escrito para Postgres); sin esto, FlywayAutoConfiguration
+    // intentaría correr esas migraciones contra este datasource H2 en memoria, que
+    // Hibernate ya gestiona solo con ddl-auto=create-drop.
+    "spring.flyway.enabled=false"
 })
 class SacaladelanguloApplicationTests {
 

@@ -34,6 +34,7 @@ import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -97,6 +98,7 @@ public class ReservaService {
     private final ReservaMapper reservaMapper;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final RegistroAuditoriaService registroAuditoriaService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Crea una nueva reserva con validación de solapamientos y disponibilidad de pool.
@@ -224,6 +226,7 @@ public class ReservaService {
             Reserva reservaGuardada = reservaRepository.save(reserva);
             log.info("Nueva reserva manual creada con éxito. ID: {}, Cancha: {}, Cliente: {}",
                     reservaGuardada.getId(), cancha.getNombre(), request.nombreCliente());
+            eventPublisher.publishEvent(new ReservaConfirmadaEvent(reservaGuardada.getId()));
 
             registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.CREAR_RESERVA_MANUAL,
                     reservaGuardada.getId(), true, "Reserva manual creada para " + request.nombreCliente());
@@ -342,6 +345,7 @@ public class ReservaService {
         List<Reserva> reservasGuardadas = reservaRepository.saveAll(reservasAGuardar);
         log.info("Turno fijo creado con éxito. {} reservas generadas para la cancha {}",
                 reservasGuardadas.size(), cancha.getNombre());
+        reservasGuardadas.forEach(r -> eventPublisher.publishEvent(new ReservaConfirmadaEvent(r.getId())));
 
         return reservasGuardadas.stream().map(reservaMapper::mapToResponse).toList();
     }
@@ -614,6 +618,7 @@ public class ReservaService {
         reserva.setExpiraEn(null);
         Reserva reservaActualizada = reservaRepository.save(reserva);
         log.info("Reserva confirmada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
+        eventPublisher.publishEvent(new ReservaConfirmadaEvent(reservaActualizada.getId()));
 
         return reservaMapper.mapToResponse(reservaActualizada);
     }
@@ -656,6 +661,7 @@ public class ReservaService {
             reserva.setEstado(EstadoReserva.CANCELADA);
             Reserva reservaActualizada = reservaRepository.save(reserva);
             log.info("Reserva cancelada con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
+            eventPublisher.publishEvent(new ReservaCanceladaEvent(reservaActualizada.getId(), usuarioAutenticado.getId()));
 
             registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.CANCELAR_RESERVA, reservaId, true, "Reserva cancelada");
             return reservaMapper.mapToResponse(reservaActualizada);

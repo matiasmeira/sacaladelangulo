@@ -3,6 +3,7 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.CompletarRegistroRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.IniciarRegistroRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.VerificarCodigoRegistroResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarTokenResponse;
 import com.matiasmeira.sacaladelangulo.auth.model.TokenVerificacionEmail;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
@@ -88,11 +89,14 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail tokenGuardado = tokenCaptor.getValue();
         assertEquals("nuevo@test.com", tokenGuardado.getEmail());
         assertTrue(tokenGuardado.getFechaExpiracion().isAfter(LocalDateTime.now()));
+        assertEquals(6, tokenGuardado.getCodigo().length());
+        assertTrue(tokenGuardado.getCodigo().chars().allMatch(Character::isDigit));
 
         ArgumentCaptor<VerificacionEmailSolicitadaEvent> eventoCaptor = ArgumentCaptor.forClass(VerificacionEmailSolicitadaEvent.class);
         verify(eventPublisher).publishEvent(eventoCaptor.capture());
         assertEquals("nuevo@test.com", eventoCaptor.getValue().email());
         assertEquals("http://localhost:5173/verificar?token=" + tokenGuardado.getToken(), eventoCaptor.getValue().linkVerificacion());
+        assertEquals(tokenGuardado.getCodigo(), eventoCaptor.getValue().codigo());
     }
 
     @Test
@@ -193,6 +197,11 @@ class RegistroVerificacionServiceTest {
         assertEquals("nuevo@test.com", usuarioGuardado.getEmail());
         assertTrue(usuarioGuardado.getEmailVerified());
         assertTrue(usuarioGuardado.getIsActive());
+
+        ArgumentCaptor<RegistroCompletadoEvent> eventoCaptor = ArgumentCaptor.forClass(RegistroCompletadoEvent.class);
+        verify(eventPublisher).publishEvent(eventoCaptor.capture());
+        assertEquals("nuevo@test.com", eventoCaptor.getValue().email());
+        assertEquals("Juan", eventoCaptor.getValue().nombre());
     }
 
     @Test
@@ -264,5 +273,108 @@ class RegistroVerificacionServiceTest {
         assertEquals("El email ya está registrado", exception.getMessage());
         verify(tokenVerificacionEmailRepository).delete(token);
         verify(usuarioRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("verificarCodigo_Exito_DevuelveElTokenAsociado")
+    void verificarCodigo_Exito_DevuelveElTokenAsociado() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-valido")
+                .codigo("123456")
+                .intentos(0)
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        when(tokenVerificacionEmailRepository.findByEmail("nuevo@test.com")).thenReturn(Optional.of(token));
+
+        VerificarCodigoRegistroResponse response = registroVerificacionService.verificarCodigo("nuevo@test.com", "123456");
+
+        assertEquals("token-valido", response.token());
+        verify(tokenVerificacionEmailRepository, never()).delete(any());
+        verify(tokenVerificacionEmailRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("verificarCodigo_Fallo_CodigoIncorrectoIncrementaIntentos")
+    void verificarCodigo_Fallo_CodigoIncorrectoIncrementaIntentos() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-valido")
+                .codigo("123456")
+                .intentos(0)
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        when(tokenVerificacionEmailRepository.findByEmail("nuevo@test.com")).thenReturn(Optional.of(token));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> registroVerificacionService.verificarCodigo("nuevo@test.com", "000000"));
+
+        assertEquals("Código incorrecto", exception.getMessage());
+        ArgumentCaptor<TokenVerificacionEmail> tokenCaptor = ArgumentCaptor.forClass(TokenVerificacionEmail.class);
+        verify(tokenVerificacionEmailRepository).save(tokenCaptor.capture());
+        assertEquals(1, tokenCaptor.getValue().getIntentos());
+        verify(tokenVerificacionEmailRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("verificarCodigo_Fallo_IntentosAgotadosBorraTokenYLanzaMensajeDistinto")
+    void verificarCodigo_Fallo_IntentosAgotadosBorraTokenYLanzaMensajeDistinto() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-valido")
+                .codigo("123456")
+                .intentos(5)
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        when(tokenVerificacionEmailRepository.findByEmail("nuevo@test.com")).thenReturn(Optional.of(token));
+
+        RateLimitExceededException exception = assertThrows(RateLimitExceededException.class,
+                () -> registroVerificacionService.verificarCodigo("nuevo@test.com", "000000"));
+
+        assertEquals("Demasiados intentos, pedí un nuevo código", exception.getMessage());
+        verify(tokenVerificacionEmailRepository).delete(token);
+        verify(tokenVerificacionEmailRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("verificarCodigo_Fallo_TokenInexistente")
+    void verificarCodigo_Fallo_TokenInexistente() {
+        when(tokenVerificacionEmailRepository.findByEmail("inexistente@test.com")).thenReturn(Optional.empty());
+
+        assertThrows(TokenInvalidoException.class,
+                () -> registroVerificacionService.verificarCodigo("inexistente@test.com", "123456"));
+    }
+
+    @Test
+    @DisplayName("verificarCodigo_Fallo_TokenExpirado")
+    void verificarCodigo_Fallo_TokenExpirado() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .token("token-vencido")
+                .codigo("123456")
+                .intentos(0)
+                .fechaExpiracion(LocalDateTime.now().minusMinutes(1))
+                .build();
+        when(tokenVerificacionEmailRepository.findByEmail("nuevo@test.com")).thenReturn(Optional.of(token));
+
+        assertThrows(TokenExpiradoException.class,
+                () -> registroVerificacionService.verificarCodigo("nuevo@test.com", "123456"));
+
+        verify(tokenVerificacionEmailRepository).delete(token);
+    }
+
+    @Test
+    @DisplayName("verificarCodigo_Fallo_RateLimitExcedido")
+    void verificarCodigo_Fallo_RateLimitExcedido() {
+        when(rateLimiterService.tryConsume(eq("verificar-codigo:nuevo@test.com"), anyInt(), anyLong())).thenReturn(false);
+
+        assertThrows(RateLimitExceededException.class,
+                () -> registroVerificacionService.verificarCodigo("nuevo@test.com", "123456"));
+
+        verify(tokenVerificacionEmailRepository, never()).findByEmail(anyString());
     }
 }

@@ -3,6 +3,7 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.CompletarRegistroRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.IniciarRegistroRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.VerificarCodigoRegistroResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarTokenResponse;
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
@@ -23,6 +24,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -50,12 +52,28 @@ public class RegistroVerificacionService {
     private static final long INICIAR_VENTANA_MILLIS = Duration.ofMinutes(15).toMillis();
     private static final long TOKEN_EXPIRACION_MINUTOS = 15;
 
+    /**
+     * Límite de intentos de verificación por código por email, independiente del límite de
+     * solicitudes de link (INICIAR_INTENTOS_MAXIMOS): esto protege contra fuerza bruta sobre
+     * el código de 6 dígitos de un token ya emitido, no contra el spam de solicitudes.
+     */
+    private static final int VERIFICAR_CODIGO_INTENTOS_MAXIMOS = 5;
+    private static final long VERIFICAR_CODIGO_VENTANA_MILLIS = Duration.ofMinutes(5).toMillis();
+
+    /**
+     * Cantidad máxima de intentos fallidos de código permitidos antes de invalidar el token
+     * y exigir solicitar uno nuevo (mismo criterio que UsuarioService.MAX_INTENTOS para el
+     * OTP de teléfono).
+     */
+    private static final int CODIGO_INTENTOS_MAXIMOS = 5;
+
     private final UsuarioRepository usuarioRepository;
     private final TokenVerificacionEmailRepository tokenVerificacionEmailRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RateLimiterService rateLimiterService;
     private final ApplicationEventPublisher eventPublisher;
+    private final SecureRandom random = new SecureRandom();
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
@@ -83,15 +101,17 @@ public class RegistroVerificacionService {
         tokenVerificacionEmailRepository.deleteByEmail(email);
 
         String token = UUID.randomUUID().toString();
+        String codigo = String.format("%06d", random.nextInt(1000000));
         TokenVerificacionEmail tokenVerificacion = TokenVerificacionEmail.builder()
                 .email(email)
                 .token(token)
+                .codigo(codigo)
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(TOKEN_EXPIRACION_MINUTOS))
                 .build();
         tokenVerificacionEmailRepository.save(tokenVerificacion);
 
         String linkVerificacion = frontendUrl + "/verificar?token=" + token;
-        eventPublisher.publishEvent(new VerificacionEmailSolicitadaEvent(email, linkVerificacion));
+        eventPublisher.publishEvent(new VerificacionEmailSolicitadaEvent(email, linkVerificacion, codigo));
         log.info("Token de verificación de registro generado para {}", email);
     }
 
@@ -104,8 +124,44 @@ public class RegistroVerificacionService {
      */
     @Transactional(readOnly = true)
     public VerificarTokenResponse verificarToken(String token) {
-        TokenVerificacionEmail tokenVerificacion = buscarTokenValido(token);
+        TokenVerificacionEmail tokenVerificacion = buscarTokenValidoPorToken(token);
         return new VerificarTokenResponse(tokenVerificacion.getEmail(), true);
+    }
+
+    /**
+     * Alternativa a {@link #verificarToken(String)}: valida el token a partir del código de
+     * 6 dígitos que el usuario tipeó a mano (en vez de hacer click en el link), llevando la
+     * cuenta de intentos fallidos para mitigar fuerza bruta sobre el código, igual que
+     * UsuarioService.verificarCodigo hace para el OTP de teléfono. Tampoco consume el token:
+     * solo completarRegistro lo hace, así ambos caminos (link o código) convergen en el
+     * mismo endpoint de completar sin cambios.
+     *
+     * @param email  Email asociado al token, ya normalizado por el DTO/frontend
+     * @param codigo Código de 6 dígitos recibido por email
+     * @return VerificarCodigoRegistroResponse con el token para completar el registro
+     */
+    public VerificarCodigoRegistroResponse verificarCodigo(String email, String codigo) {
+        String emailNormalizado = normalizarEmail(email);
+
+        if (!rateLimiterService.tryConsume("verificar-codigo:" + emailNormalizado, VERIFICAR_CODIGO_INTENTOS_MAXIMOS, VERIFICAR_CODIGO_VENTANA_MILLIS)) {
+            throw new RateLimitExceededException("Demasiadas solicitudes de verificación. Intentá nuevamente en unos minutos.");
+        }
+
+        TokenVerificacionEmail tokenVerificacion = buscarTokenValidoPorEmail(emailNormalizado);
+
+        if (tokenVerificacion.getIntentos() >= CODIGO_INTENTOS_MAXIMOS) {
+            tokenVerificacionEmailRepository.delete(tokenVerificacion);
+            log.warn("Código de verificación de registro bloqueado por exceso de intentos para {}", emailNormalizado);
+            throw new RateLimitExceededException("Demasiados intentos, pedí un nuevo código");
+        }
+
+        if (!tokenVerificacion.getCodigo().equals(codigo)) {
+            tokenVerificacion.setIntentos(tokenVerificacion.getIntentos() + 1);
+            tokenVerificacionEmailRepository.save(tokenVerificacion);
+            throw new IllegalArgumentException("Código incorrecto");
+        }
+
+        return new VerificarCodigoRegistroResponse(tokenVerificacion.getToken());
     }
 
     /**
@@ -116,7 +172,7 @@ public class RegistroVerificacionService {
      * @return AuthResponse con el JWT de sesión
      */
     public AuthResponse completarRegistro(CompletarRegistroRequest request) {
-        TokenVerificacionEmail tokenVerificacion = buscarTokenValido(request.token());
+        TokenVerificacionEmail tokenVerificacion = buscarTokenValidoPorToken(request.token());
         String email = tokenVerificacion.getEmail();
 
         if (usuarioRepository.existsByEmail(email)) {
@@ -148,16 +204,27 @@ public class RegistroVerificacionService {
         tokenVerificacionEmailRepository.delete(tokenVerificacion);
         log.info("Registro completado para {}", email);
 
+        eventPublisher.publishEvent(new RegistroCompletadoEvent(email, usuario.getNombre()));
+
         // Se construye el UserDetails a partir del Usuario recién guardado en vez de
         // volver a consultar la base con loadUserByUsername (ver M4 en la auditoría).
         var userDetails = UsuarioUserDetailsMapper.map(usuario);
         return new AuthResponse(jwtService.generateToken(userDetails));
     }
 
-    private TokenVerificacionEmail buscarTokenValido(String token) {
+    private TokenVerificacionEmail buscarTokenValidoPorToken(String token) {
         TokenVerificacionEmail tokenVerificacion = tokenVerificacionEmailRepository.findByToken(token)
                 .orElseThrow(() -> new TokenInvalidoException("El token de verificación no es válido"));
+        return validarExpiracion(tokenVerificacion);
+    }
 
+    private TokenVerificacionEmail buscarTokenValidoPorEmail(String email) {
+        TokenVerificacionEmail tokenVerificacion = tokenVerificacionEmailRepository.findByEmail(email)
+                .orElseThrow(() -> new TokenInvalidoException("El token de verificación no es válido"));
+        return validarExpiracion(tokenVerificacion);
+    }
+
+    private TokenVerificacionEmail validarExpiracion(TokenVerificacionEmail tokenVerificacion) {
         if (LocalDateTime.now().isAfter(tokenVerificacion.getFechaExpiracion())) {
             tokenVerificacionEmailRepository.delete(tokenVerificacion);
             throw new TokenExpiradoException("El token de verificación expiró, solicitá uno nuevo");

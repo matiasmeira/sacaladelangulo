@@ -31,9 +31,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -50,12 +52,14 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -92,6 +96,9 @@ class ReservaServiceTest {
 
     @Mock
     private RegistroAuditoriaService registroAuditoriaService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ReservaService reservaService;
@@ -583,6 +590,7 @@ class ReservaServiceTest {
         // El bloqueo de jugadores solo aplica al autoservicio (crearReserva), no a las
         // reservas de mostrador que carga el propio dueño.
         verify(bloqueoJugadorRepository, never()).existsByEstablecimientoIdAndJugadorId(any(), any());
+        verify(eventPublisher).publishEvent(new ReservaConfirmadaEvent(reservaGuardada.getId()));
     }
 
     @Test
@@ -614,6 +622,69 @@ class ReservaServiceTest {
                 org.springframework.security.access.AccessDeniedException.class,
                 () -> reservaService.crearReservaManual(request, otroDueno.getEmail())
         );
+    }
+
+    @Test
+    @DisplayName("confirmarReserva_Exito_PublicaEventoDeReservaConfirmada")
+    void confirmarReserva_Exito_PublicaEventoDeReservaConfirmada() {
+        // Arrange
+        Reserva reservaPendiente = Reserva.builder()
+                .id(40L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.PENDIENTE_SENA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .expiraEn(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaPendiente.getId()))
+                .thenReturn(Optional.of(reservaPendiente));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.confirmarReserva(reservaPendiente.getId(), dueno.getEmail()));
+
+        // Assert
+        assert response.estado().equals("CONFIRMADA");
+        ArgumentCaptor<ReservaConfirmadaEvent> captor = ArgumentCaptor.forClass(ReservaConfirmadaEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertEquals(reservaPendiente.getId(), captor.getValue().reservaId());
+    }
+
+    @Test
+    @DisplayName("confirmarReserva_YaConfirmada_NoPublicaEventoPorSerIdempotente")
+    void confirmarReserva_YaConfirmada_NoPublicaEventoPorSerIdempotente() {
+        // Arrange
+        Reserva reservaYaConfirmada = Reserva.builder()
+                .id(41L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaYaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaYaConfirmada));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.confirmarReserva(reservaYaConfirmada.getId(), dueno.getEmail()));
+
+        // Assert
+        assert response.estado().equals("CONFIRMADA");
+        verify(reservaRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -650,6 +721,8 @@ class ReservaServiceTest {
         // El bloqueo de jugadores solo aplica al autoservicio (crearReserva): el dueño puede
         // cargarle igual un turno fijo semanal a un jugador que él mismo haya bloqueado.
         verify(bloqueoJugadorRepository, never()).existsByEstablecimientoIdAndJugadorId(any(), any());
+        // Una reserva CONFIRMADA por ocurrencia generada -> un evento por ocurrencia.
+        verify(eventPublisher, times(3)).publishEvent(any(ReservaConfirmadaEvent.class));
     }
 
     @Test
@@ -1298,6 +1371,39 @@ class ReservaServiceTest {
         verify(registroAuditoriaService).registrar(
                 eq(empleado), eq(com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria.CANCELAR_RESERVA),
                 eq(reservaConfirmada.getId()), eq(true), any());
+        ArgumentCaptor<ReservaCanceladaEvent> captor = ArgumentCaptor.forClass(ReservaCanceladaEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertEquals(reservaConfirmada.getId(), captor.getValue().reservaId());
+        assertEquals(empleado.getId(), captor.getValue().actorId());
+    }
+
+    @Test
+    @DisplayName("cancelarReserva_YaCancelada_NoPublicaEventoPorSerIdempotente")
+    void cancelarReserva_YaCancelada_NoPublicaEventoPorSerIdempotente() {
+        // Arrange
+        Reserva reservaYaCancelada = Reserva.builder()
+                .id(62L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CANCELADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaYaCancelada.getId()))
+                .thenReturn(Optional.of(reservaYaCancelada));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.cancelarReserva(reservaYaCancelada.getId(), dueno.getEmail()));
+
+        // Assert
+        assert response.estado().equals("CANCELADA");
+        verify(reservaRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

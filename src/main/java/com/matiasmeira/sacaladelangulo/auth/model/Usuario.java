@@ -63,6 +63,35 @@ public class Usuario {
     @Column(name = "telefono_verificado", nullable = false)
     private Boolean telefonoVerificado;
 
+    @Column(name = "aviso_fin_prueba_7_enviado", nullable = false)
+    @Builder.Default
+    private Boolean avisoFinPrueba7Enviado = false;
+
+    @Column(name = "aviso_fin_prueba_3_enviado", nullable = false)
+    @Builder.Default
+    private Boolean avisoFinPrueba3Enviado = false;
+
+    @Column(name = "aviso_fin_prueba_1_enviado", nullable = false)
+    @Builder.Default
+    private Boolean avisoFinPrueba1Enviado = false;
+
+    /**
+     * Opt-in para recibir emails de marketing/ofertas (ver Fase 6), independiente del
+     * envío de emails transaccionales (que no depende de este flag). Default false: el
+     * usuario tiene que optar explícitamente para recibirlos.
+     */
+    @Column(name = "acepta_marketing", nullable = false)
+    @Builder.Default
+    private Boolean aceptaMarketing = false;
+
+    /**
+     * Token opaco único usado en el link de "darte de baja" de cada email de marketing
+     * (ver Fase 6): no requiere autenticación, así que no puede reutilizarse ningún id
+     * ni el email en texto plano.
+     */
+    @Column(name = "unsubscribe_token", nullable = false, unique = true)
+    private String unsubscribeToken;
+
     /**
      * Incrementado en logout o al cambiar la contraseña/PIN: el JWT emitido antes de ese
      * incremento lleva la versión vieja como claim y JwtService lo invalida en la
@@ -105,8 +134,23 @@ public class Usuario {
         if (telefonoVerificado == null) {
             telefonoVerificado = false;
         }
+        if (avisoFinPrueba7Enviado == null) {
+            avisoFinPrueba7Enviado = false;
+        }
+        if (avisoFinPrueba3Enviado == null) {
+            avisoFinPrueba3Enviado = false;
+        }
+        if (avisoFinPrueba1Enviado == null) {
+            avisoFinPrueba1Enviado = false;
+        }
         if (tokenVersion == null) {
             tokenVersion = 0;
+        }
+        if (unsubscribeToken == null) {
+            unsubscribeToken = java.util.UUID.randomUUID().toString();
+        }
+        if (aceptaMarketing == null) {
+            aceptaMarketing = false;
         }
     }
 }

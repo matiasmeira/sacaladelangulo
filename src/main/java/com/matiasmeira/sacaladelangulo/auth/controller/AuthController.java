@@ -6,8 +6,13 @@ import com.matiasmeira.sacaladelangulo.auth.dto.CompletarRegistroRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.EmpleadoLoginRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.IniciarRegistroRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.RegisterRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.ResetPasswordRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.SolicitarRecuperacionPasswordRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.VerificarCodigoRegistroRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.VerificarCodigoRegistroResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarTokenResponse;
 import com.matiasmeira.sacaladelangulo.auth.service.AuthService;
+import com.matiasmeira.sacaladelangulo.auth.service.RecuperacionPasswordService;
 import com.matiasmeira.sacaladelangulo.auth.service.RegistroVerificacionService;
 import com.matiasmeira.sacaladelangulo.caja.model.DispositivoCaja;
 import com.matiasmeira.sacaladelangulo.caja.service.DispositivoCajaGate;
@@ -32,6 +37,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final RegistroVerificacionService registroVerificacionService;
+    private final RecuperacionPasswordService recuperacionPasswordService;
     private final DispositivoCajaGate dispositivoCajaGate;
 
     /**
@@ -105,6 +111,16 @@ public class AuthController {
     }
 
     /**
+     * Registro de jugadores en 2 pasos — alternativa al paso 2 por link: valida el token
+     * a partir del código de 6 dígitos que el usuario tipeó a mano, devolviendo el mismo
+     * token que el link para que el frontend siga con /registro/completar sin cambios.
+     */
+    @PostMapping("/registro/verificar-codigo")
+    public ResponseEntity<VerificarCodigoRegistroResponse> verificarCodigo(@RequestBody @Valid VerificarCodigoRegistroRequest request) {
+        return ResponseEntity.ok(registroVerificacionService.verificarCodigo(request.email(), request.codigo()));
+    }
+
+    /**
      * Registro de jugadores en 2 pasos — paso 3: revalida el token, crea el usuario con
      * el resto de sus datos y devuelve el JWT de sesión.
      */
@@ -112,5 +128,26 @@ public class AuthController {
     public ResponseEntity<AuthResponse> completarRegistro(@RequestBody @Valid CompletarRegistroRequest request) {
         AuthResponse response = registroVerificacionService.completarRegistro(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Recuperación de contraseña — paso 1: siempre devuelve 200, exista o no el email, para
+     * no convertir este endpoint en un oráculo de qué cuentas existen (ver
+     * RecuperacionPasswordService.solicitarRecuperacion).
+     */
+    @PostMapping("/password/recuperar")
+    public ResponseEntity<Void> solicitarRecuperacionPassword(@RequestBody @Valid SolicitarRecuperacionPasswordRequest request) {
+        recuperacionPasswordService.solicitarRecuperacion(request);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Recuperación de contraseña — paso 2: fija la nueva contraseña a partir del token del
+     * link o del email+código tipeado a mano (ver RecuperacionPasswordService.resetPassword).
+     */
+    @PostMapping("/password/reset")
+    public ResponseEntity<Void> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        recuperacionPasswordService.resetPassword(request);
+        return ResponseEntity.ok().build();
     }
 }

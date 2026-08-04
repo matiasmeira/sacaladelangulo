@@ -1,4 +1,4 @@
-package com.matiasmeira.sacaladelangulo.reserva.model;
+package com.matiasmeira.sacaladelangulo.core.pago;
 
 /**
  * Método de pago con el que se saldó una reserva al finalizarla (ver

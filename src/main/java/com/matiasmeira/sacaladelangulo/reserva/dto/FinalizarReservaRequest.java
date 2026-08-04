@@ -1,6 +1,6 @@
 package com.matiasmeira.sacaladelangulo.reserva.dto;
 
-import com.matiasmeira.sacaladelangulo.reserva.model.MetodoPago;
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import jakarta.validation.constraints.NotNull;
 
 public record FinalizarReservaRequest(

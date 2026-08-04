@@ -5,7 +5,7 @@ import com.matiasmeira.sacaladelangulo.reportes.dto.DesglosePorMetodoPagoDto;
 import com.matiasmeira.sacaladelangulo.reportes.dto.FacturacionReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.PuntoFacturacionDiariaDto;
 import com.matiasmeira.sacaladelangulo.reportes.dto.RangoFechas;
-import com.matiasmeira.sacaladelangulo.reserva.model.MetodoPago;
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

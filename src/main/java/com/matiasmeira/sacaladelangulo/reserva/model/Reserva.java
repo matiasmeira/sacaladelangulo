@@ -1,6 +1,7 @@
 package com.matiasmeira.sacaladelangulo.reserva.model;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import jakarta.persistence.*;

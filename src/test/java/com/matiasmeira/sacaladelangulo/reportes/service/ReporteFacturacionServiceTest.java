@@ -3,7 +3,7 @@ package com.matiasmeira.sacaladelangulo.reportes.service;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.reportes.dto.FacturacionReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.RangoFechas;
-import com.matiasmeira.sacaladelangulo.reserva.model.MetodoPago;
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

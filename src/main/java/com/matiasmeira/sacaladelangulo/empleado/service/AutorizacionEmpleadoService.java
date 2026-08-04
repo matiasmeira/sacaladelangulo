@@ -50,4 +50,19 @@ public class AutorizacionEmpleadoService {
                 && usuario.getEstablecimiento().getId().equals(establecimiento.getId())
                 && usuario.getPermisos().contains(permiso);
     }
+
+    /**
+     * Resuelve el usuario autenticado y valida que sea el dueño real del establecimiento o
+     * un ADMIN, sin excepción para empleados (a diferencia de validarAccion). Usado por
+     * acciones que solo el dueño/admin puede realizar, como los gastos.
+     */
+    public Usuario validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        if (usuarioAutenticado.getRol() != Role.ADMIN &&
+                !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
+            throw new AccessDeniedException("No autorizado en este establecimiento");
+        }
+        return usuarioAutenticado;
+    }
 }

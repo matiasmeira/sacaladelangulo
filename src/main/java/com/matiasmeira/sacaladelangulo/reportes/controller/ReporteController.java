@@ -2,10 +2,13 @@ package com.matiasmeira.sacaladelangulo.reportes.controller;
 
 import com.matiasmeira.sacaladelangulo.reportes.dto.ClientesReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.FacturacionReporteResponse;
+import com.matiasmeira.sacaladelangulo.reportes.dto.GastosReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.HorariosPedidosReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.OcupacionReporteResponse;
+import com.matiasmeira.sacaladelangulo.reportes.dto.ResultadoReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.service.ReporteClientesService;
 import com.matiasmeira.sacaladelangulo.reportes.service.ReporteFacturacionService;
+import com.matiasmeira.sacaladelangulo.reportes.service.ReporteGastosService;
 import com.matiasmeira.sacaladelangulo.reportes.service.ReporteHorariosService;
 import com.matiasmeira.sacaladelangulo.reportes.service.ReporteOcupacionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +45,7 @@ public class ReporteController {
     private final ReporteOcupacionService reporteOcupacionService;
     private final ReporteHorariosService reporteHorariosService;
     private final ReporteClientesService reporteClientesService;
+    private final ReporteGastosService reporteGastosService;
 
     @GetMapping("/facturacion")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
@@ -107,5 +111,36 @@ public class ReporteController {
             @Parameter(description = "Cantidad de clientes del ranking a devolver") @RequestParam(defaultValue = "10") int topN,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(reporteClientesService.obtenerClientes(establecimientoId, desde, hasta, topN, userDetails.getUsername()));
+    }
+
+    @GetMapping("/gastos")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @Operation(
+            summary = "Gastos del establecimiento en un rango de fechas",
+            description = "Total gastado, desglose por categoría (ALQUILER/SERVICIOS/SUELDOS/INSUMOS/MANTENIMIENTO/" +
+                    "IMPUESTOS/MARKETING/OTROS) y serie temporal diaria. Incluye el período pedido y el " +
+                    "inmediatamente anterior de igual duración para comparar."
+    )
+    public ResponseEntity<GastosReporteResponse> obtenerGastos(
+            @PathVariable Long establecimientoId,
+            @Parameter(description = "Fecha de inicio del período (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @Parameter(description = "Fecha de fin del período (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(reporteGastosService.obtenerGastos(establecimientoId, desde, hasta, userDetails.getUsername()));
+    }
+
+    @GetMapping("/resultado")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @Operation(
+            summary = "Resultado neto del establecimiento en un rango de fechas",
+            description = "Total facturado, total de gastos y el neto (facturado - gastos), cada uno comparado " +
+                    "contra el período inmediatamente anterior de igual duración."
+    )
+    public ResponseEntity<ResultadoReporteResponse> obtenerResultado(
+            @PathVariable Long establecimientoId,
+            @Parameter(description = "Fecha de inicio del período (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @Parameter(description = "Fecha de fin del período (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(reporteGastosService.obtenerResultado(establecimientoId, desde, hasta, userDetails.getUsername()));
     }
 }

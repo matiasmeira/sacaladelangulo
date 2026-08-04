@@ -1,11 +1,13 @@
 package com.matiasmeira.sacaladelangulo.reportes.controller;
 
+import com.matiasmeira.sacaladelangulo.reportes.dto.CierreCajaReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.ClientesReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.FacturacionReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.GastosReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.HorariosPedidosReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.OcupacionReporteResponse;
 import com.matiasmeira.sacaladelangulo.reportes.dto.ResultadoReporteResponse;
+import com.matiasmeira.sacaladelangulo.reportes.service.ReporteCierreCajaService;
 import com.matiasmeira.sacaladelangulo.reportes.service.ReporteClientesService;
 import com.matiasmeira.sacaladelangulo.reportes.service.ReporteFacturacionService;
 import com.matiasmeira.sacaladelangulo.reportes.service.ReporteGastosService;
@@ -46,6 +48,7 @@ public class ReporteController {
     private final ReporteHorariosService reporteHorariosService;
     private final ReporteClientesService reporteClientesService;
     private final ReporteGastosService reporteGastosService;
+    private final ReporteCierreCajaService reporteCierreCajaService;
 
     @GetMapping("/facturacion")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
@@ -142,5 +145,21 @@ public class ReporteController {
             @Parameter(description = "Fecha de fin del período (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(reporteGastosService.obtenerResultado(establecimientoId, desde, hasta, userDetails.getUsername()));
+    }
+
+    @GetMapping("/cierres-caja")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @Operation(
+            summary = "Diferencias de caja del establecimiento en un rango de fechas",
+            description = "Turnos de caja CERRADO en el período (por fecha de cierre) con su diferencia individual " +
+                    "(saldo real contado - saldo teórico), más el faltante y sobrante acumulados del período para " +
+                    "detectar descuadres recurrentes. No compara con el período anterior."
+    )
+    public ResponseEntity<CierreCajaReporteResponse> obtenerDiferenciasDeCaja(
+            @PathVariable Long establecimientoId,
+            @Parameter(description = "Fecha de inicio del período (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @Parameter(description = "Fecha de fin del período (inclusive)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(reporteCierreCajaService.obtenerDiferenciasDeCaja(establecimientoId, desde, hasta, userDetails.getUsername()));
     }
 }

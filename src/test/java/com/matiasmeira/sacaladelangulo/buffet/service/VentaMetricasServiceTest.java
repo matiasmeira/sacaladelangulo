@@ -9,6 +9,7 @@ import com.matiasmeira.sacaladelangulo.buffet.model.EstadoVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.ProductoBuffet;
 import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.buffet.repository.VentaRepository;
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -104,6 +105,7 @@ class VentaMetricasServiceTest {
                 .fechaHora(LocalDateTime.of(2026, 1, 10, 12, 0))
                 .total(BigDecimal.valueOf(4500))
                 .estado(EstadoVenta.CONFIRMADA)
+                .metodoPago(MetodoPago.EFECTIVO)
                 .detalles(List.of(DetalleVenta.builder()
                         .productoBuffet(agua).cantidad(3).subtotal(BigDecimal.valueOf(4500)).build()))
                 .build();
@@ -114,6 +116,7 @@ class VentaMetricasServiceTest {
                 .fechaHora(LocalDateTime.of(2026, 1, 15, 18, 0))
                 .total(BigDecimal.valueOf(2300))
                 .estado(EstadoVenta.CONFIRMADA)
+                .metodoPago(MetodoPago.EFECTIVO)
                 .detalles(List.of(
                         DetalleVenta.builder().productoBuffet(agua).cantidad(1).subtotal(BigDecimal.valueOf(1500)).build(),
                         DetalleVenta.builder().productoBuffet(alfajor).cantidad(1).subtotal(BigDecimal.valueOf(800)).build()

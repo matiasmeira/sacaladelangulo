@@ -11,6 +11,7 @@ public record GastoResponse(
         BigDecimal monto,
         String categoria,
         String descripcion,
+        String metodoPago,
         String comprobanteUrl,
         Long usuarioRegistroId,
         String usuarioRegistroNombre,

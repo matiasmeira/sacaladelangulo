@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.buffet.model;
 
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import jakarta.persistence.CascadeType;
@@ -52,6 +53,10 @@ public class Venta {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EstadoVenta estado;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metodo_pago", nullable = false)
+    private MetodoPago metodoPago;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "establecimiento_id", nullable = false)

@@ -16,6 +16,7 @@ public class VentaMapper {
                 venta.getFechaHora(),
                 venta.getTotal(),
                 venta.getEstado().name(),
+                venta.getMetodoPago().name(),
                 venta.getEstablecimiento().getId(),
                 venta.getReserva() != null ? venta.getReserva().getId() : null,
                 venta.getDetalles().stream().map(this::mapDetalleToResponse).toList()

@@ -9,6 +9,7 @@ public record VentaResponse(
         LocalDateTime fechaHora,
         BigDecimal total,
         String estado,
+        String metodoPago,
         Long establecimientoId,
         Long reservaId,
         List<DetalleVentaResponse> detalles

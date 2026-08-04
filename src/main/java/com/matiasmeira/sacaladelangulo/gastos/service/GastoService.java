@@ -49,6 +49,7 @@ public class GastoService {
                 .monto(request.monto())
                 .categoria(request.categoria())
                 .descripcion(request.descripcion())
+                .metodoPago(request.metodoPago())
                 .comprobanteUrl(request.comprobanteUrl())
                 .usuarioRegistro(usuarioAutenticado)
                 .build();
@@ -69,6 +70,7 @@ public class GastoService {
         gasto.setMonto(request.monto());
         gasto.setCategoria(request.categoria());
         gasto.setDescripcion(request.descripcion());
+        gasto.setMetodoPago(request.metodoPago());
         gasto.setComprobanteUrl(request.comprobanteUrl());
 
         return gastoMapper.mapToResponse(gastoRepository.save(gasto));

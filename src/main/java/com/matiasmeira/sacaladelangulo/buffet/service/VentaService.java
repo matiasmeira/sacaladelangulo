@@ -78,6 +78,7 @@ public class VentaService {
                     .fechaHora(LocalDateTime.now())
                     .total(BigDecimal.ZERO)
                     .estado(EstadoVenta.CONFIRMADA)
+                    .metodoPago(request.metodoPago())
                     .build();
 
             // Lock pesimista sobre todos los productos del carrito antes de leer/escribir

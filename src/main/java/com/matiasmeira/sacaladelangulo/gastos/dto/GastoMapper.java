@@ -14,6 +14,7 @@ public class GastoMapper {
                 gasto.getMonto(),
                 gasto.getCategoria().name(),
                 gasto.getDescripcion(),
+                gasto.getMetodoPago().name(),
                 gasto.getComprobanteUrl(),
                 gasto.getUsuarioRegistro().getId(),
                 gasto.getUsuarioRegistro().getNombre(),

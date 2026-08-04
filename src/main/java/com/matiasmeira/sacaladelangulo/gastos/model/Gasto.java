@@ -1,6 +1,7 @@
 package com.matiasmeira.sacaladelangulo.gastos.model;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -57,6 +58,10 @@ public class Gasto {
 
     @Column(nullable = false)
     private String descripcion;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metodo_pago", nullable = false)
+    private MetodoPago metodoPago;
 
     @Column(name = "comprobante_url")
     private String comprobanteUrl;

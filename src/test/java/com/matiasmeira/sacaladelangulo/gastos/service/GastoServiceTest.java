@@ -3,6 +3,7 @@ package com.matiasmeira.sacaladelangulo.gastos.service;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
@@ -85,7 +86,7 @@ class GastoServiceTest {
     @Test
     @DisplayName("registrarGasto_Exito_Owner")
     void registrarGasto_Exito_Owner() {
-        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(1000), CategoriaGasto.SERVICIOS, "Luz", null);
+        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(1000), CategoriaGasto.SERVICIOS, "Luz", MetodoPago.EFECTIVO, null);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
@@ -107,7 +108,7 @@ class GastoServiceTest {
     @Test
     @DisplayName("registrarGasto_Fallo_Empleado_NoAutorizado")
     void registrarGasto_Fallo_Empleado_NoAutorizado() {
-        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(1000), CategoriaGasto.SERVICIOS, "Luz", null);
+        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(1000), CategoriaGasto.SERVICIOS, "Luz", MetodoPago.EFECTIVO, null);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, empleado.getEmail()))
@@ -121,7 +122,7 @@ class GastoServiceTest {
     @Test
     @DisplayName("registrarGasto_Fallo_MontoInvalido")
     void registrarGasto_Fallo_MontoInvalido() {
-        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.ZERO, CategoriaGasto.SERVICIOS, "Luz", null);
+        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.ZERO, CategoriaGasto.SERVICIOS, "Luz", MetodoPago.EFECTIVO, null);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
@@ -134,7 +135,7 @@ class GastoServiceTest {
     @Test
     @DisplayName("editarGasto_Fallo_NoPertenceAlEstablecimiento")
     void editarGasto_Fallo_NoPertenceAlEstablecimiento() {
-        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(500), CategoriaGasto.OTROS, "Otro", null);
+        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(500), CategoriaGasto.OTROS, "Otro", MetodoPago.EFECTIVO, null);
 
         when(gastoRepository.findByIdAndEstablecimientoId(999L, establecimiento.getId())).thenReturn(Optional.empty());
 
@@ -152,11 +153,12 @@ class GastoServiceTest {
                 .monto(BigDecimal.valueOf(200))
                 .categoria(CategoriaGasto.INSUMOS)
                 .descripcion("Vieja")
+                .metodoPago(MetodoPago.EFECTIVO)
                 .usuarioRegistro(dueno)
                 .fechaCreacion(LocalDateTime.now())
                 .build();
 
-        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(999), CategoriaGasto.MARKETING, "Nueva", "http://x");
+        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(999), CategoriaGasto.MARKETING, "Nueva", MetodoPago.TRANSFERENCIA, "http://x");
 
         when(gastoRepository.findByIdAndEstablecimientoId(50L, establecimiento.getId())).thenReturn(Optional.of(gasto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
@@ -180,6 +182,7 @@ class GastoServiceTest {
                 .monto(BigDecimal.valueOf(100))
                 .categoria(CategoriaGasto.OTROS)
                 .descripcion("A borrar")
+                .metodoPago(MetodoPago.EFECTIVO)
                 .usuarioRegistro(dueno)
                 .build();
 
@@ -201,6 +204,7 @@ class GastoServiceTest {
                 .monto(BigDecimal.valueOf(300))
                 .categoria(CategoriaGasto.ALQUILER)
                 .descripcion("Alquiler mensual")
+                .metodoPago(MetodoPago.EFECTIVO)
                 .usuarioRegistro(dueno)
                 .build();
 

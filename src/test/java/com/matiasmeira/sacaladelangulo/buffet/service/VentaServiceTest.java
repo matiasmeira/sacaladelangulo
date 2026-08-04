@@ -15,6 +15,7 @@ import com.matiasmeira.sacaladelangulo.buffet.model.ProductoBuffet;
 import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepository;
 import com.matiasmeira.sacaladelangulo.buffet.repository.VentaRepository;
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
@@ -128,7 +129,7 @@ class VentaServiceTest {
     @DisplayName("registrarVenta_Exito_UnProducto")
     void registrarVenta_Exito_UnProducto() {
         // Arrange
-        VentaRequest request = new VentaRequest(establecimiento.getId(), null,
+        VentaRequest request = new VentaRequest(establecimiento.getId(), null, MetodoPago.EFECTIVO,
                 List.of(new DetalleVentaRequest(agua.getId(), 3)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
@@ -157,7 +158,7 @@ class VentaServiceTest {
     @DisplayName("registrarVenta_Exito_VariosProductos_SumaTotalCorrectamente")
     void registrarVenta_Exito_VariosProductos_SumaTotalCorrectamente() {
         // Arrange: 2 aguas (1500 c/u) + 1 alfajor (800) = 3800
-        VentaRequest request = new VentaRequest(establecimiento.getId(), null, List.of(
+        VentaRequest request = new VentaRequest(establecimiento.getId(), null, MetodoPago.EFECTIVO, List.of(
                 new DetalleVentaRequest(agua.getId(), 2),
                 new DetalleVentaRequest(alfajor.getId(), 1)
         ));
@@ -186,7 +187,7 @@ class VentaServiceTest {
     @DisplayName("registrarVenta_Exito_StockQuedaNegativoSiNoAlcanza")
     void registrarVenta_Exito_StockQuedaNegativoSiNoAlcanza() {
         // Arrange: se piden 25 aguas, hay 20 (ej. el dueño no cargó el stock inicial a tiempo)
-        VentaRequest request = new VentaRequest(establecimiento.getId(), null,
+        VentaRequest request = new VentaRequest(establecimiento.getId(), null, MetodoPago.EFECTIVO,
                 List.of(new DetalleVentaRequest(agua.getId(), 25)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
@@ -211,7 +212,7 @@ class VentaServiceTest {
     @DisplayName("registrarVenta_Exito_VariosProductosConUnoQuedandoEnStockNegativo")
     void registrarVenta_Exito_VariosProductosConUnoQuedandoEnStockNegativo() {
         // Arrange: agua tiene stock de sobra, alfajor no alcanza pero igual se procesa
-        VentaRequest request = new VentaRequest(establecimiento.getId(), null, List.of(
+        VentaRequest request = new VentaRequest(establecimiento.getId(), null, MetodoPago.EFECTIVO, List.of(
                 new DetalleVentaRequest(agua.getId(), 1),
                 new DetalleVentaRequest(alfajor.getId(), 12)
         ));
@@ -249,7 +250,7 @@ class VentaServiceTest {
                 .isActive(true)
                 .build();
 
-        VentaRequest request = new VentaRequest(establecimiento.getId(), null,
+        VentaRequest request = new VentaRequest(establecimiento.getId(), null, MetodoPago.EFECTIVO,
                 List.of(new DetalleVentaRequest(agua.getId(), 2)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
@@ -277,7 +278,7 @@ class VentaServiceTest {
     @DisplayName("registrarVenta_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
     void registrarVenta_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
         // Arrange
-        VentaRequest request = new VentaRequest(establecimiento.getId(), null,
+        VentaRequest request = new VentaRequest(establecimiento.getId(), null, MetodoPago.EFECTIVO,
                 List.of(new DetalleVentaRequest(agua.getId(), 1)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
@@ -315,7 +316,7 @@ class VentaServiceTest {
                 .establecimiento(otroEstablecimiento)
                 .build();
 
-        VentaRequest request = new VentaRequest(establecimiento.getId(), null,
+        VentaRequest request = new VentaRequest(establecimiento.getId(), null, MetodoPago.EFECTIVO,
                 List.of(new DetalleVentaRequest(productoDeOtroEstablecimiento.getId(), 1)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
@@ -367,7 +368,7 @@ class VentaServiceTest {
                 .build();
 
         VentaRequest request = new VentaRequest(establecimiento.getId(), reservaDeOtroEstablecimiento.getId(),
-                List.of(new DetalleVentaRequest(agua.getId(), 1)));
+                MetodoPago.EFECTIVO, List.of(new DetalleVentaRequest(agua.getId(), 1)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(reservaRepository.findById(reservaDeOtroEstablecimiento.getId())).thenReturn(Optional.of(reservaDeOtroEstablecimiento));
@@ -406,7 +407,7 @@ class VentaServiceTest {
                 .build();
 
         VentaRequest request = new VentaRequest(establecimiento.getId(), reservaCancelada.getId(),
-                List.of(new DetalleVentaRequest(agua.getId(), 1)));
+                MetodoPago.EFECTIVO, List.of(new DetalleVentaRequest(agua.getId(), 1)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(reservaRepository.findById(reservaCancelada.getId())).thenReturn(Optional.of(reservaCancelada));
@@ -446,7 +447,7 @@ class VentaServiceTest {
                 .build();
 
         VentaRequest request = new VentaRequest(establecimiento.getId(), reserva.getId(),
-                List.of(new DetalleVentaRequest(agua.getId(), 1)));
+                MetodoPago.EFECTIVO, List.of(new DetalleVentaRequest(agua.getId(), 1)));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(reservaRepository.findById(reserva.getId())).thenReturn(Optional.of(reserva));
@@ -494,6 +495,7 @@ class VentaServiceTest {
                 .fechaHora(LocalDateTime.now())
                 .total(BigDecimal.valueOf(6100))
                 .estado(EstadoVenta.CONFIRMADA)
+                .metodoPago(MetodoPago.EFECTIVO)
                 .detalles(List.of(detalleAgua, detalleAlfajor))
                 .build();
 
@@ -529,6 +531,7 @@ class VentaServiceTest {
                 .fechaHora(LocalDateTime.now())
                 .total(BigDecimal.valueOf(4500))
                 .estado(EstadoVenta.CANCELADA)
+                .metodoPago(MetodoPago.EFECTIVO)
                 .detalles(List.of(detalle))
                 .build();
 
@@ -555,6 +558,7 @@ class VentaServiceTest {
                 .fechaHora(LocalDateTime.now())
                 .total(BigDecimal.valueOf(1500))
                 .estado(EstadoVenta.CONFIRMADA)
+                .metodoPago(MetodoPago.EFECTIVO)
                 .detalles(List.of())
                 .build();
 

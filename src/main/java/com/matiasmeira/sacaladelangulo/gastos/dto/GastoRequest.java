@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.gastos.dto;
 
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.gastos.model.CategoriaGasto;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -21,6 +22,9 @@ public record GastoRequest(
 
         @NotBlank(message = "La descripción es obligatoria")
         String descripcion,
+
+        @NotNull(message = "El método de pago es obligatorio")
+        MetodoPago metodoPago,
 
         String comprobanteUrl
 ) {

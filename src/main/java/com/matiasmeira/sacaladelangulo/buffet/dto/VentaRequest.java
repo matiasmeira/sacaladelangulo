@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.buffet.dto;
 
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -15,6 +16,9 @@ public record VentaRequest(
         Long establecimientoId,
 
         Long reservaId,
+
+        @NotNull(message = "El método de pago es obligatorio")
+        MetodoPago metodoPago,
 
         @NotEmpty(message = "Debe incluir al menos un producto en la venta")
         @Valid

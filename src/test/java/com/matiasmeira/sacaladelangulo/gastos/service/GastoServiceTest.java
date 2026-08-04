@@ -2,6 +2,9 @@ package com.matiasmeira.sacaladelangulo.gastos.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.OrigenMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
@@ -52,6 +55,9 @@ class GastoServiceTest {
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
+    @Mock
+    private TurnoCajaService turnoCajaService;
+
     private GastoService gastoService;
 
     private Usuario dueno;
@@ -60,7 +66,7 @@ class GastoServiceTest {
 
     @BeforeEach
     void setUp() {
-        gastoService = new GastoService(gastoRepository, establecimientoRepository, autorizacionEmpleadoService, new GastoMapper());
+        gastoService = new GastoService(gastoRepository, establecimientoRepository, autorizacionEmpleadoService, new GastoMapper(), turnoCajaService);
 
         dueno = Usuario.builder()
                 .id(2L)
@@ -103,6 +109,10 @@ class GastoServiceTest {
         assertEquals(0, BigDecimal.valueOf(1000).compareTo(response.monto()));
         assertEquals("SERVICIOS", response.categoria());
         assertEquals(dueno.getId(), response.usuarioRegistroId());
+        verify(turnoCajaService).registrarMovimientoSiCorresponde(
+                eq(establecimiento), eq(TipoMovimientoCaja.EGRESO), eq(OrigenMovimientoCaja.GASTO),
+                eq(MetodoPago.EFECTIVO), eq(BigDecimal.valueOf(1000)), eq("Gasto: Luz"),
+                eq(100L), eq(dueno));
     }
 
     @Test

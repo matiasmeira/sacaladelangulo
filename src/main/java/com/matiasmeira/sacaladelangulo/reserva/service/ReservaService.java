@@ -4,6 +4,9 @@ import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.OrigenMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.exception.JugadorBloqueadoException;
 import com.matiasmeira.sacaladelangulo.core.exception.ReservaExpiradaException;
@@ -99,6 +102,7 @@ public class ReservaService {
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final RegistroAuditoriaService registroAuditoriaService;
     private final ApplicationEventPublisher eventPublisher;
+    private final TurnoCajaService turnoCajaService;
 
     /**
      * Crea una nueva reserva con validación de solapamientos y disponibilidad de pool.
@@ -712,6 +716,14 @@ public class ReservaService {
             reserva.setMetodoPago(metodoPago);
             Reserva reservaActualizada = reservaRepository.save(reserva);
             log.info("Reserva finalizada con éxito. ID: {}", reservaId);
+
+            BigDecimal montoCobrado = reservaActualizada.getPrecioTotal().subtract(reservaActualizada.getSenaPagada());
+            if (montoCobrado.signum() > 0) {
+                turnoCajaService.registrarMovimientoSiCorresponde(
+                        reservaActualizada.getCancha().getEstablecimiento(), TipoMovimientoCaja.INGRESO,
+                        OrigenMovimientoCaja.RESERVA, metodoPago, montoCobrado,
+                        "Reserva #" + reservaId + " finalizada", reservaId, usuarioAutenticado);
+            }
 
             registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.FINALIZAR_RESERVA, reservaId, true, "Reserva finalizada");
             return reservaMapper.mapToResponse(reservaActualizada);

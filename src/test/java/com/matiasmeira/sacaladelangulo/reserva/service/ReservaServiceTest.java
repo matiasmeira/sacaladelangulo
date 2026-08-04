@@ -4,6 +4,9 @@ import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.OrigenMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.JugadorBloqueadoException;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
@@ -99,6 +102,9 @@ class ReservaServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private TurnoCajaService turnoCajaService;
 
     @InjectMocks
     private ReservaService reservaService;
@@ -1215,6 +1221,71 @@ class ReservaServiceTest {
         // Assert
         assert response.estado().equals("FINALIZADA");
         verify(reservaRepository).save(argThat(r -> r.getEstado() == EstadoReserva.FINALIZADA && r.getMetodoPago() == MetodoPago.EFECTIVO));
+        // montoCobrado = precioTotal (1500) - senaPagada (500) = 1000
+        verify(turnoCajaService).registrarMovimientoSiCorresponde(
+                eq(establecimiento), eq(TipoMovimientoCaja.INGRESO), eq(OrigenMovimientoCaja.RESERVA),
+                eq(MetodoPago.EFECTIVO), eq(BigDecimal.valueOf(1000)), eq("Reserva #" + reservaConfirmada.getId() + " finalizada"),
+                eq(reservaConfirmada.getId()), eq(dueno));
+    }
+
+    @Test
+    @DisplayName("finalizarReserva_Exito_MetodoPagoNoEfectivo_IgualLlamaAlHook")
+    void finalizarReserva_Exito_MetodoPagoNoEfectivo_IgualLlamaAlHook() {
+        // Arrange: registrarMovimientoSiCorresponde es el único punto de decisión sobre si el
+        // pago fue en efectivo o no (ver TurnoCajaService); ReservaService siempre lo llama
+        // cuando hay saldo positivo, delegando ese no-op interno.
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(55L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+        when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        assertDoesNotThrow(
+                () -> reservaService.finalizarReserva(reservaConfirmada.getId(), MetodoPago.TARJETA_CREDITO, dueno.getEmail()));
+
+        // Assert
+        verify(turnoCajaService).registrarMovimientoSiCorresponde(
+                eq(establecimiento), eq(TipoMovimientoCaja.INGRESO), eq(OrigenMovimientoCaja.RESERVA),
+                eq(MetodoPago.TARJETA_CREDITO), eq(BigDecimal.valueOf(1000)), eq("Reserva #" + reservaConfirmada.getId() + " finalizada"),
+                eq(reservaConfirmada.getId()), eq(dueno));
+    }
+
+    @Test
+    @DisplayName("finalizarReserva_Exito_MontoCobradoCero_NoLlamaAlHook")
+    void finalizarReserva_Exito_MontoCobradoCero_NoLlamaAlHook() {
+        // Arrange: la seña ya cubrió el precio total completo (por ejemplo un turno fijo
+        // sin saldo pendiente), no hay nada más que cobrar al finalizar.
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(56L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(1500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+        when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        assertDoesNotThrow(
+                () -> reservaService.finalizarReserva(reservaConfirmada.getId(), MetodoPago.EFECTIVO, dueno.getEmail()));
+
+        // Assert
+        verify(turnoCajaService, never()).registrarMovimientoSiCorresponde(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -1244,6 +1315,8 @@ class ReservaServiceTest {
         assert response.estado().equals("FINALIZADA");
         assert response.metodoPago().equals("EFECTIVO");
         verify(reservaRepository, never()).save(any());
+        // El path idempotente no debe generar un movimiento de caja duplicado.
+        verify(turnoCajaService, never()).registrarMovimientoSiCorresponde(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

@@ -1,6 +1,9 @@
 package com.matiasmeira.sacaladelangulo.gastos.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.OrigenMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
@@ -35,6 +38,7 @@ public class GastoService {
     private final EstablecimientoRepository establecimientoRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final GastoMapper gastoMapper;
+    private final TurnoCajaService turnoCajaService;
 
     @Transactional
     public GastoResponse registrarGasto(Long establecimientoId, GastoRequest request, String email) {
@@ -56,6 +60,12 @@ public class GastoService {
 
         gasto = gastoRepository.save(gasto);
         log.info("Gasto registrado. Establecimiento: {}, Categoría: {}, Monto: {}", establecimientoId, gasto.getCategoria(), gasto.getMonto());
+
+        turnoCajaService.registrarMovimientoSiCorresponde(
+                establecimiento, TipoMovimientoCaja.EGRESO, OrigenMovimientoCaja.GASTO,
+                gasto.getMetodoPago(), gasto.getMonto(), "Gasto: " + gasto.getDescripcion(),
+                gasto.getId(), usuarioAutenticado);
+
         return gastoMapper.mapToResponse(gasto);
     }
 

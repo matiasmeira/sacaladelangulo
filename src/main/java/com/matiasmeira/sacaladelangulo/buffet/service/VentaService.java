@@ -14,6 +14,9 @@ import com.matiasmeira.sacaladelangulo.buffet.model.ProductoBuffet;
 import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepository;
 import com.matiasmeira.sacaladelangulo.buffet.repository.VentaRepository;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.OrigenMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
@@ -50,6 +53,7 @@ public class VentaService {
     private final VentaMapper ventaMapper;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final RegistroAuditoriaService registroAuditoriaService;
+    private final TurnoCajaService turnoCajaService;
 
     /**
      * Registra una venta de uno o más productos del buffet, descontando el stock
@@ -122,6 +126,11 @@ public class VentaService {
             Venta ventaGuardada = ventaRepository.save(venta);
             log.info("Venta registrada con éxito. ID: {}, Establecimiento: {}, Total: {}",
                     ventaGuardada.getId(), establecimiento.getId(), total);
+
+            turnoCajaService.registrarMovimientoSiCorresponde(
+                    establecimiento, TipoMovimientoCaja.INGRESO, OrigenMovimientoCaja.VENTA_BUFFET,
+                    ventaGuardada.getMetodoPago(), ventaGuardada.getTotal(),
+                    "Venta buffet #" + ventaGuardada.getId(), ventaGuardada.getId(), usuarioAutenticado);
 
             registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.REGISTRAR_VENTA_BUFFET,
                     ventaGuardada.getId(), true, "Venta registrada por un total de " + total);

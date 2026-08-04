@@ -15,6 +15,9 @@ import com.matiasmeira.sacaladelangulo.buffet.model.ProductoBuffet;
 import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepository;
 import com.matiasmeira.sacaladelangulo.buffet.repository.VentaRepository;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.OrigenMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
+import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
@@ -73,6 +76,9 @@ class VentaServiceTest {
     @Mock
     private RegistroAuditoriaService registroAuditoriaService;
 
+    @Mock
+    private TurnoCajaService turnoCajaService;
+
     private VentaService ventaService;
 
     private Usuario dueno;
@@ -85,7 +91,7 @@ class VentaServiceTest {
         ventaService = new VentaService(
                 ventaRepository, productoBuffetRepository, establecimientoRepository,
                 reservaRepository, usuarioRepository, new VentaMapper(),
-                autorizacionEmpleadoService, registroAuditoriaService);
+                autorizacionEmpleadoService, registroAuditoriaService, turnoCajaService);
 
         dueno = Usuario.builder()
                 .id(2L)
@@ -152,6 +158,10 @@ class VentaServiceTest {
         assertEquals("CONFIRMADA", response.estado());
         assertEquals(17, agua.getStock());
         verify(productoBuffetRepository).save(agua);
+        verify(turnoCajaService).registrarMovimientoSiCorresponde(
+                eq(establecimiento), eq(TipoMovimientoCaja.INGRESO), eq(OrigenMovimientoCaja.VENTA_BUFFET),
+                eq(MetodoPago.EFECTIVO), eq(BigDecimal.valueOf(4500)), eq("Venta buffet #" + response.id()),
+                eq(response.id()), eq(dueno));
     }
 
     @Test

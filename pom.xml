@@ -119,6 +119,26 @@
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
+
+		<!-- Testcontainers: solo test scope, para los tests adversariales que necesitan
+		     una base Postgres real (constraints, índices parciales, locking pesimista
+		     bajo concurrencia real con varios hilos). Versión gestionada por el BOM de
+		     spring-boot-starter-parent (spring-boot-dependencies), no se fija a mano. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

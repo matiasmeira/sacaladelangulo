@@ -104,8 +104,8 @@ public class ReporteController {
     @Operation(
             summary = "Reporte de clientes del establecimiento",
             description = "Clientes nuevos (primera reserva FINALIZADA de ese jugador en este establecimiento dentro " +
-                    "del período), ausencias (no implementado todavía: el modelo no registra asistencia/no-show) y " +
-                    "top N clientes por cantidad de reservas en el rango (sin comparar con el período anterior)."
+                    "del período), ausencias (cantidad de reservas marcadas AUSENTE/no-show del establecimiento en " +
+                    "el rango) y top N clientes por cantidad de reservas en el rango (sin comparar con el período anterior)."
     )
     public ResponseEntity<ClientesReporteResponse> obtenerClientes(
             @PathVariable Long establecimientoId,

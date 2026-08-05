@@ -17,9 +17,9 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -55,6 +55,8 @@ class ReporteClientesServiceTest {
         ));
         when(reservaRepository.topClientesPorReservas(eq(establecimientoId), eq(PeriodoUtil.inicioDelDia(desde)), eq(PeriodoUtil.finDelDia(hasta)), eq(PageRequest.of(0, 10))))
                 .thenReturn(List.of());
+        when(reservaRepository.countAusenciasEnRango(eq(establecimientoId), eq(PeriodoUtil.inicioDelDia(desde)), eq(PeriodoUtil.finDelDia(hasta))))
+                .thenReturn(0L);
 
         ClientesReporteResponse response = reporteClientesService.obtenerClientes(establecimientoId, desde, hasta, 10, "dueno@test.com");
 
@@ -77,18 +79,24 @@ class ReporteClientesServiceTest {
                         new Object[]{1L, "Juan", 5L},
                         new Object[]{2L, "Pedro", 3L}
                 ));
+        when(reservaRepository.countAusenciasPorJugadoresEnRango(eq(establecimientoId), eq(List.of(1L, 2L)), eq(PeriodoUtil.inicioDelDia(desde)), eq(PeriodoUtil.finDelDia(hasta))))
+                .thenReturn(List.<Object[]>of(new Object[]{1L, 2L}));
+        when(reservaRepository.countAusenciasEnRango(eq(establecimientoId), eq(PeriodoUtil.inicioDelDia(desde)), eq(PeriodoUtil.finDelDia(hasta))))
+                .thenReturn(0L);
 
         ClientesReporteResponse response = reporteClientesService.obtenerClientes(establecimientoId, desde, hasta, 2, "dueno@test.com");
 
         assertEquals(2, response.topClientes().size());
         assertEquals("Juan", response.topClientes().get(0).nombre());
         assertEquals(5L, response.topClientes().get(0).cantidadReservas());
+        assertEquals(2L, response.topClientes().get(0).ausencias());
         assertEquals("Pedro", response.topClientes().get(1).nombre());
+        assertEquals(0L, response.topClientes().get(1).ausencias());
     }
 
     @Test
-    @DisplayName("Ausencias se devuelve como no disponible: no hay ningún dato de asistencia en el modelo")
-    void obtenerClientes_Ausencias_NoDisponible() {
+    @DisplayName("Ausencias cuenta las reservas AUSENTE del establecimiento en el rango")
+    void obtenerClientes_Ausencias_CuentaReservasAusentes() {
         Long establecimientoId = 10L;
         LocalDate desde = LocalDate.now().plusDays(30);
         LocalDate hasta = desde;
@@ -98,11 +106,14 @@ class ReporteClientesServiceTest {
         when(reservaRepository.primeraReservaPorJugador(establecimientoId)).thenReturn(List.of());
         when(reservaRepository.topClientesPorReservas(eq(establecimientoId), eq(PeriodoUtil.inicioDelDia(desde)), eq(PeriodoUtil.finDelDia(hasta)), eq(PageRequest.of(0, 10))))
                 .thenReturn(List.of());
+        when(reservaRepository.countAusenciasEnRango(eq(establecimientoId), eq(PeriodoUtil.inicioDelDia(desde)), eq(PeriodoUtil.finDelDia(hasta))))
+                .thenReturn(4L);
 
         ClientesReporteResponse response = reporteClientesService.obtenerClientes(establecimientoId, desde, hasta, 10, "dueno@test.com");
 
-        assertFalse(response.ausencias().disponible());
-        assertNull(response.ausencias().total());
+        assertTrue(response.ausencias().disponible());
+        assertEquals(4L, response.ausencias().total());
+        assertNull(response.ausencias().motivoNoDisponible());
     }
 
     @Test

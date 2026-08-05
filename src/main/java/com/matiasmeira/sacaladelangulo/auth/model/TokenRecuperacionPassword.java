@@ -13,6 +13,9 @@ import java.time.LocalDateTime;
  * Token opaco de un solo uso para recuperar la contraseña de un usuario (ver
  * RecuperacionPasswordService). Mismo criterio que TokenVerificacionEmail: no es un JWT
  * ni autentica nada por sí mismo, solo habilita el reset puntual de la contraseña.
+ *
+ * <p>tokenHash/codigoHash guardan el hash SHA-256 (ver TokenHasher), nunca el valor crudo
+ * (ver M-05 en la auditoría).
  */
 @Getter
 @Setter
@@ -20,7 +23,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "tokens_recuperacion_password", indexes = @Index(columnList = "token", unique = true))
+@Table(name = "tokens_recuperacion_password", indexes = @Index(columnList = "token_hash", unique = true))
 public class TokenRecuperacionPassword {
 
     @Id
@@ -30,11 +33,11 @@ public class TokenRecuperacionPassword {
     @Column(nullable = false)
     private String email;
 
-    @Column(nullable = false, unique = true)
-    private String token;
+    @Column(name = "token_hash", nullable = false, unique = true)
+    private String tokenHash;
 
-    @Column(nullable = false)
-    private String codigo;
+    @Column(name = "codigo_hash", nullable = false)
+    private String codigoHash;
 
     @Column(nullable = false)
     private LocalDateTime fechaExpiracion;

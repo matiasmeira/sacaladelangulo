@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.CodigoVerificacionRepository;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.core.security.TokenHasher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -46,10 +47,11 @@ public class UsuarioService {
         // Generar código aleatorio de 6 dígitos
         String codigo = String.format("%06d", random.nextInt(1000000));
 
-        // Crear y guardar el código con expiración a 5 minutos
+        // Crear y guardar el código con expiración a 5 minutos. Solo se persiste el hash
+        // (ver M-05 en la auditoría): el valor crudo únicamente viaja por SMS/log de dev.
         CodigoVerificacion codigoVerificacion = CodigoVerificacion.builder()
                 .email(email)
-                .codigo(codigo)
+                .codigoHash(TokenHasher.sha256Hex(codigo))
                 .telefonoPendiente(telefono)
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(5))
                 .build();
@@ -92,7 +94,7 @@ public class UsuarioService {
             throw new IllegalArgumentException("Se superó el número máximo de intentos. Solicitá un nuevo código.");
         }
 
-        if (!codigoVerificacion.getCodigo().equals(codigo)) {
+        if (!codigoVerificacion.getCodigoHash().equals(TokenHasher.sha256Hex(codigo))) {
             codigoVerificacion.setIntentos(codigoVerificacion.getIntentos() + 1);
             codigoVerificacionRepository.save(codigoVerificacion);
             throw new IllegalArgumentException("Código inválido o expirado");

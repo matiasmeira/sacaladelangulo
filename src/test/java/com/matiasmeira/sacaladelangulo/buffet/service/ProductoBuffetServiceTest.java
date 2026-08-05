@@ -2,13 +2,13 @@ package com.matiasmeira.sacaladelangulo.buffet.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.buffet.dto.AjustarStockRequest;
 import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetMapper;
 import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetRequest;
 import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetResponse;
 import com.matiasmeira.sacaladelangulo.buffet.model.ProductoBuffet;
 import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepository;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +41,7 @@ class ProductoBuffetServiceTest {
     private EstablecimientoRepository establecimientoRepository;
 
     @Mock
-    private UsuarioRepository usuarioRepository;
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     private ProductoBuffetService productoBuffetService;
 
@@ -51,7 +51,7 @@ class ProductoBuffetServiceTest {
     @BeforeEach
     void setUp() {
         productoBuffetService = new ProductoBuffetService(
-                productoBuffetRepository, establecimientoRepository, usuarioRepository, new ProductoBuffetMapper());
+                productoBuffetRepository, establecimientoRepository, autorizacionEmpleadoService, new ProductoBuffetMapper());
 
         dueno = Usuario.builder()
                 .id(2L)
@@ -78,7 +78,7 @@ class ProductoBuffetServiceTest {
         ProductoBuffetRequest request = new ProductoBuffetRequest("Agua mineral", "500ml", BigDecimal.valueOf(1500), 20);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(invocation -> {
             ProductoBuffet producto = invocation.getArgument(0);
             producto.setId(1L);
@@ -109,7 +109,8 @@ class ProductoBuffetServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(
@@ -135,7 +136,7 @@ class ProductoBuffetServiceTest {
         ProductoBuffetRequest request = new ProductoBuffetRequest("Agua con gas", "500ml, con gas", BigDecimal.valueOf(1800), 99);
 
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -163,7 +164,7 @@ class ProductoBuffetServiceTest {
         AjustarStockRequest request = new AjustarStockRequest(10);
 
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -189,7 +190,7 @@ class ProductoBuffetServiceTest {
         AjustarStockRequest request = new AjustarStockRequest(-5);
 
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -215,7 +216,7 @@ class ProductoBuffetServiceTest {
         AjustarStockRequest request = new AjustarStockRequest(-10);
 
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act & Assert
         assertThrows(
@@ -238,7 +239,7 @@ class ProductoBuffetServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(productoBuffetRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(producto));
 
         // Act
@@ -263,7 +264,7 @@ class ProductoBuffetServiceTest {
                 .build();
 
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act
         assertDoesNotThrow(() -> productoBuffetService.eliminarProducto(establecimiento.getId(), producto.getId(), dueno.getEmail()));

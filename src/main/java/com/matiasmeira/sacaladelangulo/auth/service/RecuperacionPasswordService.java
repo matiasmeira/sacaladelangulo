@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.TokenExpiradoException;
 import com.matiasmeira.sacaladelangulo.core.exception.TokenInvalidoException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
+import com.matiasmeira.sacaladelangulo.core.security.TokenHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -91,10 +92,12 @@ public class RecuperacionPasswordService {
 
         String token = UUID.randomUUID().toString();
         String codigo = String.format("%06d", random.nextInt(1000000));
+        // Solo se persiste el hash (ver M-05 en la auditoría): el valor crudo únicamente
+        // viaja en el link/email enviado al usuario, nunca a la base.
         TokenRecuperacionPassword tokenRecuperacion = TokenRecuperacionPassword.builder()
                 .email(email)
-                .token(token)
-                .codigo(codigo)
+                .tokenHash(TokenHasher.sha256Hex(token))
+                .codigoHash(TokenHasher.sha256Hex(codigo))
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(TOKEN_EXPIRACION_MINUTOS))
                 .build();
         tokenRecuperacionPasswordRepository.save(tokenRecuperacion);
@@ -160,7 +163,7 @@ public class RecuperacionPasswordService {
             throw new RateLimitExceededException("Demasiados intentos, pedí un nuevo código");
         }
 
-        if (!tokenRecuperacion.getCodigo().equals(codigo)) {
+        if (!tokenRecuperacion.getCodigoHash().equals(TokenHasher.sha256Hex(codigo))) {
             tokenRecuperacion.setIntentos(tokenRecuperacion.getIntentos() + 1);
             tokenRecuperacionPasswordRepository.save(tokenRecuperacion);
             throw new IllegalArgumentException("Código incorrecto");
@@ -170,7 +173,7 @@ public class RecuperacionPasswordService {
     }
 
     private TokenRecuperacionPassword buscarTokenValidoPorToken(String token) {
-        TokenRecuperacionPassword tokenRecuperacion = tokenRecuperacionPasswordRepository.findByToken(token)
+        TokenRecuperacionPassword tokenRecuperacion = tokenRecuperacionPasswordRepository.findByTokenHash(TokenHasher.sha256Hex(token))
                 .orElseThrow(() -> new TokenInvalidoException("El token de recuperación no es válido"));
         return validarExpiracion(tokenRecuperacion);
     }

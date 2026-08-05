@@ -3,7 +3,6 @@ package com.matiasmeira.sacaladelangulo.buffet.service;
 import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.buffet.dto.DetalleVentaRequest;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaMapper;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaRequest;
@@ -28,7 +27,6 @@ import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,7 +47,6 @@ public class VentaService {
     private final ProductoBuffetRepository productoBuffetRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final ReservaRepository reservaRepository;
-    private final UsuarioRepository usuarioRepository;
     private final VentaMapper ventaMapper;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final RegistroAuditoriaService registroAuditoriaService;
@@ -162,7 +159,7 @@ public class VentaService {
 
         Venta venta = ventaRepository.findByIdConDetalles(ventaId)
                 .orElseThrow(() -> new EntityNotFoundException("Venta no encontrada"));
-        validarPropietarioOAdmin(venta.getEstablecimiento(), email);
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(venta.getEstablecimiento(), email);
 
         if (venta.getEstado() == EstadoVenta.CANCELADA) {
             log.info("Venta ya se encontraba cancelada. ID: {}", ventaId);
@@ -188,6 +185,16 @@ public class VentaService {
         venta.setEstado(EstadoVenta.CANCELADA);
         Venta ventaCancelada = ventaRepository.save(venta);
         log.info("Venta cancelada con éxito. ID: {}", ventaId);
+
+        // Revierte el ingreso de caja que generó la venta original (si correspondía), para
+        // que el arqueo no reporte un faltante falso tras anular una venta en efectivo (ver
+        // M-04 en la auditoría). Se registra contra el turno actualmente abierto, con el
+        // mismo criterio que registrarMovimientoSiCorresponde: si no hay turno abierto o el
+        // pago no fue en efectivo, es un no-op.
+        turnoCajaService.registrarMovimientoSiCorresponde(
+                venta.getEstablecimiento(), TipoMovimientoCaja.EGRESO, OrigenMovimientoCaja.VENTA_BUFFET,
+                venta.getMetodoPago(), venta.getTotal(),
+                "Venta buffet #" + ventaId + " anulada", ventaId, usuarioAutenticado);
 
         return ventaMapper.mapToResponse(ventaCancelada);
     }
@@ -218,12 +225,4 @@ public class VentaService {
         return producto;
     }
 
-    private void validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
-    }
 }

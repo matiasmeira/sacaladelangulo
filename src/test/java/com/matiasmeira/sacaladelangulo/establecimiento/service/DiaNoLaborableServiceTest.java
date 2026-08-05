@@ -2,7 +2,7 @@ package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.DiaNoLaborableRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.DiaNoLaborableResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
@@ -40,7 +40,7 @@ class DiaNoLaborableServiceTest {
     private EstablecimientoRepository establecimientoRepository;
 
     @Mock
-    private UsuarioRepository usuarioRepository;
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @InjectMocks
     private DiaNoLaborableService diaNoLaborableService;
@@ -75,7 +75,7 @@ class DiaNoLaborableServiceTest {
         DiaNoLaborableRequest request = new DiaNoLaborableRequest(LocalDate.of(2030, 12, 25), "Navidad");
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(diaNoLaborableRepository.existsByEstablecimientoIdAndFecha(establecimiento.getId(), request.fecha()))
                 .thenReturn(false);
         when(diaNoLaborableRepository.save(any(DiaNoLaborable.class))).thenAnswer(invocation -> {
@@ -101,7 +101,7 @@ class DiaNoLaborableServiceTest {
         DiaNoLaborableRequest request = new DiaNoLaborableRequest(LocalDate.of(2030, 12, 25), "Navidad");
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(diaNoLaborableRepository.existsByEstablecimientoIdAndFecha(establecimiento.getId(), request.fecha()))
                 .thenReturn(true);
 
@@ -126,7 +126,8 @@ class DiaNoLaborableServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(
@@ -148,7 +149,7 @@ class DiaNoLaborableServiceTest {
                 .build();
 
         when(diaNoLaborableRepository.findById(diaNoLaborable.getId())).thenReturn(Optional.of(diaNoLaborable));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act
         assertDoesNotThrow(() -> diaNoLaborableService.eliminar(establecimiento.getId(), diaNoLaborable.getId(), dueno.getEmail()));
@@ -201,7 +202,7 @@ class DiaNoLaborableServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(diaNoLaborableRepository.findByEstablecimientoIdOrderByFechaAsc(establecimiento.getId()))
                 .thenReturn(List.of(diaNoLaborable));
 

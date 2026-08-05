@@ -1,8 +1,5 @@
 package com.matiasmeira.sacaladelangulo.buffet.service;
 
-import com.matiasmeira.sacaladelangulo.auth.model.Role;
-import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.buffet.dto.MetricasVentasResponse;
 import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoMasVendidoResponse;
 import com.matiasmeira.sacaladelangulo.buffet.model.DetalleVenta;
@@ -10,10 +7,10 @@ import com.matiasmeira.sacaladelangulo.buffet.model.EstadoVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.buffet.repository.VentaRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,7 +34,7 @@ public class VentaMetricasService {
 
     private final VentaRepository ventaRepository;
     private final EstablecimientoRepository establecimientoRepository;
-    private final UsuarioRepository usuarioRepository;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     /**
      * Métricas de ventas del buffet en un rango de fechas (inclusive): ingreso total,
@@ -48,7 +45,7 @@ public class VentaMetricasService {
     public MetricasVentasResponse obtenerMetricas(Long establecimientoId, LocalDate desde, LocalDate hasta, String email) {
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-        validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         if (desde.isAfter(hasta)) {
             throw new IllegalArgumentException("La fecha 'desde' no puede ser posterior a 'hasta'");
@@ -96,12 +93,4 @@ public class VentaMetricasService {
                 .toList();
     }
 
-    private void validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
-    }
 }

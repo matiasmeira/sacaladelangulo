@@ -2,7 +2,6 @@ package com.matiasmeira.sacaladelangulo.buffet.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.buffet.dto.DetalleVentaRequest;
@@ -68,9 +67,6 @@ class VentaServiceTest {
     private ReservaRepository reservaRepository;
 
     @Mock
-    private UsuarioRepository usuarioRepository;
-
-    @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Mock
@@ -90,7 +86,7 @@ class VentaServiceTest {
     void setUp() {
         ventaService = new VentaService(
                 ventaRepository, productoBuffetRepository, establecimientoRepository,
-                reservaRepository, usuarioRepository, new VentaMapper(),
+                reservaRepository, new VentaMapper(),
                 autorizacionEmpleadoService, registroAuditoriaService, turnoCajaService);
 
         dueno = Usuario.builder()
@@ -510,7 +506,7 @@ class VentaServiceTest {
                 .build();
 
         when(ventaRepository.findByIdConDetalles(venta.getId())).thenReturn(Optional.of(venta));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -522,6 +518,36 @@ class VentaServiceTest {
         assertEquals(10, alfajor.getStock());
         verify(productoBuffetRepository).save(agua);
         verify(productoBuffetRepository).save(alfajor);
+        // Ver M-04 en la auditoría: anular una venta en efectivo debe revertir el ingreso
+        // de caja que generó, para que el arqueo no reporte un faltante falso.
+        verify(turnoCajaService).registrarMovimientoSiCorresponde(
+                eq(establecimiento), eq(TipoMovimientoCaja.EGRESO), eq(OrigenMovimientoCaja.VENTA_BUFFET),
+                eq(MetodoPago.EFECTIVO), eq(BigDecimal.valueOf(6100)), eq("Venta buffet #" + venta.getId() + " anulada"),
+                eq(venta.getId()), eq(dueno));
+    }
+
+    @Test
+    @DisplayName("cancelarVenta_Exito_SiYaEstabaCancelada_NoDuplicaMovimientoDeCaja")
+    void cancelarVenta_Exito_SiYaEstabaCancelada_NoDuplicaMovimientoDeCaja() {
+        // Arrange: idempotencia también aplica al movimiento compensatorio de caja, no solo
+        // al stock (complementa cancelarVenta_Exito_EsIdempotenteSiYaEstabaCancelada).
+        Venta ventaYaCancelada = Venta.builder()
+                .id(203L)
+                .establecimiento(establecimiento)
+                .fechaHora(LocalDateTime.now())
+                .total(BigDecimal.valueOf(1500))
+                .estado(EstadoVenta.CANCELADA)
+                .metodoPago(MetodoPago.EFECTIVO)
+                .detalles(List.of())
+                .build();
+
+        when(ventaRepository.findByIdConDetalles(ventaYaCancelada.getId())).thenReturn(Optional.of(ventaYaCancelada));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+
+        assertDoesNotThrow(() -> ventaService.cancelarVenta(ventaYaCancelada.getId(), dueno.getEmail()));
+
+        verify(turnoCajaService, never()).registrarMovimientoSiCorresponde(
+                any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -546,7 +572,7 @@ class VentaServiceTest {
                 .build();
 
         when(ventaRepository.findByIdConDetalles(ventaYaCancelada.getId())).thenReturn(Optional.of(ventaYaCancelada));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act
         VentaResponse response = assertDoesNotThrow(
@@ -579,7 +605,8 @@ class VentaServiceTest {
                 .build();
 
         when(ventaRepository.findByIdConDetalles(venta.getId())).thenReturn(Optional.of(venta));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(

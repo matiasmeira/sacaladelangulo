@@ -15,10 +15,10 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaR
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +37,7 @@ public class BloqueoCanchaService {
     private final ReservaRepository reservaRepository;
     private final ReservaMapper reservaMapper;
     private final UsuarioRepository usuarioRepository;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Transactional
     public BloqueoCanchaResponse crearBloqueo(Long establecimientoId, Long canchaId, BloqueoCanchaRequest request, String email) {
@@ -45,7 +46,7 @@ public class BloqueoCanchaService {
         }
 
         Cancha cancha = buscarCanchaDelEstablecimiento(establecimientoId, canchaId);
-        validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
 
         BloqueoCancha bloqueo = BloqueoCancha.builder()
                 .cancha(cancha)
@@ -151,7 +152,7 @@ public class BloqueoCanchaService {
             throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
         }
 
-        validarPropietarioOAdmin(bloqueo.getCancha().getEstablecimiento(), email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(bloqueo.getCancha().getEstablecimiento(), email);
 
         bloqueoCanchaRepository.delete(bloqueo);
         log.info("Bloqueo {} eliminado de la cancha {}", bloqueoId, canchaId);
@@ -160,7 +161,7 @@ public class BloqueoCanchaService {
     @Transactional(readOnly = true)
     public List<BloqueoCanchaResponse> listarPorCancha(Long establecimientoId, Long canchaId, String email) {
         Cancha cancha = buscarCanchaDelEstablecimiento(establecimientoId, canchaId);
-        validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
 
         return bloqueoCanchaRepository.findByCanchaIdOrderByFechaInicioAsc(canchaId).stream()
                 .map(this::mapSinReservasAfectadas)
@@ -212,12 +213,4 @@ public class BloqueoCanchaService {
         return cancha;
     }
 
-    private void validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
-    }
 }

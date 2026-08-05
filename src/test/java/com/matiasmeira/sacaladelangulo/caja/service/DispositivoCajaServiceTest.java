@@ -2,7 +2,6 @@ package com.matiasmeira.sacaladelangulo.caja.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.caja.dto.ActivarLocalRequest;
 import com.matiasmeira.sacaladelangulo.caja.dto.ActivarLocalResponse;
 import com.matiasmeira.sacaladelangulo.caja.dto.ConsumirCodigoResponse;
@@ -15,6 +14,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
@@ -59,7 +59,7 @@ class DispositivoCajaServiceTest {
     private EstablecimientoRepository establecimientoRepository;
 
     @Mock
-    private UsuarioRepository usuarioRepository;
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Mock
     private RateLimiterService rateLimiterService;
@@ -79,7 +79,7 @@ class DispositivoCajaServiceTest {
     void setUp() {
         dispositivoCajaService = new DispositivoCajaService(
                 dispositivoCajaRepository, codigoEmparejamientoCajaRepository, establecimientoRepository,
-                usuarioRepository, rateLimiterService, registroAuditoriaService);
+                autorizacionEmpleadoService, rateLimiterService, registroAuditoriaService);
         ReflectionTestUtils.setField(dispositivoCajaService, "dispositivoExpirationMillis", 7_776_000_000L);
         ReflectionTestUtils.setField(dispositivoCajaService, "codigoEmparejamientoTtlMillis", 600_000L);
         ReflectionTestUtils.setField(dispositivoCajaService, "frontendUrl", "http://localhost:5173");
@@ -103,7 +103,7 @@ class DispositivoCajaServiceTest {
     @DisplayName("activarLocal_Exito_CreaDispositivoYSeteaCookie")
     void activarLocal_Exito_CreaDispositivoYSeteaCookie() {
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(dispositivoCajaRepository.save(any(DispositivoCaja.class))).thenAnswer(invocation -> {
             DispositivoCaja d = invocation.getArgument(0);
             d.setId(100L);
@@ -129,7 +129,7 @@ class DispositivoCajaServiceTest {
                 .id(100L).establecimiento(establecimiento).label("Caja 1").tokenHash("hash").activo(true).build();
 
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(dispositivoCajaRepository.findByIdAndEstablecimientoId(100L, 10L)).thenReturn(Optional.of(dispositivo));
 
         assertDoesNotThrow(() -> dispositivoCajaService.revocar(10L, 100L, dueno.getEmail()));
@@ -144,7 +144,8 @@ class DispositivoCajaServiceTest {
         Usuario otroDueno = Usuario.builder().id(3L).email("otro@test.com").rol(Role.OWNER).build();
 
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new AccessDeniedException("No autorizado en este establecimiento"));
 
         assertThrows(AccessDeniedException.class,
                 () -> dispositivoCajaService.revocar(10L, 100L, otroDueno.getEmail()));
@@ -159,7 +160,7 @@ class DispositivoCajaServiceTest {
                 .createdAt(LocalDateTime.now()).build();
 
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(dispositivoCajaRepository.findByEstablecimientoIdAndActivoTrue(10L)).thenReturn(List.of(dispositivo));
 
         List<DispositivoCajaResponse> response = dispositivoCajaService.listar(10L, dueno.getEmail());
@@ -290,7 +291,8 @@ class DispositivoCajaServiceTest {
         Usuario otroDueno = Usuario.builder().id(3L).email("otro@test.com").rol(Role.OWNER).build();
 
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new AccessDeniedException("No autorizado en este establecimiento"));
 
         assertThrows(AccessDeniedException.class,
                 () -> dispositivoCajaService.activarLocal(10L, otroDueno.getEmail(), null, httpServletResponse));
@@ -301,7 +303,7 @@ class DispositivoCajaServiceTest {
     @DisplayName("revocar_Fallo_DispositivoNoEncontrado")
     void revocar_Fallo_DispositivoNoEncontrado() {
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(dispositivoCajaRepository.findByIdAndEstablecimientoId(999L, 10L)).thenReturn(Optional.empty());
 
         assertThrows(EntityNotFoundException.class,

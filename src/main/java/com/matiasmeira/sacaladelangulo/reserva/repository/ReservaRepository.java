@@ -205,4 +205,22 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
            "FROM Reserva r WHERE r.cancha.establecimiento.id = :estId AND r.estado = 'FINALIZADA' " +
            "AND r.fechaHoraInicio BETWEEN :inicio AND :fin")
     List<ReservaOcupacionProjection> findProyeccionOcupacion(@Param("estId") Long estId, @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
+
+    /**
+     * Cantidad de reservas marcadas AUSENTE (no-show) de un establecimiento en el rango,
+     * para el reporte de clientes (ver ReporteClientesService).
+     */
+    @Query("SELECT COUNT(r) FROM Reserva r WHERE r.cancha.establecimiento.id = :estId " +
+           "AND r.estado = 'AUSENTE' AND r.fechaHoraInicio BETWEEN :inicio AND :fin")
+    long countAusenciasEnRango(@Param("estId") Long estId, @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
+
+    /**
+     * Cantidad de reservas AUSENTE por jugador, restringido a un conjunto de jugadores
+     * (el top de clientes ya calculado), para el reporte de clientes (ver ReporteClientesService).
+     */
+    @Query("SELECT r.jugador.id, COUNT(r) FROM Reserva r WHERE r.cancha.establecimiento.id = :estId " +
+           "AND r.estado = 'AUSENTE' AND r.jugador.id IN :jugadorIds AND r.fechaHoraInicio BETWEEN :inicio AND :fin " +
+           "GROUP BY r.jugador.id")
+    List<Object[]> countAusenciasPorJugadoresEnRango(@Param("estId") Long estId, @Param("jugadorIds") List<Long> jugadorIds,
+                                                       @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
  }

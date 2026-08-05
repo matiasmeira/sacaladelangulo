@@ -136,6 +136,40 @@ public class ReservaController {
     }
 
     /**
+     * Marca una reserva confirmada como AUSENTE (no-show): el jugador no se presentó al turno.
+     * Protegido: propietarios, administradores, y empleados con el permiso MARCAR_AUSENTE.
+     *
+     * @param id ID de la reserva a marcar como ausente
+     * @param userDetails Detalles del usuario autenticado
+     * @return ReservaResponse con la reserva actualizada
+     */
+    @PatchMapping("/{id}/ausente")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<ReservaResponse> marcarAusente(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        ReservaResponse reserva = reservaService.marcarAusente(id, userDetails.getUsername());
+        return ResponseEntity.ok(reserva);
+    }
+
+    /**
+     * Revierte una reserva marcada como AUSENTE de vuelta a CONFIRMADA.
+     * Protegido: solo propietarios de establecimientos y administradores.
+     *
+     * @param id ID de la reserva a revertir
+     * @param userDetails Detalles del usuario autenticado
+     * @return ReservaResponse con la reserva actualizada
+     */
+    @PatchMapping("/{id}/revertir-ausencia")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ReservaResponse> revertirAusencia(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        ReservaResponse reserva = reservaService.revertirAusencia(id, userDetails.getUsername());
+        return ResponseEntity.ok(reserva);
+    }
+
+    /**
      * Mueve una reserva a otra cancha del mismo establecimiento (por ejemplo, para
      * reubicarla cuando la cancha original fue bloqueada y hay una equivalente libre).
      * Protegido: solo propietarios de establecimientos y administradores.

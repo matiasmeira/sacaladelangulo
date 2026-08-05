@@ -15,7 +15,6 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,10 +57,11 @@ public class EmpleadoService {
     private final PasswordEncoder passwordEncoder;
     private final EmpleadoMapper empleadoMapper;
     private final RegistroAuditoriaService registroAuditoriaService;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     public EmpleadoResponse crearEmpleado(Long establecimientoId, EmpleadoRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        Usuario actor = validarPropietarioOAdmin(establecimiento, email);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         // Trim + IgnoreCase para que "Juan" y "juan "/" JUAN" cuenten como el mismo
         // nombre tanto acá como al loguear (ver B4 en la auditoría).
@@ -94,7 +94,7 @@ public class EmpleadoService {
     @Transactional(readOnly = true)
     public List<EmpleadoResponse> listarPorEstablecimiento(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         return usuarioRepository.findByEstablecimientoIdAndRol(establecimientoId, Role.EMPLOYEE).stream()
                 .map(empleadoMapper::mapToResponse)
@@ -114,7 +114,7 @@ public class EmpleadoService {
 
     public EmpleadoResponse actualizarPermisos(Long establecimientoId, Long empleadoId, ActualizarPermisosRequest request, String email) {
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
-        Usuario actor = validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
 
         empleado.setPermisos(new HashSet<>(request.permisos()));
         Usuario empleadoActualizado = usuarioRepository.save(empleado);
@@ -127,7 +127,7 @@ public class EmpleadoService {
 
     public EmpleadoResponse cambiarPin(Long establecimientoId, Long empleadoId, CambiarPinRequest request, String email) {
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
-        Usuario actor = validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
         validarPinNoTrivial(request.pin());
 
         empleado.setPassword(passwordEncoder.encode(request.pin()));
@@ -144,7 +144,7 @@ public class EmpleadoService {
 
     public void desactivarEmpleado(Long establecimientoId, Long empleadoId, String email) {
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
-        Usuario actor = validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
 
         empleado.setIsActive(false);
         Usuario empleadoDesactivado = usuarioRepository.save(empleado);
@@ -180,18 +180,4 @@ public class EmpleadoService {
         return empleado;
     }
 
-    /**
-     * Devuelve el usuario autenticado (OWNER real o ADMIN) para que los llamadores puedan
-     * reutilizarlo como actor de la auditoría administrativa, sin una segunda consulta
-     * (ver M31 en la auditoría).
-     */
-    private Usuario validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
-        return usuarioAutenticado;
-    }
 }

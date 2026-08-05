@@ -9,6 +9,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRespon
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
@@ -52,6 +53,9 @@ class EstablecimientoServiceTest {
 
     @Mock
     private FeedbackRepository feedbackRepository;
+
+    @Mock
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @InjectMocks
     private EstablecimientoService establecimientoService;
@@ -235,7 +239,7 @@ class EstablecimientoServiceTest {
         );
 
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(existente));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(existente, dueno.getEmail())).thenReturn(dueno);
         when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         EstablecimientoResponse response = assertDoesNotThrow(

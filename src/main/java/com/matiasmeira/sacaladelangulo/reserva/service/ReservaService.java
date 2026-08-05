@@ -267,7 +267,7 @@ public class ReservaService {
         }
 
         Cancha cancha = buscarCanchaPorId(request.canchaId());
-        validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
         validarDeporteSoportado(request.deporteSeleccionado(), cancha);
 
         Usuario jugador = null;
@@ -733,6 +733,82 @@ public class ReservaService {
         }
     }
 
+    /**
+     * Marca una reserva como AUSENTE (no-show): el turno estaba confirmado pero el
+     * jugador no se presentó. Solo el dueño real del establecimiento, un administrador,
+     * o un empleado con el permiso MARCAR_AUSENTE pueden hacerlo. Es idempotente: si ya
+     * estaba AUSENTE, no hace nada. No genera movimiento de caja ni notificaciones: a
+     * diferencia de finalizarReserva, acá no hubo cobro ni servicio prestado.
+     *
+     * @param reservaId ID de la reserva a marcar como ausente
+     * @param email Email del usuario autenticado
+     * @return ReservaResponse con los datos actualizados
+     */
+    public ReservaResponse marcarAusente(Long reservaId, String email) {
+        log.info("Iniciando marcado de ausencia de reserva. ID: {}, Email: {}", reservaId, email);
+
+        Reserva reserva = reservaRepository.findByIdConEstablecimientoYDueno(reservaId)
+                .orElseThrow(() -> new EntityNotFoundException("Reserva no encontrada"));
+
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
+                reserva.getCancha().getEstablecimiento(), email, PermisoEmpleado.MARCAR_AUSENTE);
+
+        try {
+            if (reserva.getEstado() == EstadoReserva.AUSENTE) {
+                log.info("Reserva ya se encontraba marcada como ausente. ID: {}", reservaId);
+                return reservaMapper.mapToResponse(reserva);
+            }
+
+            if (reserva.getEstado() != EstadoReserva.CONFIRMADA) {
+                throw new IllegalArgumentException(
+                        "Solo se puede marcar como ausente una reserva en estado CONFIRMADA (actual: " + reserva.getEstado() + ")");
+            }
+
+            if (LocalDateTime.now().isBefore(reserva.getFechaHoraInicio())) {
+                throw new IllegalArgumentException("No se puede marcar ausente un turno que todavía no empezó");
+            }
+
+            reserva.setEstado(EstadoReserva.AUSENTE);
+            Reserva reservaActualizada = reservaRepository.save(reserva);
+            log.info("Reserva marcada como ausente con éxito. ID: {}", reservaId);
+
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.MARCAR_AUSENTE, reservaId, true, "Reserva marcada como ausente");
+            return reservaMapper.mapToResponse(reservaActualizada);
+        } catch (RuntimeException ex) {
+            registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.MARCAR_AUSENTE, reservaId, false, ex.getMessage());
+            throw ex;
+        }
+    }
+
+    /**
+     * Revierte una reserva marcada como AUSENTE de vuelta a CONFIRMADA. Es un override
+     * sensible (corrige un error al marcar la ausencia), por lo que solo el dueño real
+     * del establecimiento o un administrador pueden hacerlo, a diferencia de
+     * marcarAusente: un empleado con el permiso MARCAR_AUSENTE no puede revertirlo.
+     *
+     * @param reservaId ID de la reserva a revertir
+     * @param email Email del usuario autenticado (OWNER/ADMIN)
+     * @return ReservaResponse con los datos actualizados
+     */
+    public ReservaResponse revertirAusencia(Long reservaId, String email) {
+        log.info("Iniciando reversión de ausencia de reserva. ID: {}, Email: {}", reservaId, email);
+
+        Reserva reserva = reservaRepository.findByIdConEstablecimientoYDueno(reservaId)
+                .orElseThrow(() -> new EntityNotFoundException("Reserva no encontrada"));
+
+        autorizacionEmpleadoService.validarPropietarioOAdmin(reserva.getCancha().getEstablecimiento(), email);
+
+        if (reserva.getEstado() != EstadoReserva.AUSENTE) {
+            throw new IllegalArgumentException("Solo se puede revertir un turno marcado como ausente");
+        }
+
+        reserva.setEstado(EstadoReserva.CONFIRMADA);
+        Reserva reservaActualizada = reservaRepository.save(reserva);
+        log.info("Ausencia revertida con éxito. ID: {}, Nuevo estado: {}", reservaId, reservaActualizada.getEstado());
+
+        return reservaMapper.mapToResponse(reservaActualizada);
+    }
+
     private void registrarAuditoriaSiEsEmpleado(Usuario usuario, AccionAuditoria accion, Long entidadAfectadaId, boolean exitoso, String detalle) {
         if (usuario.getRol() == Role.EMPLOYEE) {
             registroAuditoriaService.registrar(usuario, accion, entidadAfectadaId, exitoso, detalle);
@@ -759,7 +835,7 @@ public class ReservaService {
         Reserva reserva = reservaRepository.findByIdConEstablecimientoYDueno(reservaId)
                 .orElseThrow(() -> new EntityNotFoundException("Reserva no encontrada"));
 
-        validarPropietarioOAdmin(reserva.getCancha().getEstablecimiento(), email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(reserva.getCancha().getEstablecimiento(), email);
 
         // Solo tiene sentido reasignar cancha en reservas todavía "en curso": una cancelada
         // no debería reflotarse, y una finalizada ya representa un partido que ya se jugó
@@ -863,7 +939,7 @@ public class ReservaService {
     @Transactional(readOnly = true)
     public Page<ReservaResponse> obtenerReservasPorCanchaYFecha(Long canchaId, LocalDate fecha, boolean incluirCanceladas, Pageable pageable, String email) {
         Cancha cancha = buscarCanchaPorId(canchaId);
-        validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
 
         LocalDateTime inicioDia = fecha.atStartOfDay();
         LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
@@ -882,7 +958,7 @@ public class ReservaService {
     public Page<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, LocalDate fecha, boolean incluirCanceladas, Pageable pageable, String email) {
         Establecimiento establecimiento = establecimientoRepository.findById(estId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-        validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         LocalDateTime inicioDia = fecha.atStartOfDay();
         LocalDateTime finDia = fecha.atTime(23, 59, 59);
@@ -904,15 +980,6 @@ public class ReservaService {
                 ? reservaRepository.findByJugadorId(jugador.getId(), pageableFinal)
                 : reservaRepository.findByJugadorIdAndEstado(jugador.getId(), estado, pageableFinal);
         return reservas.map(reservaMapper::mapToResponse);
-    }
-
-    private void validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = buscarUsuarioPorEmail(email);
-        boolean esAdmin = usuarioAutenticado.getRol() == Role.ADMIN;
-        boolean esDueno = establecimiento.getDueno().getId().equals(usuarioAutenticado.getId());
-        if (!esAdmin && !esDueno) {
-            throw new AccessDeniedException("No autorizado para ver las reservas de este establecimiento");
-        }
     }
 
     private Pageable capPageSize(Pageable pageable) {

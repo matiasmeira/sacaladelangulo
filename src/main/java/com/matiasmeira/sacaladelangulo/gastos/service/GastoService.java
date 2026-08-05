@@ -5,7 +5,10 @@ import com.matiasmeira.sacaladelangulo.cierrecaja.model.OrigenMovimientoCaja;
 import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
 import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
+import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoMapper;
@@ -39,6 +42,7 @@ public class GastoService {
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final GastoMapper gastoMapper;
     private final TurnoCajaService turnoCajaService;
+    private final RegistroAuditoriaService registroAuditoriaService;
 
     @Transactional
     public GastoResponse registrarGasto(Long establecimientoId, GastoRequest request, String email) {
@@ -56,6 +60,7 @@ public class GastoService {
                 .metodoPago(request.metodoPago())
                 .comprobanteUrl(request.comprobanteUrl())
                 .usuarioRegistro(usuarioAutenticado)
+                .isActive(true)
                 .build();
 
         gasto = gastoRepository.save(gasto);
@@ -66,6 +71,9 @@ public class GastoService {
                 gasto.getMetodoPago(), gasto.getMonto(), "Gasto: " + gasto.getDescripcion(),
                 gasto.getId(), usuarioAutenticado);
 
+        registroAuditoriaService.registrarSobreEstablecimiento(usuarioAutenticado, establecimiento,
+                AccionAuditoria.REGISTRAR_GASTO, gasto.getId(), "Gasto registrado: " + gasto.getDescripcion() + " por " + gasto.getMonto());
+
         return gastoMapper.mapToResponse(gasto);
     }
 
@@ -73,8 +81,14 @@ public class GastoService {
     public GastoResponse editarGasto(Long establecimientoId, Long gastoId, GastoRequest request, String email) {
         Gasto gasto = gastoRepository.findByIdAndEstablecimientoId(gastoId, establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Gasto no encontrado"));
-        autorizacionEmpleadoService.validarPropietarioOAdmin(gasto.getEstablecimiento(), email);
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(gasto.getEstablecimiento(), email);
+        if (Boolean.FALSE.equals(gasto.getIsActive())) {
+            throw new IllegalArgumentException("No se puede editar un gasto eliminado");
+        }
         validarMonto(request.monto());
+
+        BigDecimal montoAnterior = gasto.getMonto();
+        MetodoPago metodoPagoAnterior = gasto.getMetodoPago();
 
         gasto.setFecha(request.fecha());
         gasto.setMonto(request.monto());
@@ -83,17 +97,62 @@ public class GastoService {
         gasto.setMetodoPago(request.metodoPago());
         gasto.setComprobanteUrl(request.comprobanteUrl());
 
-        return gastoMapper.mapToResponse(gastoRepository.save(gasto));
+        Gasto gastoActualizado = gastoRepository.save(gasto);
+
+        // Si cambió el monto o el método de pago, revierte el egreso original (si
+        // correspondía) y registra el nuevo, para que el arqueo de caja no quede
+        // desfasado tras editar un gasto ya contabilizado (ver M-04 en la auditoría).
+        // registrarMovimientoSiCorresponde ya es un no-op si el método no era EFECTIVO o
+        // no hay turno abierto, así que no hace falta duplicar esa condición acá.
+        boolean montoOMetodoCambiaron = montoAnterior.compareTo(request.monto()) != 0 || metodoPagoAnterior != request.metodoPago();
+        if (montoOMetodoCambiaron) {
+            turnoCajaService.registrarMovimientoSiCorresponde(
+                    gasto.getEstablecimiento(), TipoMovimientoCaja.INGRESO, OrigenMovimientoCaja.GASTO,
+                    metodoPagoAnterior, montoAnterior,
+                    "Ajuste por edición del gasto #" + gastoId + ": reversión del monto anterior",
+                    gastoId, usuarioAutenticado);
+            turnoCajaService.registrarMovimientoSiCorresponde(
+                    gasto.getEstablecimiento(), TipoMovimientoCaja.EGRESO, OrigenMovimientoCaja.GASTO,
+                    gasto.getMetodoPago(), gasto.getMonto(),
+                    "Gasto editado: " + gasto.getDescripcion(), gastoId, usuarioAutenticado);
+        }
+
+        registroAuditoriaService.registrarSobreEstablecimiento(usuarioAutenticado, gasto.getEstablecimiento(),
+                AccionAuditoria.EDITAR_GASTO, gastoId, "Gasto editado: " + gasto.getDescripcion() + " por " + gasto.getMonto());
+
+        return gastoMapper.mapToResponse(gastoActualizado);
     }
 
+    /**
+     * Anulación lógica (ver M-04 en la auditoría): antes hacía un DELETE físico, perdiendo
+     * el historial financiero. Ahora marca isActive=false — la fila persiste para
+     * auditoría, pero queda excluida del listado y de los reportes (ver GastoRepository).
+     * Idempotente: si ya estaba eliminado, no vuelve a revertir el movimiento de caja.
+     */
     @Transactional
     public void eliminarGasto(Long establecimientoId, Long gastoId, String email) {
         Gasto gasto = gastoRepository.findByIdAndEstablecimientoId(gastoId, establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Gasto no encontrado"));
-        autorizacionEmpleadoService.validarPropietarioOAdmin(gasto.getEstablecimiento(), email);
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(gasto.getEstablecimiento(), email);
 
-        gastoRepository.delete(gasto);
-        log.info("Gasto eliminado. Establecimiento: {}, Gasto: {}", establecimientoId, gastoId);
+        if (Boolean.FALSE.equals(gasto.getIsActive())) {
+            log.info("Gasto ya se encontraba eliminado. ID: {}", gastoId);
+            return;
+        }
+
+        // Revierte el egreso original (si correspondía) antes de anular el gasto, para que
+        // el arqueo de caja no quede desfasado (ver M-04 en la auditoría).
+        turnoCajaService.registrarMovimientoSiCorresponde(
+                gasto.getEstablecimiento(), TipoMovimientoCaja.INGRESO, OrigenMovimientoCaja.GASTO,
+                gasto.getMetodoPago(), gasto.getMonto(),
+                "Gasto eliminado: reversión de " + gasto.getDescripcion(), gastoId, usuarioAutenticado);
+
+        gasto.setIsActive(false);
+        gastoRepository.save(gasto);
+        log.info("Gasto eliminado (anulación lógica). Establecimiento: {}, Gasto: {}", establecimientoId, gastoId);
+
+        registroAuditoriaService.registrarSobreEstablecimiento(usuarioAutenticado, gasto.getEstablecimiento(),
+                AccionAuditoria.ELIMINAR_GASTO, gastoId, "Gasto eliminado: " + gasto.getDescripcion() + " por " + gasto.getMonto());
     }
 
     @Transactional(readOnly = true)

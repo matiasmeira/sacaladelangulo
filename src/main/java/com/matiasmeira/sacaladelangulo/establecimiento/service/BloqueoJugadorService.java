@@ -10,9 +10,9 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoJugador;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugadorRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,11 +30,12 @@ public class BloqueoJugadorService {
     private final BloqueoJugadorRepository bloqueoJugadorRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Transactional
     public BloqueoJugadorResponse crearBloqueo(Long establecimientoId, BloqueoJugadorRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
-        validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         Usuario jugador = usuarioRepository.findById(request.jugadorId())
                 .orElseThrow(() -> new EntityNotFoundException("Jugador no encontrado"));
@@ -61,7 +62,7 @@ public class BloqueoJugadorService {
     @Transactional
     public void eliminarBloqueo(Long establecimientoId, Long jugadorId, String email) {
         Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
-        validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         BloqueoJugador bloqueo = bloqueoJugadorRepository.findByEstablecimientoIdAndJugadorId(establecimientoId, jugadorId)
                 .orElseThrow(() -> new EntityNotFoundException("Este jugador no está bloqueado en este establecimiento"));
@@ -73,7 +74,7 @@ public class BloqueoJugadorService {
     @Transactional(readOnly = true)
     public List<BloqueoJugadorResponse> listarBloqueados(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
-        validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         return bloqueoJugadorRepository.findByEstablecimientoIdOrderByFechaBloqueoDesc(establecimientoId).stream()
                 .map(this::mapToResponse)
@@ -95,14 +96,5 @@ public class BloqueoJugadorService {
     private Establecimiento buscarEstablecimiento(Long establecimientoId) {
         return establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-    }
-
-    private void validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
     }
 }

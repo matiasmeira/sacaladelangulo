@@ -1,10 +1,11 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
-import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.TarifaDto;
@@ -14,7 +15,6 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,13 +38,14 @@ public class CanchaService {
 
     private final CanchaRepository canchaRepository;
     private final EstablecimientoRepository establecimientoRepository;
-    private final UsuarioRepository usuarioRepository;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final RegistroAuditoriaService registroAuditoriaService;
 
     public CanchaResponse crearCancha(Long establecimientoId, CanchaRequest request, String email) {
         validarSolapamientoTarifas(request.tarifas());
 
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        Usuario usuarioAutenticado = validarPropietario(establecimiento, email);
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         BigDecimal montoSena = validarMontoSena(request.montoSena(), usuarioAutenticado.getPlanSuscripcion());
         Integer canchasNecesarias = calcularCanchasNecesarias(request.canchasFisicasIds(), request.cantidadCanchasNecesarias());
@@ -68,10 +69,14 @@ public class CanchaService {
                 .canchasNecesarias(canchasNecesarias)
                 .build();
 
-        cancha.setCanchasFisicas(resolverCanchasFisicas(request.canchasFisicasIds()));
+        cancha.setCanchasFisicas(resolverCanchasFisicas(establecimientoId, request.canchasFisicasIds()));
         cancha.setTarifas(mapearTarifas(request.tarifas(), cancha));
 
         Cancha canchaGuardada = canchaRepository.save(cancha);
+
+        registroAuditoriaService.registrarSobreEstablecimiento(usuarioAutenticado, establecimiento,
+                AccionAuditoria.CREAR_CANCHA, canchaGuardada.getId(),
+                "Cancha creada: " + canchaGuardada.getNombre() + ", precio base " + canchaGuardada.getPrecioBase());
 
         return mapToResponse(canchaGuardada);
     }
@@ -79,7 +84,7 @@ public class CanchaService {
     @Transactional(readOnly = true)
     public List<CanchaResponse> obtenerCanchasPorEstablecimiento(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        validarPropietario(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         return canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId).stream()
                 .map(this::mapToResponse)
@@ -90,7 +95,7 @@ public class CanchaService {
         validarSolapamientoTarifas(request.tarifas());
 
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        Usuario usuarioAutenticado = validarPropietario(establecimiento, email);
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         Cancha cancha = canchaRepository.findById(canchaId)
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
@@ -115,7 +120,7 @@ public class CanchaService {
         cancha.setPreciosPorDuracion(normalizarPrecios(request.preciosPorDuracion()));
         cancha.setPermiteInicioMediaHora(request.permiteInicioMediaHora() != null ? request.permiteInicioMediaHora() : true);
         cancha.setCanchasNecesarias(calcularCanchasNecesarias(request.canchasFisicasIds(), request.cantidadCanchasNecesarias()));
-        cancha.setCanchasFisicas(resolverCanchasFisicas(request.canchasFisicasIds()));
+        cancha.setCanchasFisicas(resolverCanchasFisicas(establecimientoId, request.canchasFisicasIds()));
 
         if (request.tarifas() != null) {
             cancha.getTarifas().clear();
@@ -123,6 +128,11 @@ public class CanchaService {
         }
 
         Cancha canchaGuardada = canchaRepository.save(cancha);
+
+        registroAuditoriaService.registrarSobreEstablecimiento(usuarioAutenticado, establecimiento,
+                AccionAuditoria.ACTUALIZAR_CANCHA, canchaGuardada.getId(),
+                "Cancha actualizada: " + canchaGuardada.getNombre() + ", precio base " + canchaGuardada.getPrecioBase());
+
         return mapToResponse(canchaGuardada);
     }
 
@@ -133,7 +143,7 @@ public class CanchaService {
      */
     public void desactivarCancha(Long establecimientoId, Long canchaId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        validarPropietario(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         Cancha cancha = canchaRepository.findById(canchaId)
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
@@ -146,18 +156,6 @@ public class CanchaService {
         canchaRepository.save(cancha);
     }
 
-    /**
-     * Valida que el usuario autenticado sea el dueño del establecimiento o un administrador.
-     */
-    private Usuario validarPropietario(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-
-        if (usuarioAutenticado.getRol() != Role.ADMIN && !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
-        return usuarioAutenticado;
-    }
 
     /**
      * Los planes limitados (TRIAL/FREE) exigen una seña mínima obligatoria; el resto de
@@ -188,7 +186,7 @@ public class CanchaService {
         return cantidadSolicitada;
     }
 
-    private List<Cancha> resolverCanchasFisicas(List<Long> canchasFisicasIds) {
+    private List<Cancha> resolverCanchasFisicas(Long establecimientoId, List<Long> canchasFisicasIds) {
         if (canchasFisicasIds == null || canchasFisicasIds.isEmpty()) {
             return new ArrayList<>();
         }
@@ -197,6 +195,14 @@ public class CanchaService {
 
         if (canchasFisicas.size() != canchasFisicasIds.size()) {
             throw new IllegalArgumentException("Algunas canchas físicas no existen");
+        }
+        // Sin este chequeo, un pool podía armarse con canchas de OTRO establecimiento (ver
+        // M-03 en la auditoría): el cálculo de disponibilidad y el lock pesimista de
+        // ReservaService operarían sobre filas de un tenant ajeno.
+        boolean todasDelEstablecimiento = canchasFisicas.stream()
+                .allMatch(c -> c.getEstablecimiento().getId().equals(establecimientoId));
+        if (!todasDelEstablecimiento) {
+            throw new IllegalArgumentException("Las canchas físicas deben pertenecer a este establecimiento");
         }
         return canchasFisicas;
     }

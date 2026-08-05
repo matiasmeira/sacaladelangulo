@@ -12,7 +12,7 @@ import java.util.Optional;
 @Repository
 public interface TokenRecuperacionPasswordRepository extends JpaRepository<TokenRecuperacionPassword, Long> {
 
-    Optional<TokenRecuperacionPassword> findByToken(String token);
+    Optional<TokenRecuperacionPassword> findByTokenHash(String tokenHash);
 
     Optional<TokenRecuperacionPassword> findByEmail(String email);
 

@@ -1,7 +1,6 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
-import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
@@ -15,11 +14,11 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +50,7 @@ public class EstablecimientoService {
     private final ReservaRepository reservaRepository;
     private final CanchaRepository canchaRepository;
     private final FeedbackRepository feedbackRepository;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     public EstablecimientoResponse crearEstablecimiento(EstablecimientoRequest request, String email) {
         Usuario dueno = buscarUsuarioPorEmail(email);
@@ -125,7 +125,7 @@ public class EstablecimientoService {
 
     public EstablecimientoResponse actualizarEstablecimiento(Long id, EstablecimientoRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(id);
-        Usuario usuarioAutenticado = validarPropietario(establecimiento, email);
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         establecimiento.setNombre(request.nombre());
         establecimiento.setDireccion(request.direccion());
@@ -188,17 +188,6 @@ public class EstablecimientoService {
     private Establecimiento buscarEstablecimientoPorId(Long id) {
         return establecimientoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-    }
-
-    /**
-     * Valida que el usuario autenticado sea el dueño del establecimiento o un administrador.
-     */
-    private Usuario validarPropietario(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = buscarUsuarioPorEmail(email);
-        if (usuarioAutenticado.getRol() != Role.ADMIN && !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado para modificar este establecimiento");
-        }
-        return usuarioAutenticado;
     }
 
     /**

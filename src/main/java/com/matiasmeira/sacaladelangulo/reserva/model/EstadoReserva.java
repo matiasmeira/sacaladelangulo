@@ -30,5 +30,12 @@ public enum EstadoReserva {
     /**
      * Reserva finalizada (servicio completado).
      */
-    FINALIZADA
+    FINALIZADA,
+
+    /**
+     * Reserva confirmada a la que el jugador no se presentó (no-show). Estado terminal;
+     * puede revertirse a CONFIRMADA únicamente por el dueño real del establecimiento o
+     * un administrador (ver ReservaService.revertirAusencia).
+     */
+    AUSENTE
 }

@@ -8,6 +8,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.BloqueoJugadorRequest
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.BloqueoJugadorResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoJugador;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugadorRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +42,9 @@ class BloqueoJugadorServiceTest {
 
     @Mock
     private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @InjectMocks
     private BloqueoJugadorService bloqueoJugadorService;
@@ -83,7 +87,7 @@ class BloqueoJugadorServiceTest {
         BloqueoJugadorRequest request = new BloqueoJugadorRequest(jugador.getId(), "No-show reiterado");
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.findById(jugador.getId())).thenReturn(Optional.of(jugador));
         when(bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(establecimiento.getId(), jugador.getId()))
                 .thenReturn(false);
@@ -110,7 +114,7 @@ class BloqueoJugadorServiceTest {
         BloqueoJugadorRequest request = new BloqueoJugadorRequest(jugador.getId(), "No-show reiterado");
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.findById(jugador.getId())).thenReturn(Optional.of(jugador));
         when(bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(establecimiento.getId(), jugador.getId()))
                 .thenReturn(true);
@@ -130,7 +134,7 @@ class BloqueoJugadorServiceTest {
         BloqueoJugadorRequest request = new BloqueoJugadorRequest(dueno.getId(), "Motivo cualquiera");
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.findById(dueno.getId())).thenReturn(Optional.of(dueno));
 
         // Act & Assert
@@ -154,7 +158,8 @@ class BloqueoJugadorServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(
@@ -176,7 +181,7 @@ class BloqueoJugadorServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(bloqueoJugadorRepository.findByEstablecimientoIdAndJugadorId(establecimiento.getId(), jugador.getId()))
                 .thenReturn(Optional.of(bloqueo));
 
@@ -192,7 +197,7 @@ class BloqueoJugadorServiceTest {
     void eliminarBloqueo_Fallo_JugadorNoEstaBloqueado() {
         // Arrange
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(bloqueoJugadorRepository.findByEstablecimientoIdAndJugadorId(establecimiento.getId(), jugador.getId()))
                 .thenReturn(Optional.empty());
 
@@ -216,7 +221,7 @@ class BloqueoJugadorServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(bloqueoJugadorRepository.findByEstablecimientoIdOrderByFechaBloqueoDesc(establecimiento.getId()))
                 .thenReturn(List.of(bloqueo));
 

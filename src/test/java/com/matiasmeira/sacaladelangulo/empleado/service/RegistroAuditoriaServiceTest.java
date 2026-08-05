@@ -2,7 +2,6 @@ package com.matiasmeira.sacaladelangulo.empleado.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.dto.RegistroAuditoriaResponse;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
@@ -43,7 +42,7 @@ class RegistroAuditoriaServiceTest {
     private EstablecimientoRepository establecimientoRepository;
 
     @Mock
-    private UsuarioRepository usuarioRepository;
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @InjectMocks
     private RegistroAuditoriaService registroAuditoriaService;
@@ -116,7 +115,7 @@ class RegistroAuditoriaServiceTest {
         Page<RegistroAuditoria> pagina = new PageImpl<>(List.of(registro), pageable, 1);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(registroAuditoriaRepository.findByEstablecimientoIdOrderByFechaHoraDesc(establecimiento.getId(), pageable))
                 .thenReturn(pagina);
 
@@ -139,7 +138,7 @@ class RegistroAuditoriaServiceTest {
         Page<RegistroAuditoria> paginaVacia = new PageImpl<>(List.of(), pageable, 0);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, admin.getEmail())).thenReturn(admin);
         when(registroAuditoriaRepository.findByEstablecimientoIdOrderByFechaHoraDesc(establecimiento.getId(), pageable))
                 .thenReturn(paginaVacia);
 
@@ -159,7 +158,8 @@ class RegistroAuditoriaServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(

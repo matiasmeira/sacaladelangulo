@@ -15,6 +15,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.TokenExpiradoException;
 import com.matiasmeira.sacaladelangulo.core.exception.TokenInvalidoException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
+import com.matiasmeira.sacaladelangulo.core.security.TokenHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -102,10 +103,12 @@ public class RegistroVerificacionService {
 
         String token = UUID.randomUUID().toString();
         String codigo = String.format("%06d", random.nextInt(1000000));
+        // Solo se persiste el hash (ver M-05 en la auditoría): el valor crudo únicamente
+        // viaja en el link/email enviado al usuario, nunca a la base.
         TokenVerificacionEmail tokenVerificacion = TokenVerificacionEmail.builder()
                 .email(email)
-                .token(token)
-                .codigo(codigo)
+                .tokenHash(TokenHasher.sha256Hex(token))
+                .codigoHash(TokenHasher.sha256Hex(codigo))
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(TOKEN_EXPIRACION_MINUTOS))
                 .build();
         tokenVerificacionEmailRepository.save(tokenVerificacion);
@@ -155,13 +158,21 @@ public class RegistroVerificacionService {
             throw new RateLimitExceededException("Demasiados intentos, pedí un nuevo código");
         }
 
-        if (!tokenVerificacion.getCodigo().equals(codigo)) {
+        if (!tokenVerificacion.getCodigoHash().equals(TokenHasher.sha256Hex(codigo))) {
             tokenVerificacion.setIntentos(tokenVerificacion.getIntentos() + 1);
             tokenVerificacionEmailRepository.save(tokenVerificacion);
             throw new IllegalArgumentException("Código incorrecto");
         }
 
-        return new VerificarCodigoRegistroResponse(tokenVerificacion.getToken());
+        // El código validado no tiene un token crudo recuperable (solo se persiste su
+        // hash, ver M-05 en la auditoría): se emite uno nuevo, equivalente al del link,
+        // para que el frontend continúe con /registro/completar sin cambios. Solo se
+        // guarda su hash, igual que el resto de los secretos de este flujo.
+        String nuevoToken = UUID.randomUUID().toString();
+        tokenVerificacion.setTokenHash(TokenHasher.sha256Hex(nuevoToken));
+        tokenVerificacionEmailRepository.save(tokenVerificacion);
+
+        return new VerificarCodigoRegistroResponse(nuevoToken);
     }
 
     /**
@@ -213,7 +224,7 @@ public class RegistroVerificacionService {
     }
 
     private TokenVerificacionEmail buscarTokenValidoPorToken(String token) {
-        TokenVerificacionEmail tokenVerificacion = tokenVerificacionEmailRepository.findByToken(token)
+        TokenVerificacionEmail tokenVerificacion = tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex(token))
                 .orElseThrow(() -> new TokenInvalidoException("El token de verificación no es válido"));
         return validarExpiracion(tokenVerificacion);
     }

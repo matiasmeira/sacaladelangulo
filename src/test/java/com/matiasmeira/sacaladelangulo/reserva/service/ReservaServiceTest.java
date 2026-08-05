@@ -707,7 +707,7 @@ class ReservaServiceTest {
                 horaInicio, horaFin, Deporte.FUTBOL, null, "Cliente Fijo", "1122334455");
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
@@ -745,7 +745,7 @@ class ReservaServiceTest {
                 horaInicio, horaFin, Deporte.FUTBOL, dueno.getId(), null, null);
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.findById(dueno.getId())).thenReturn(Optional.of(dueno));
 
         // Act & Assert
@@ -782,7 +782,7 @@ class ReservaServiceTest {
                 .build();
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of(bloqueo));
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
@@ -819,7 +819,8 @@ class ReservaServiceTest {
                 .build();
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(
@@ -864,7 +865,7 @@ class ReservaServiceTest {
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaOriginal.getId()))
                 .thenReturn(Optional.of(reservaOriginal));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findById(canchaDestino.getId())).thenReturn(Optional.of(canchaDestino));
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any()))
                 .thenReturn(List.of(reservaOriginal));
@@ -927,7 +928,7 @@ class ReservaServiceTest {
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaOriginal.getId()))
                 .thenReturn(Optional.of(reservaOriginal));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findById(canchaDeOtroEstablecimiento.getId())).thenReturn(Optional.of(canchaDeOtroEstablecimiento));
 
         // Act & Assert
@@ -966,7 +967,8 @@ class ReservaServiceTest {
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaOriginal.getId()))
                 .thenReturn(Optional.of(reservaOriginal));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(
@@ -992,7 +994,7 @@ class ReservaServiceTest {
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaCancelada.getId()))
                 .thenReturn(Optional.of(reservaCancelada));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
@@ -1019,7 +1021,7 @@ class ReservaServiceTest {
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaFinalizada.getId()))
                 .thenReturn(Optional.of(reservaFinalizada));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
@@ -1079,7 +1081,7 @@ class ReservaServiceTest {
                 .build();
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of(diaNoLaborable));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
@@ -1141,7 +1143,7 @@ class ReservaServiceTest {
                 LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.TENIS, null, "Cliente Fijo", null);
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
@@ -1184,7 +1186,7 @@ class ReservaServiceTest {
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaOriginal.getId()))
                 .thenReturn(Optional.of(reservaOriginal));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findById(canchaDestinoSinHockey.getId())).thenReturn(Optional.of(canchaDestinoSinHockey));
 
         // Act & Assert
@@ -1519,6 +1521,306 @@ class ReservaServiceTest {
     }
 
     @Test
+    @DisplayName("marcarAusente_Exito_ConfirmadaConInicioPasado_CambiaEstadoAAusente")
+    void marcarAusente_Exito_ConfirmadaConInicioPasado_CambiaEstadoAAusente() {
+        // Arrange
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(70L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2020, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2020, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+        when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.marcarAusente(reservaConfirmada.getId(), dueno.getEmail()));
+
+        // Assert
+        assert response.estado().equals("AUSENTE");
+        verify(reservaRepository).save(argThat(r -> r.getEstado() == EstadoReserva.AUSENTE));
+        verify(turnoCajaService, never()).registrarMovimientoSiCorresponde(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("marcarAusente_Exito_EsIdempotenteSiYaEstaAusente")
+    void marcarAusente_Exito_EsIdempotenteSiYaEstaAusente() {
+        // Arrange
+        Reserva reservaAusente = Reserva.builder()
+                .id(71L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2020, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2020, 1, 15, 11, 0))
+                .estado(EstadoReserva.AUSENTE)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaAusente.getId()))
+                .thenReturn(Optional.of(reservaAusente));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.marcarAusente(reservaAusente.getId(), dueno.getEmail()));
+
+        // Assert
+        assert response.estado().equals("AUSENTE");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("marcarAusente_Fallo_TurnoFuturo")
+    void marcarAusente_Fallo_TurnoFuturo() {
+        // Arrange
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(72L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.marcarAusente(reservaConfirmada.getId(), dueno.getEmail())
+        );
+        assert exception.getMessage().contains("todavía no empezó");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("marcarAusente_Fallo_ReservaPendienteDeSena")
+    void marcarAusente_Fallo_ReservaPendienteDeSena() {
+        // Arrange
+        Reserva reservaPendiente = Reserva.builder()
+                .id(73L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2020, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2020, 1, 15, 11, 0))
+                .estado(EstadoReserva.PENDIENTE_SENA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaPendiente.getId()))
+                .thenReturn(Optional.of(reservaPendiente));
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.marcarAusente(reservaPendiente.getId(), dueno.getEmail())
+        );
+        assert exception.getMessage().contains("CONFIRMADA");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("marcarAusente_Fallo_ReservaCancelada")
+    void marcarAusente_Fallo_ReservaCancelada() {
+        // Arrange
+        Reserva reservaCancelada = Reserva.builder()
+                .id(74L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2020, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2020, 1, 15, 11, 0))
+                .estado(EstadoReserva.CANCELADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaCancelada.getId()))
+                .thenReturn(Optional.of(reservaCancelada));
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.marcarAusente(reservaCancelada.getId(), dueno.getEmail())
+        );
+        assert exception.getMessage().contains("CONFIRMADA");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("marcarAusente_Fallo_ReservaFinalizada")
+    void marcarAusente_Fallo_ReservaFinalizada() {
+        // Arrange
+        Reserva reservaFinalizada = Reserva.builder()
+                .id(75L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2020, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2020, 1, 15, 11, 0))
+                .estado(EstadoReserva.FINALIZADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(1500))
+                .metodoPago(MetodoPago.EFECTIVO)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaFinalizada.getId()))
+                .thenReturn(Optional.of(reservaFinalizada));
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.marcarAusente(reservaFinalizada.getId(), dueno.getEmail())
+        );
+        assert exception.getMessage().contains("CONFIRMADA");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("marcarAusente_Fallo_EmpleadoSinPermisoMarcarAusente")
+    void marcarAusente_Fallo_EmpleadoSinPermisoMarcarAusente() {
+        // Arrange
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(76L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2020, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2020, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        Usuario empleadoSinPermiso = Usuario.builder()
+                .id(9L)
+                .email("empleado-sin-permiso-ausente@empleados.interno")
+                .nombre("Empleado Sin Permiso")
+                .rol(Role.EMPLOYEE)
+                .establecimiento(establecimiento)
+                .permisos(Set.of())
+                .isActive(true)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+        when(autorizacionEmpleadoService.validarAccion(establecimiento, empleadoSinPermiso.getEmail(),
+                com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.MARCAR_AUSENTE))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado para realizar esta acción en este establecimiento"));
+
+        // Act & Assert
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> reservaService.marcarAusente(reservaConfirmada.getId(), empleadoSinPermiso.getEmail())
+        );
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("revertirAusencia_Exito_OwnerVuelveAConfirmada")
+    void revertirAusencia_Exito_OwnerVuelveAConfirmada() {
+        // Arrange
+        Reserva reservaAusente = Reserva.builder()
+                .id(80L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2020, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2020, 1, 15, 11, 0))
+                .estado(EstadoReserva.AUSENTE)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaAusente.getId()))
+                .thenReturn(Optional.of(reservaAusente));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.revertirAusencia(reservaAusente.getId(), dueno.getEmail()));
+
+        // Assert
+        assert response.estado().equals("CONFIRMADA");
+        verify(reservaRepository).save(argThat(r -> r.getEstado() == EstadoReserva.CONFIRMADA));
+    }
+
+    @Test
+    @DisplayName("revertirAusencia_Fallo_Empleado_AunqueTengaPermisoMarcarAusente")
+    void revertirAusencia_Fallo_Empleado_AunqueTengaPermisoMarcarAusente() {
+        // Arrange: validarPropietarioOAdmin no tiene excepción para empleados (a diferencia
+        // de validarAccion), así que un EMPLOYEE con MARCAR_AUSENTE igual queda afuera.
+        Reserva reservaAusente = Reserva.builder()
+                .id(81L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2020, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2020, 1, 15, 11, 0))
+                .estado(EstadoReserva.AUSENTE)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        Usuario empleadoConPermiso = Usuario.builder()
+                .id(10L)
+                .email("empleado-con-permiso-ausente@empleados.interno")
+                .nombre("Empleado Con Permiso")
+                .rol(Role.EMPLOYEE)
+                .establecimiento(establecimiento)
+                .permisos(Set.of(com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.MARCAR_AUSENTE))
+                .isActive(true)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaAusente.getId()))
+                .thenReturn(Optional.of(reservaAusente));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, empleadoConPermiso.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
+
+        // Act & Assert
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> reservaService.revertirAusencia(reservaAusente.getId(), empleadoConPermiso.getEmail())
+        );
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("revertirAusencia_Fallo_EstadoNoEsAusente")
+    void revertirAusencia_Fallo_EstadoNoEsAusente() {
+        // Arrange
+        Reserva reservaConfirmada = Reserva.builder()
+                .id(82L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2020, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2020, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaConfirmada.getId()))
+                .thenReturn(Optional.of(reservaConfirmada));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+
+        // Act & Assert
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.revertirAusencia(reservaConfirmada.getId(), dueno.getEmail())
+        );
+        assert exception.getMessage().contains("ausente");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("obtenerMisReservas_SinFiltroEstado_DebeRetornarReservasDelJugador")
     void obtenerMisReservas_SinFiltroEstado_DebeRetornarReservasDelJugador() {
         // Arrange
@@ -1583,7 +1885,7 @@ class ReservaServiceTest {
         LocalDate fecha = LocalDate.of(2030, 1, 15);
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         List<EstadoReserva> estadosCancelados = List.of(EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
         when(reservaRepository.findReservasEnRangoDiario(
                 eq(cancha.getId()), any(), any(), eq(estadosCancelados), eq(pageable)))
@@ -1608,7 +1910,7 @@ class ReservaServiceTest {
         LocalDate fecha = LocalDate.of(2030, 1, 15);
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(reservaRepository.findReservasEnRangoDiarioIncluyendoCanceladas(eq(cancha.getId()), any(), any(), eq(pageable)))
                 .thenReturn(pageVacia);
 
@@ -1631,7 +1933,7 @@ class ReservaServiceTest {
         LocalDate fecha = LocalDate.of(2030, 1, 15);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         List<EstadoReserva> estadosCancelados = List.of(EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
         when(reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn(
                 eq(establecimiento.getId()), any(), any(), eq(estadosCancelados), eq(pageable)))
@@ -1657,7 +1959,7 @@ class ReservaServiceTest {
         LocalDate fecha = LocalDate.of(2030, 1, 15);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(
                 eq(establecimiento.getId()), any(), any(), eq(pageable)))
                 .thenReturn(pageVacia);

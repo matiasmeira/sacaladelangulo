@@ -2,7 +2,6 @@ package com.matiasmeira.sacaladelangulo.buffet.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.buffet.dto.MetricasVentasResponse;
 import com.matiasmeira.sacaladelangulo.buffet.model.DetalleVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.EstadoVenta;
@@ -10,6 +9,7 @@ import com.matiasmeira.sacaladelangulo.buffet.model.ProductoBuffet;
 import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.buffet.repository.VentaRepository;
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +49,7 @@ class VentaMetricasServiceTest {
     private EstablecimientoRepository establecimientoRepository;
 
     @Mock
-    private UsuarioRepository usuarioRepository;
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @InjectMocks
     private VentaMetricasService ventaMetricasService;
@@ -127,7 +127,7 @@ class VentaMetricasServiceTest {
         LocalDate hasta = LocalDate.of(2026, 1, 31);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(ventaRepository.findByEstablecimientoIdAndEstadoAndFechaHoraBetween(
                 eq(establecimiento.getId()), eq(EstadoVenta.CONFIRMADA), any(), any()))
                 .thenReturn(List.of(venta1, venta2));
@@ -161,7 +161,7 @@ class VentaMetricasServiceTest {
         LocalDate hasta = LocalDate.of(2026, 1, 31);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(ventaRepository.findByEstablecimientoIdAndEstadoAndFechaHoraBetween(
                 eq(establecimiento.getId()), eq(EstadoVenta.CONFIRMADA), any(), any()))
                 .thenReturn(List.of());
@@ -181,7 +181,7 @@ class VentaMetricasServiceTest {
     void obtenerMetricas_Fallo_DesdeMayorQueHasta() {
         // Arrange
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act & Assert
         assertThrows(
@@ -202,7 +202,8 @@ class VentaMetricasServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(

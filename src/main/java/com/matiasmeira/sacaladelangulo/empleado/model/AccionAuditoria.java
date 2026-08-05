@@ -13,6 +13,7 @@ public enum AccionAuditoria {
     CREAR_RESERVA_MANUAL,
     FINALIZAR_RESERVA,
     CANCELAR_RESERVA,
+    MARCAR_AUSENTE,
     REGISTRAR_VENTA_BUFFET,
     FIJAR_COMENTARIO_DESTACADO,
 
@@ -27,5 +28,15 @@ public enum AccionAuditoria {
 
     ABRIR_CAJA,
     CERRAR_CAJA,
-    REGISTRAR_MOVIMIENTO_CAJA
+    REGISTRAR_MOVIMIENTO_CAJA,
+
+    // Acciones administrativas de dinero del propio OWNER/ADMIN sobre su establecimiento
+    // (ver §3 "Consistencia entre features" en la auditoría): antes solo se auditaba la
+    // actividad de mostrador de los empleados, dejando sin rastro cambios de precio/tarifa
+    // y altas/ediciones/bajas de gastos hechos directamente por el dueño.
+    REGISTRAR_GASTO,
+    EDITAR_GASTO,
+    ELIMINAR_GASTO,
+    CREAR_CANCHA,
+    ACTUALIZAR_CANCHA
 }

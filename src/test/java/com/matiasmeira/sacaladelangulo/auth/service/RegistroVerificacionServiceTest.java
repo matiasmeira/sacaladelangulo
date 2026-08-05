@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.TokenExpiradoException;
 import com.matiasmeira.sacaladelangulo.core.exception.TokenInvalidoException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
+import com.matiasmeira.sacaladelangulo.core.security.TokenHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -89,14 +90,22 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail tokenGuardado = tokenCaptor.getValue();
         assertEquals("nuevo@test.com", tokenGuardado.getEmail());
         assertTrue(tokenGuardado.getFechaExpiracion().isAfter(LocalDateTime.now()));
-        assertEquals(6, tokenGuardado.getCodigo().length());
-        assertTrue(tokenGuardado.getCodigo().chars().allMatch(Character::isDigit));
 
         ArgumentCaptor<VerificacionEmailSolicitadaEvent> eventoCaptor = ArgumentCaptor.forClass(VerificacionEmailSolicitadaEvent.class);
         verify(eventPublisher).publishEvent(eventoCaptor.capture());
         assertEquals("nuevo@test.com", eventoCaptor.getValue().email());
-        assertEquals("http://localhost:5173/verificar?token=" + tokenGuardado.getToken(), eventoCaptor.getValue().linkVerificacion());
-        assertEquals(tokenGuardado.getCodigo(), eventoCaptor.getValue().codigo());
+
+        // El valor crudo del código/token solo viaja en el evento (dispara el email); en
+        // la base solo se persiste su hash (ver M-05 en la auditoría).
+        String codigoCrudo = eventoCaptor.getValue().codigo();
+        assertEquals(6, codigoCrudo.length());
+        assertTrue(codigoCrudo.chars().allMatch(Character::isDigit));
+        assertEquals(TokenHasher.sha256Hex(codigoCrudo), tokenGuardado.getCodigoHash());
+
+        String prefijoLink = "http://localhost:5173/verificar?token=";
+        assertTrue(eventoCaptor.getValue().linkVerificacion().startsWith(prefijoLink));
+        String tokenCrudo = eventoCaptor.getValue().linkVerificacion().substring(prefijoLink.length());
+        assertEquals(TokenHasher.sha256Hex(tokenCrudo), tokenGuardado.getTokenHash());
     }
 
     @Test
@@ -131,10 +140,10 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-valido")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
-        when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
+        when(tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex("token-valido"))).thenReturn(Optional.of(token));
 
         VerificarTokenResponse response = registroVerificacionService.verificarToken("token-valido");
 
@@ -146,7 +155,7 @@ class RegistroVerificacionServiceTest {
     @Test
     @DisplayName("verificarToken_Fallo_TokenInexistente")
     void verificarToken_Fallo_TokenInexistente() {
-        when(tokenVerificacionEmailRepository.findByToken("token-inexistente")).thenReturn(Optional.empty());
+        when(tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex("token-inexistente"))).thenReturn(Optional.empty());
 
         assertThrows(TokenInvalidoException.class, () -> registroVerificacionService.verificarToken("token-inexistente"));
     }
@@ -157,10 +166,10 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-vencido")
+                .tokenHash(TokenHasher.sha256Hex("token-vencido"))
                 .fechaExpiracion(LocalDateTime.now().minusMinutes(1))
                 .build();
-        when(tokenVerificacionEmailRepository.findByToken("token-vencido")).thenReturn(Optional.of(token));
+        when(tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex("token-vencido"))).thenReturn(Optional.of(token));
 
         assertThrows(TokenExpiradoException.class, () -> registroVerificacionService.verificarToken("token-vencido"));
 
@@ -173,12 +182,12 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-valido")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
         CompletarRegistroRequest request = new CompletarRegistroRequest("token-valido", "Juan", "1122334455", "Password123");
 
-        when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
+        when(tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex("token-valido"))).thenReturn(Optional.of(token));
         when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
         when(passwordEncoder.encode("Password123")).thenReturn("encoded-password");
         // El UserDetails real es un UsuarioPrincipal construido internamente a partir del
@@ -208,7 +217,7 @@ class RegistroVerificacionServiceTest {
     @DisplayName("completarRegistro_Fallo_TokenInvalido")
     void completarRegistro_Fallo_TokenInvalido() {
         CompletarRegistroRequest request = new CompletarRegistroRequest("token-inexistente", "Juan", null, "Password123");
-        when(tokenVerificacionEmailRepository.findByToken("token-inexistente")).thenReturn(Optional.empty());
+        when(tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex("token-inexistente"))).thenReturn(Optional.empty());
 
         assertThrows(TokenInvalidoException.class, () -> registroVerificacionService.completarRegistro(request));
         verify(usuarioRepository, never()).saveAndFlush(any());
@@ -220,11 +229,11 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-vencido")
+                .tokenHash(TokenHasher.sha256Hex("token-vencido"))
                 .fechaExpiracion(LocalDateTime.now().minusMinutes(1))
                 .build();
         CompletarRegistroRequest request = new CompletarRegistroRequest("token-vencido", "Juan", null, "Password123");
-        when(tokenVerificacionEmailRepository.findByToken("token-vencido")).thenReturn(Optional.of(token));
+        when(tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex("token-vencido"))).thenReturn(Optional.of(token));
 
         assertThrows(TokenExpiradoException.class, () -> registroVerificacionService.completarRegistro(request));
         verify(usuarioRepository, never()).saveAndFlush(any());
@@ -236,12 +245,12 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-valido")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
         CompletarRegistroRequest request = new CompletarRegistroRequest("token-valido", "Juan", null, "Password123");
 
-        when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
+        when(tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex("token-valido"))).thenReturn(Optional.of(token));
         when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
         when(usuarioRepository.saveAndFlush(any()))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
@@ -259,12 +268,12 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-valido")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
         CompletarRegistroRequest request = new CompletarRegistroRequest("token-valido", "Juan", null, "Password123");
 
-        when(tokenVerificacionEmailRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
+        when(tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex("token-valido"))).thenReturn(Optional.of(token));
         when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(true);
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
@@ -276,13 +285,16 @@ class RegistroVerificacionServiceTest {
     }
 
     @Test
-    @DisplayName("verificarCodigo_Exito_DevuelveElTokenAsociado")
-    void verificarCodigo_Exito_DevuelveElTokenAsociado() {
+    @DisplayName("verificarCodigo_Exito_EmiteUnNuevoTokenYPersisteSoloSuHash")
+    void verificarCodigo_Exito_EmiteUnNuevoTokenYPersisteSoloSuHash() {
+        // El código validado no tiene un token crudo recuperable (solo se persiste su
+        // hash, ver M-05 en la auditoría): verificarCodigo emite un token NUEVO
+        // (equivalente al del link) y actualiza el hash persistido a partir de él.
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-valido")
-                .codigo("123456")
+                .tokenHash(TokenHasher.sha256Hex("token-original-del-link"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
                 .intentos(0)
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
@@ -290,9 +302,11 @@ class RegistroVerificacionServiceTest {
 
         VerificarCodigoRegistroResponse response = registroVerificacionService.verificarCodigo("nuevo@test.com", "123456");
 
-        assertEquals("token-valido", response.token());
+        assertTrue(response.token() != null && !response.token().isBlank());
+        ArgumentCaptor<TokenVerificacionEmail> tokenCaptor = ArgumentCaptor.forClass(TokenVerificacionEmail.class);
+        verify(tokenVerificacionEmailRepository).save(tokenCaptor.capture());
+        assertEquals(TokenHasher.sha256Hex(response.token()), tokenCaptor.getValue().getTokenHash());
         verify(tokenVerificacionEmailRepository, never()).delete(any());
-        verify(tokenVerificacionEmailRepository, never()).save(any());
     }
 
     @Test
@@ -301,8 +315,8 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-valido")
-                .codigo("123456")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
                 .intentos(0)
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
@@ -315,6 +329,8 @@ class RegistroVerificacionServiceTest {
         ArgumentCaptor<TokenVerificacionEmail> tokenCaptor = ArgumentCaptor.forClass(TokenVerificacionEmail.class);
         verify(tokenVerificacionEmailRepository).save(tokenCaptor.capture());
         assertEquals(1, tokenCaptor.getValue().getIntentos());
+        // El intento fallido no debe tocar el tokenHash, solo el contador de intentos.
+        assertEquals(TokenHasher.sha256Hex("token-valido"), tokenCaptor.getValue().getTokenHash());
         verify(tokenVerificacionEmailRepository, never()).delete(any());
     }
 
@@ -324,8 +340,8 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-valido")
-                .codigo("123456")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
                 .intentos(5)
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
@@ -354,8 +370,8 @@ class RegistroVerificacionServiceTest {
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)
                 .email("nuevo@test.com")
-                .token("token-vencido")
-                .codigo("123456")
+                .tokenHash(TokenHasher.sha256Hex("token-vencido"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
                 .intentos(0)
                 .fechaExpiracion(LocalDateTime.now().minusMinutes(1))
                 .build();

@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
@@ -59,6 +60,9 @@ class BloqueoCanchaServiceTest {
 
     @Mock
     private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @InjectMocks
     private BloqueoCanchaService bloqueoCanchaService;
@@ -173,7 +177,7 @@ class BloqueoCanchaServiceTest {
         BloqueoCanchaRequest request = new BloqueoCanchaRequest(fechaInicio, fechaFin, "Mantenimiento");
 
         when(canchaRepository.findById(cancha5A.getId())).thenReturn(Optional.of(cancha5A));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(reservaRepository.findOverlappingByCanchaId(cancha5A.getId(), fechaInicio, fechaFin)).thenReturn(List.of());
 
         // Act
@@ -221,7 +225,8 @@ class BloqueoCanchaServiceTest {
                 .build();
 
         when(canchaRepository.findById(cancha5A.getId())).thenReturn(Optional.of(cancha5A));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(
@@ -252,7 +257,7 @@ class BloqueoCanchaServiceTest {
                 .build();
 
         when(canchaRepository.findById(cancha5A.getId())).thenReturn(Optional.of(cancha5A));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(reservaRepository.findOverlappingByCanchaId(cancha5A.getId(), fechaInicio, fechaFin))
                 .thenReturn(List.of(reservaAfectada));
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
@@ -304,7 +309,7 @@ class BloqueoCanchaServiceTest {
                 .build();
 
         when(canchaRepository.findById(cancha5A.getId())).thenReturn(Optional.of(cancha5A));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(reservaRepository.findOverlappingByCanchaId(cancha5A.getId(), fechaInicio, fechaFin))
                 .thenReturn(List.of(reservaAfectada));
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
@@ -358,7 +363,7 @@ class BloqueoCanchaServiceTest {
                 .build();
 
         when(bloqueoCanchaRepository.findById(bloqueo.getId())).thenReturn(Optional.of(bloqueo));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act
         assertDoesNotThrow(() -> bloqueoCanchaService.eliminarBloqueo(

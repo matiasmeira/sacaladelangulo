@@ -16,7 +16,12 @@ public interface GastoRepository extends JpaRepository<Gasto, Long> {
 
     Optional<Gasto> findByIdAndEstablecimientoId(Long id, Long establecimientoId);
 
+    // Las tres queries de abajo excluyen is_active=false (ver M-04 en la auditoría): un
+    // gasto eliminado no debe aparecer en el listado ni contarse en los reportes, aunque
+    // la fila siga existiendo para auditoría.
+
     @Query("SELECT g FROM Gasto g WHERE g.establecimiento.id = :establecimientoId " +
+            "AND g.isActive = true " +
             "AND (:desde IS NULL OR g.fecha >= :desde) " +
             "AND (:hasta IS NULL OR g.fecha <= :hasta) " +
             "AND (:categoria IS NULL OR g.categoria = :categoria) " +
@@ -28,14 +33,14 @@ public interface GastoRepository extends JpaRepository<Gasto, Long> {
                         Pageable pageable);
 
     @Query("SELECT g.categoria, SUM(g.monto), COUNT(g) FROM Gasto g " +
-            "WHERE g.establecimiento.id = :establecimientoId AND g.fecha BETWEEN :desde AND :hasta " +
+            "WHERE g.establecimiento.id = :establecimientoId AND g.isActive = true AND g.fecha BETWEEN :desde AND :hasta " +
             "GROUP BY g.categoria")
     List<Object[]> sumGastoPorCategoria(@Param("establecimientoId") Long establecimientoId,
                                          @Param("desde") LocalDate desde,
                                          @Param("hasta") LocalDate hasta);
 
     @Query("SELECT g.fecha, g.monto FROM Gasto g " +
-            "WHERE g.establecimiento.id = :establecimientoId AND g.fecha BETWEEN :desde AND :hasta")
+            "WHERE g.establecimiento.id = :establecimientoId AND g.isActive = true AND g.fecha BETWEEN :desde AND :hasta")
     List<Object[]> findFechaYMontoParaSerieTemporal(@Param("establecimientoId") Long establecimientoId,
                                                       @Param("desde") LocalDate desde,
                                                       @Param("hasta") LocalDate hasta);

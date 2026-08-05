@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.TokenExpiradoException;
 import com.matiasmeira.sacaladelangulo.core.exception.TokenInvalidoException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
+import com.matiasmeira.sacaladelangulo.core.security.TokenHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,14 +83,22 @@ class RecuperacionPasswordServiceTest {
         TokenRecuperacionPassword tokenGuardado = tokenCaptor.getValue();
         assertEquals("existente@test.com", tokenGuardado.getEmail());
         assertTrue(tokenGuardado.getFechaExpiracion().isAfter(LocalDateTime.now()));
-        assertEquals(6, tokenGuardado.getCodigo().length());
-        assertTrue(tokenGuardado.getCodigo().chars().allMatch(Character::isDigit));
 
         ArgumentCaptor<RecuperacionPasswordSolicitadaEvent> eventoCaptor = ArgumentCaptor.forClass(RecuperacionPasswordSolicitadaEvent.class);
         verify(eventPublisher).publishEvent(eventoCaptor.capture());
         assertEquals("existente@test.com", eventoCaptor.getValue().email());
-        assertEquals("http://localhost:5173/restablecer?token=" + tokenGuardado.getToken(), eventoCaptor.getValue().linkRecuperacion());
-        assertEquals(tokenGuardado.getCodigo(), eventoCaptor.getValue().codigo());
+
+        // El valor crudo del código/token solo viaja en el evento (dispara el email); en
+        // la base solo se persiste su hash (ver M-05 en la auditoría).
+        String codigoCrudo = eventoCaptor.getValue().codigo();
+        assertEquals(6, codigoCrudo.length());
+        assertTrue(codigoCrudo.chars().allMatch(Character::isDigit));
+        assertEquals(TokenHasher.sha256Hex(codigoCrudo), tokenGuardado.getCodigoHash());
+
+        String prefijoLink = "http://localhost:5173/restablecer?token=";
+        assertTrue(eventoCaptor.getValue().linkRecuperacion().startsWith(prefijoLink));
+        String tokenCrudo = eventoCaptor.getValue().linkRecuperacion().substring(prefijoLink.length());
+        assertEquals(TokenHasher.sha256Hex(tokenCrudo), tokenGuardado.getTokenHash());
     }
 
     @Test
@@ -123,15 +132,15 @@ class RecuperacionPasswordServiceTest {
         TokenRecuperacionPassword token = TokenRecuperacionPassword.builder()
                 .id(1L)
                 .email("existente@test.com")
-                .token("token-valido")
-                .codigo("123456")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
                 .intentos(0)
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
         Usuario usuario = Usuario.builder().id(1L).email("existente@test.com").password("old").tokenVersion(3).build();
         ResetPasswordRequest request = new ResetPasswordRequest("token-valido", null, null, "NuevaPass123");
 
-        when(tokenRecuperacionPasswordRepository.findByToken("token-valido")).thenReturn(Optional.of(token));
+        when(tokenRecuperacionPasswordRepository.findByTokenHash(TokenHasher.sha256Hex("token-valido"))).thenReturn(Optional.of(token));
         when(usuarioRepository.findByEmail("existente@test.com")).thenReturn(Optional.of(usuario));
         when(passwordEncoder.encode("NuevaPass123")).thenReturn("encoded-password");
 
@@ -156,8 +165,8 @@ class RecuperacionPasswordServiceTest {
         TokenRecuperacionPassword token = TokenRecuperacionPassword.builder()
                 .id(1L)
                 .email("existente@test.com")
-                .token("token-valido")
-                .codigo("123456")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
                 .intentos(0)
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
@@ -181,8 +190,8 @@ class RecuperacionPasswordServiceTest {
         TokenRecuperacionPassword token = TokenRecuperacionPassword.builder()
                 .id(1L)
                 .email("existente@test.com")
-                .token("token-valido")
-                .codigo("123456")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
                 .intentos(0)
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
@@ -206,8 +215,8 @@ class RecuperacionPasswordServiceTest {
         TokenRecuperacionPassword token = TokenRecuperacionPassword.builder()
                 .id(1L)
                 .email("existente@test.com")
-                .token("token-valido")
-                .codigo("123456")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
                 .intentos(5)
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
                 .build();
@@ -229,14 +238,14 @@ class RecuperacionPasswordServiceTest {
         TokenRecuperacionPassword token = TokenRecuperacionPassword.builder()
                 .id(1L)
                 .email("existente@test.com")
-                .token("token-vencido")
-                .codigo("123456")
+                .tokenHash(TokenHasher.sha256Hex("token-vencido"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
                 .intentos(0)
                 .fechaExpiracion(LocalDateTime.now().minusMinutes(1))
                 .build();
         ResetPasswordRequest request = new ResetPasswordRequest("token-vencido", null, null, "NuevaPass123");
 
-        when(tokenRecuperacionPasswordRepository.findByToken("token-vencido")).thenReturn(Optional.of(token));
+        when(tokenRecuperacionPasswordRepository.findByTokenHash(TokenHasher.sha256Hex("token-vencido"))).thenReturn(Optional.of(token));
 
         assertThrows(TokenExpiradoException.class, () -> recuperacionPasswordService.resetPassword(request));
 
@@ -248,7 +257,7 @@ class RecuperacionPasswordServiceTest {
     @DisplayName("resetPassword_Fallo_TokenInvalido")
     void resetPassword_Fallo_TokenInvalido() {
         ResetPasswordRequest request = new ResetPasswordRequest("token-inexistente", null, null, "NuevaPass123");
-        when(tokenRecuperacionPasswordRepository.findByToken("token-inexistente")).thenReturn(Optional.empty());
+        when(tokenRecuperacionPasswordRepository.findByTokenHash(TokenHasher.sha256Hex("token-inexistente"))).thenReturn(Optional.empty());
 
         assertThrows(TokenInvalidoException.class, () -> recuperacionPasswordService.resetPassword(request));
         verify(usuarioRepository, never()).save(any());
@@ -263,7 +272,7 @@ class RecuperacionPasswordServiceTest {
                 () -> recuperacionPasswordService.resetPassword(request));
 
         assertEquals("Enviá el token o el email+código, no ambos", exception.getMessage());
-        verify(tokenRecuperacionPasswordRepository, never()).findByToken(anyString());
+        verify(tokenRecuperacionPasswordRepository, never()).findByTokenHash(anyString());
         verify(tokenRecuperacionPasswordRepository, never()).findByEmail(anyString());
     }
 
@@ -276,7 +285,7 @@ class RecuperacionPasswordServiceTest {
                 () -> recuperacionPasswordService.resetPassword(request));
 
         assertEquals("Enviá el token o el email+código", exception.getMessage());
-        verify(tokenRecuperacionPasswordRepository, never()).findByToken(anyString());
+        verify(tokenRecuperacionPasswordRepository, never()).findByTokenHash(anyString());
         verify(tokenRecuperacionPasswordRepository, never()).findByEmail(anyString());
     }
 }

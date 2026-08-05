@@ -13,21 +13,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Reporte de clientes: clientes nuevos (primera reserva FINALIZADA de ese jugador *en este
  * establecimiento*, no Usuario.fechaCreacion, que es de toda la plataforma), ausencias
- * (no implementado: no existe ningún concepto de no-show en el modelo, ver AusenciasInfo) y
- * top clientes por cantidad de reservas en el rango (sin comparar con el período anterior,
- * mismo criterio que horarios-pedidos).
+ * (cantidad de reservas AUSENTE del establecimiento en el rango, y por jugador dentro del top
+ * de clientes, ver EstadoReserva.AUSENTE) y top clientes por cantidad de reservas en el rango
+ * (sin comparar con el período anterior, mismo criterio que horarios-pedidos).
  */
 @Service
 @RequiredArgsConstructor
 public class ReporteClientesService {
-
-    private static final String MOTIVO_AUSENCIAS_NO_DISPONIBLE =
-            "No implementado: el modelo actual no registra asistencia/no-show a una reserva.";
 
     private final ReservaRepository reservaRepository;
     private final ReporteAutorizacionService reporteAutorizacionService;
@@ -54,15 +53,29 @@ public class ReporteClientesService {
 
         List<Object[]> filasTopClientes = reservaRepository.topClientesPorReservas(
                 establecimientoId, PeriodoUtil.inicioDelDia(desde), PeriodoUtil.finDelDia(hasta), PageRequest.of(0, topN));
+
+        List<Long> jugadorIds = filasTopClientes.stream().map(fila -> (Long) fila[0]).toList();
+        Map<Long, Long> ausenciasPorJugador = new HashMap<>();
+        if (!jugadorIds.isEmpty()) {
+            for (Object[] fila : reservaRepository.countAusenciasPorJugadoresEnRango(
+                    establecimientoId, jugadorIds, PeriodoUtil.inicioDelDia(desde), PeriodoUtil.finDelDia(hasta))) {
+                ausenciasPorJugador.put((Long) fila[0], ((Number) fila[1]).longValue());
+            }
+        }
+
         List<TopClienteDto> topClientes = filasTopClientes.stream()
-                .map(fila -> new TopClienteDto((Long) fila[0], (String) fila[1], ((Number) fila[2]).longValue()))
+                .map(fila -> new TopClienteDto((Long) fila[0], (String) fila[1], ((Number) fila[2]).longValue(),
+                        ausenciasPorJugador.getOrDefault((Long) fila[0], 0L)))
                 .toList();
+
+        long totalAusencias = reservaRepository.countAusenciasEnRango(
+                establecimientoId, PeriodoUtil.inicioDelDia(desde), PeriodoUtil.finDelDia(hasta));
 
         return new ClientesReporteResponse(
                 new RangoFechas(desde, hasta),
                 anterior,
                 new Comparativo<>(clientesNuevosActual, clientesNuevosAnterior),
-                new AusenciasInfo(false, null, MOTIVO_AUSENCIAS_NO_DISPONIBLE),
+                new AusenciasInfo(true, totalAusencias, null),
                 topClientes
         );
     }

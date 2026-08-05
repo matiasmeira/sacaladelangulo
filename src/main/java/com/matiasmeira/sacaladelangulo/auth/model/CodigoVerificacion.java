@@ -10,6 +10,9 @@ import java.time.LocalDateTime;
 
 /**
  * Entidad para almacenar códigos OTP de verificación de teléfono.
+ *
+ * <p>codigoHash guarda el hash SHA-256 (ver TokenHasher), nunca el código crudo (ver M-05
+ * en la auditoría).
  */
 @Getter
 @Setter
@@ -29,8 +32,8 @@ public class CodigoVerificacion {
     @Column(nullable = false)
     private String email;
 
-    @Column(nullable = false)
-    private String codigo;
+    @Column(name = "codigo_hash", nullable = false)
+    private String codigoHash;
 
     @Column(nullable = false)
     private String telefonoPendiente;

@@ -1,8 +1,5 @@
 package com.matiasmeira.sacaladelangulo.buffet.service;
 
-import com.matiasmeira.sacaladelangulo.auth.model.Role;
-import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.buffet.dto.AjustarStockRequest;
 import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetMapper;
 import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetRequest;
@@ -10,11 +7,11 @@ import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetResponse;
 import com.matiasmeira.sacaladelangulo.buffet.model.ProductoBuffet;
 import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,12 +28,12 @@ public class ProductoBuffetService {
 
     private final ProductoBuffetRepository productoBuffetRepository;
     private final EstablecimientoRepository establecimientoRepository;
-    private final UsuarioRepository usuarioRepository;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final ProductoBuffetMapper productoBuffetMapper;
 
     public ProductoBuffetResponse crearProducto(Long establecimientoId, ProductoBuffetRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         ProductoBuffet producto = ProductoBuffet.builder()
                 .nombre(request.nombre())
@@ -58,7 +55,7 @@ public class ProductoBuffetService {
      */
     public ProductoBuffetResponse actualizarProducto(Long establecimientoId, Long productoId, ProductoBuffetRequest request, String email) {
         ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimientoId, productoId);
-        validarPropietarioOAdmin(producto.getEstablecimiento(), email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(producto.getEstablecimiento(), email);
 
         producto.setNombre(request.nombre());
         producto.setDescripcion(request.descripcion());
@@ -76,7 +73,7 @@ public class ProductoBuffetService {
      */
     public ProductoBuffetResponse ajustarStock(Long establecimientoId, Long productoId, AjustarStockRequest request, String email) {
         ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimientoId, productoId);
-        validarPropietarioOAdmin(producto.getEstablecimiento(), email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(producto.getEstablecimiento(), email);
 
         // Lock pesimista antes de leer/escribir el stock: serializa contra cualquier otro
         // ajuste/venta/cancelación concurrente sobre el mismo producto (ver A5 en la auditoría).
@@ -101,7 +98,7 @@ public class ProductoBuffetService {
     @Transactional(readOnly = true)
     public List<ProductoBuffetResponse> listarPorEstablecimiento(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         return productoBuffetRepository.findByEstablecimientoId(establecimientoId).stream()
                 .map(productoBuffetMapper::mapToResponse)
@@ -110,7 +107,7 @@ public class ProductoBuffetService {
 
     public void eliminarProducto(Long establecimientoId, Long productoId, String email) {
         ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimientoId, productoId);
-        validarPropietarioOAdmin(producto.getEstablecimiento(), email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(producto.getEstablecimiento(), email);
 
         productoBuffetRepository.delete(producto);
         log.info("Producto de buffet eliminado. ID: {}", productoId);
@@ -130,12 +127,4 @@ public class ProductoBuffetService {
         return producto;
     }
 
-    private void validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
-    }
 }

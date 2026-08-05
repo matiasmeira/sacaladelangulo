@@ -3,8 +3,10 @@ package com.matiasmeira.sacaladelangulo.establecimiento.service;
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
@@ -29,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,7 +52,10 @@ class CanchaServiceTest {
     private EstablecimientoRepository establecimientoRepository;
 
     @Mock
-    private UsuarioRepository usuarioRepository;
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
+
+    @Mock
+    private RegistroAuditoriaService registroAuditoriaService;
 
     @InjectMocks
     private CanchaService canchaService;
@@ -91,7 +97,7 @@ class CanchaServiceTest {
     @DisplayName("desactivarCancha_Exito_DejaLaCanchaInactiva")
     void desactivarCancha_Exito_DejaLaCanchaInactiva() {
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(canchaRepository.save(any(Cancha.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -107,7 +113,8 @@ class CanchaServiceTest {
         Usuario otroDueno = Usuario.builder().id(3L).email("otro@test.com").rol(Role.OWNER).build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         assertThrows(
                 org.springframework.security.access.AccessDeniedException.class,
@@ -139,7 +146,7 @@ class CanchaServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findById(canchaDeOtroEstablecimiento.getId())).thenReturn(Optional.of(canchaDeOtroEstablecimiento));
 
         assertThrows(
@@ -153,7 +160,7 @@ class CanchaServiceTest {
     @DisplayName("desactivarCancha_Fallo_CanchaNoEncontrada")
     void desactivarCancha_Fallo_CanchaNoEncontrada() {
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThrows(
@@ -178,11 +185,27 @@ class CanchaServiceTest {
         );
     }
 
+    private CanchaRequest requestConCanchasFisicasIds(java.util.List<Long> canchasFisicasIds) {
+        return new CanchaRequest(
+                "Cancha Pool",
+                Set.of(Deporte.FUTBOL),
+                10,
+                BigDecimal.valueOf(10000),
+                BigDecimal.ZERO,
+                java.util.List.of(60, 90, 120),
+                null,
+                true,
+                java.util.List.of(),
+                canchasFisicasIds,
+                canchasFisicasIds.size()
+        );
+    }
+
     @Test
     @DisplayName("crearCancha_Exito_ConPreciosPorDuracionValidos")
     void crearCancha_Exito_ConPreciosPorDuracionValidos() {
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.save(any(Cancha.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CanchaRequest request = requestConPreciosPorDuracion(Map.of(120, BigDecimal.valueOf(18000)));
@@ -191,13 +214,17 @@ class CanchaServiceTest {
 
         assertEquals(0, BigDecimal.valueOf(18000).compareTo(response.preciosPorDuracion().get(120)));
         verify(canchaRepository).save(any(Cancha.class));
+        // Ver §3 "Consistencia entre features" en la auditoría: alta de cancha (con su
+        // precio) por el dueño ahora deja rastro en RegistroAuditoria.
+        verify(registroAuditoriaService).registrarSobreEstablecimiento(
+                eq(dueno), eq(establecimiento), eq(AccionAuditoria.CREAR_CANCHA), any(), any());
     }
 
     @Test
     @DisplayName("crearCancha_Fallo_PrecioPorDuracionNoPermitida")
     void crearCancha_Fallo_PrecioPorDuracionNoPermitida() {
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         CanchaRequest request = requestConPreciosPorDuracion(Map.of(45, BigDecimal.valueOf(5000)));
 
@@ -210,9 +237,55 @@ class CanchaServiceTest {
     @DisplayName("crearCancha_Fallo_PrecioPorDuracionNoPositivo")
     void crearCancha_Fallo_PrecioPorDuracionNoPositivo() {
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         CanchaRequest request = requestConPreciosPorDuracion(Map.of(120, BigDecimal.ZERO));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> canchaService.crearCancha(establecimiento.getId(), request, dueno.getEmail()));
+        verify(canchaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crearCancha_Exito_ConCanchasFisicasDelMismoEstablecimiento")
+    void crearCancha_Exito_ConCanchasFisicasDelMismoEstablecimiento() {
+        Cancha fisicaA = Cancha.builder().id(101L).nombre("Fisica A").establecimiento(establecimiento).capacidad(5).isActive(true).build();
+        Cancha fisicaB = Cancha.builder().id(102L).nombre("Fisica B").establecimiento(establecimiento).capacidad(5).isActive(true).build();
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(canchaRepository.findAllById(java.util.List.of(101L, 102L))).thenReturn(java.util.List.of(fisicaA, fisicaB));
+        when(canchaRepository.save(any(Cancha.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CanchaRequest request = requestConCanchasFisicasIds(java.util.List.of(101L, 102L));
+
+        assertDoesNotThrow(() -> canchaService.crearCancha(establecimiento.getId(), request, dueno.getEmail()));
+        verify(canchaRepository).save(any(Cancha.class));
+        verify(registroAuditoriaService).registrarSobreEstablecimiento(
+                eq(dueno), eq(establecimiento), eq(AccionAuditoria.CREAR_CANCHA), any(), any());
+    }
+
+    @Test
+    @DisplayName("crearCancha_Fallo_CanchaFisicaPerteneceAOtroEstablecimiento")
+    void crearCancha_Fallo_CanchaFisicaPerteneceAOtroEstablecimiento() {
+        Establecimiento otroEstablecimiento = Establecimiento.builder()
+                .id(99L)
+                .nombre("Otro")
+                .direccion("Otra calle")
+                .latitud(-1.0)
+                .longitud(-1.0)
+                .dueno(dueno)
+                .requiereSena(true)
+                .isActive(true)
+                .build();
+        Cancha fisicaDeOtroEstablecimiento = Cancha.builder()
+                .id(201L).nombre("Ajena").establecimiento(otroEstablecimiento).capacidad(5).isActive(true).build();
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(canchaRepository.findAllById(java.util.List.of(201L))).thenReturn(java.util.List.of(fisicaDeOtroEstablecimiento));
+
+        CanchaRequest request = requestConCanchasFisicasIds(java.util.List.of(201L));
 
         assertThrows(IllegalArgumentException.class,
                 () -> canchaService.crearCancha(establecimiento.getId(), request, dueno.getEmail()));

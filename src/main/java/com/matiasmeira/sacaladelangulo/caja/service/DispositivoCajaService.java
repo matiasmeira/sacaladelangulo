@@ -1,8 +1,6 @@
 package com.matiasmeira.sacaladelangulo.caja.service;
 
-import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.caja.dto.ActivarLocalRequest;
 import com.matiasmeira.sacaladelangulo.caja.dto.ActivarLocalResponse;
 import com.matiasmeira.sacaladelangulo.caja.dto.ConsumirCodigoResponse;
@@ -17,6 +15,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
@@ -61,7 +60,7 @@ public class DispositivoCajaService {
     private final DispositivoCajaRepository dispositivoCajaRepository;
     private final CodigoEmparejamientoCajaRepository codigoEmparejamientoCajaRepository;
     private final EstablecimientoRepository establecimientoRepository;
-    private final UsuarioRepository usuarioRepository;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final RateLimiterService rateLimiterService;
     private final RegistroAuditoriaService registroAuditoriaService;
 
@@ -76,7 +75,7 @@ public class DispositivoCajaService {
 
     public ActivarLocalResponse activarLocal(Long establecimientoId, String email, ActivarLocalRequest request, HttpServletResponse response) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        Usuario actor = validarPropietarioOAdmin(establecimiento, email);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         String tokenCrudo = generarSecretoAlto();
         DispositivoCaja dispositivo = DispositivoCaja.builder()
@@ -98,7 +97,7 @@ public class DispositivoCajaService {
 
     public EmparejarResponse emparejar(Long establecimientoId, String email, EmparejarRequest request) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        Usuario actor = validarPropietarioOAdmin(establecimiento, email);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         String codigoCrudo = generarSecretoAlto();
         LocalDateTime expiraEn = LocalDateTime.now().plus(Duration.ofMillis(codigoEmparejamientoTtlMillis));
@@ -120,7 +119,7 @@ public class DispositivoCajaService {
     @Transactional(readOnly = true)
     public List<DispositivoCajaResponse> listar(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         return dispositivoCajaRepository.findByEstablecimientoIdAndActivoTrue(establecimientoId).stream()
                 .map(d -> new DispositivoCajaResponse(d.getId(), d.getLabel(), d.getCreatedAt(), d.getLastUsedAt()))
@@ -129,7 +128,7 @@ public class DispositivoCajaService {
 
     public void revocar(Long establecimientoId, Long dispositivoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        Usuario actor = validarPropietarioOAdmin(establecimiento, email);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         DispositivoCaja dispositivo = dispositivoCajaRepository.findByIdAndEstablecimientoId(dispositivoId, establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Dispositivo no encontrado"));
@@ -221,17 +220,4 @@ public class DispositivoCajaService {
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
     }
 
-    /**
-     * Duplicado a propósito de EmpleadoService/RegistroAuditoriaService: el proyecto
-     * prefiere esta pequeña duplicación a una abstracción compartida prematura.
-     */
-    private Usuario validarPropietarioOAdmin(Establecimiento establecimiento, String email) {
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
-            throw new AccessDeniedException("No autorizado en este establecimiento");
-        }
-        return usuarioAutenticado;
-    }
 }

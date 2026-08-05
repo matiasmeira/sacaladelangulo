@@ -7,7 +7,9 @@ import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
 import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
+import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoMapper;
@@ -35,6 +37,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -58,6 +61,9 @@ class GastoServiceTest {
     @Mock
     private TurnoCajaService turnoCajaService;
 
+    @Mock
+    private RegistroAuditoriaService registroAuditoriaService;
+
     private GastoService gastoService;
 
     private Usuario dueno;
@@ -66,7 +72,7 @@ class GastoServiceTest {
 
     @BeforeEach
     void setUp() {
-        gastoService = new GastoService(gastoRepository, establecimientoRepository, autorizacionEmpleadoService, new GastoMapper(), turnoCajaService);
+        gastoService = new GastoService(gastoRepository, establecimientoRepository, autorizacionEmpleadoService, new GastoMapper(), turnoCajaService, registroAuditoriaService);
 
         dueno = Usuario.builder()
                 .id(2L)
@@ -113,6 +119,10 @@ class GastoServiceTest {
                 eq(establecimiento), eq(TipoMovimientoCaja.EGRESO), eq(OrigenMovimientoCaja.GASTO),
                 eq(MetodoPago.EFECTIVO), eq(BigDecimal.valueOf(1000)), eq("Gasto: Luz"),
                 eq(100L), eq(dueno));
+        // Ver §3 "Consistencia entre features" en la auditoría: alta de gasto por el
+        // propio dueño ahora deja rastro en RegistroAuditoria, no solo la de empleados.
+        verify(registroAuditoriaService).registrarSobreEstablecimiento(
+                eq(dueno), eq(establecimiento), eq(AccionAuditoria.REGISTRAR_GASTO), eq(100L), any());
     }
 
     @Test
@@ -180,11 +190,59 @@ class GastoServiceTest {
         assertEquals("MARKETING", response.categoria());
         assertEquals("Nueva", response.descripcion());
         assertEquals("http://x", response.comprobanteUrl());
+        // Ver M-04 en la auditoría: cambió monto (200->999) y método de pago
+        // (EFECTIVO->TRANSFERENCIA), así que debe revertir el egreso original en efectivo
+        // y no registrar un nuevo egreso (el nuevo método ya no es EFECTIVO).
+        verify(turnoCajaService).registrarMovimientoSiCorresponde(
+                eq(establecimiento), eq(TipoMovimientoCaja.INGRESO), eq(OrigenMovimientoCaja.GASTO),
+                eq(MetodoPago.EFECTIVO), eq(BigDecimal.valueOf(200)),
+                eq("Ajuste por edición del gasto #50: reversión del monto anterior"), eq(50L), eq(dueno));
+        verify(turnoCajaService).registrarMovimientoSiCorresponde(
+                eq(establecimiento), eq(TipoMovimientoCaja.EGRESO), eq(OrigenMovimientoCaja.GASTO),
+                eq(MetodoPago.TRANSFERENCIA), eq(BigDecimal.valueOf(999)),
+                eq("Gasto editado: Nueva"), eq(50L), eq(dueno));
+        verify(registroAuditoriaService).registrarSobreEstablecimiento(
+                eq(dueno), eq(establecimiento), eq(AccionAuditoria.EDITAR_GASTO), eq(50L), any());
     }
 
     @Test
-    @DisplayName("eliminarGasto_Exito_LlamaDelete")
-    void eliminarGasto_Exito_LlamaDelete() {
+    @DisplayName("editarGasto_Exito_SinCambioDeMontoNiMetodo_NoTocaLaCaja")
+    void editarGasto_Exito_SinCambioDeMontoNiMetodo_NoTocaLaCaja() {
+        // Arrange: solo cambia la descripción/categoría, ni el monto ni el método de pago
+        Gasto gasto = Gasto.builder()
+                .id(51L)
+                .establecimiento(establecimiento)
+                .fecha(LocalDate.now().minusDays(1))
+                .monto(BigDecimal.valueOf(200))
+                .categoria(CategoriaGasto.INSUMOS)
+                .descripcion("Vieja")
+                .metodoPago(MetodoPago.EFECTIVO)
+                .usuarioRegistro(dueno)
+                .fechaCreacion(LocalDateTime.now())
+                .build();
+
+        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(200), CategoriaGasto.MARKETING, "Nueva descripción", MetodoPago.EFECTIVO, null);
+
+        when(gastoRepository.findByIdAndEstablecimientoId(51L, establecimiento.getId())).thenReturn(Optional.of(gasto));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(gastoRepository.save(any(Gasto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        gastoService.editarGasto(establecimiento.getId(), 51L, request, dueno.getEmail());
+
+        verify(turnoCajaService, never()).registrarMovimientoSiCorresponde(
+                any(), any(), any(), any(), any(), any(), any(), any());
+        // La edición sigue auditándose aunque no haya cambiado monto/método (afecta
+        // categoría/descripción/comprobante, que también son datos de negocio).
+        verify(registroAuditoriaService).registrarSobreEstablecimiento(
+                eq(dueno), eq(establecimiento), eq(AccionAuditoria.EDITAR_GASTO), eq(51L), any());
+    }
+
+    @Test
+    @DisplayName("eliminarGasto_Exito_EsAnulacionLogicaNoDeleteFisico")
+    void eliminarGasto_Exito_EsAnulacionLogicaNoDeleteFisico() {
+        // Ver M-04 en la auditoría: eliminarGasto ya no borra la fila (se perdía el
+        // historial financiero), marca isActive=false para que quede excluida del listado
+        // y de los reportes pero persista para auditoría.
         Gasto gasto = Gasto.builder()
                 .id(60L)
                 .establecimiento(establecimiento)
@@ -198,10 +256,76 @@ class GastoServiceTest {
 
         when(gastoRepository.findByIdAndEstablecimientoId(60L, establecimiento.getId())).thenReturn(Optional.of(gasto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(gastoRepository.save(any(Gasto.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         gastoService.eliminarGasto(establecimiento.getId(), 60L, dueno.getEmail());
 
-        verify(gastoRepository).delete(gasto);
+        verify(gastoRepository, never()).delete(any());
+        verify(gastoRepository).save(gasto);
+        assertFalse(gasto.getIsActive());
+        // Eliminar un gasto en efectivo debe revertir el egreso que había generado, para
+        // que el arqueo no reporte un sobrante falso.
+        verify(turnoCajaService).registrarMovimientoSiCorresponde(
+                eq(establecimiento), eq(TipoMovimientoCaja.INGRESO), eq(OrigenMovimientoCaja.GASTO),
+                eq(MetodoPago.EFECTIVO), eq(BigDecimal.valueOf(100)),
+                eq("Gasto eliminado: reversión de A borrar"), eq(60L), eq(dueno));
+        verify(registroAuditoriaService).registrarSobreEstablecimiento(
+                eq(dueno), eq(establecimiento), eq(AccionAuditoria.ELIMINAR_GASTO), eq(60L), any());
+    }
+
+    @Test
+    @DisplayName("eliminarGasto_Exito_EsIdempotenteSiYaEstabaEliminado")
+    void eliminarGasto_Exito_EsIdempotenteSiYaEstabaEliminado() {
+        Gasto gastoYaEliminado = Gasto.builder()
+                .id(61L)
+                .establecimiento(establecimiento)
+                .fecha(LocalDate.now())
+                .monto(BigDecimal.valueOf(100))
+                .categoria(CategoriaGasto.OTROS)
+                .descripcion("Ya eliminado")
+                .metodoPago(MetodoPago.EFECTIVO)
+                .usuarioRegistro(dueno)
+                .isActive(false)
+                .build();
+
+        when(gastoRepository.findByIdAndEstablecimientoId(61L, establecimiento.getId())).thenReturn(Optional.of(gastoYaEliminado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+
+        gastoService.eliminarGasto(establecimiento.getId(), 61L, dueno.getEmail());
+
+        verify(gastoRepository, never()).save(any());
+        verify(gastoRepository, never()).delete(any());
+        verify(turnoCajaService, never()).registrarMovimientoSiCorresponde(
+                any(), any(), any(), any(), any(), any(), any(), any());
+        verify(registroAuditoriaService, never()).registrarSobreEstablecimiento(
+                any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("editarGasto_Fallo_GastoEliminado")
+    void editarGasto_Fallo_GastoEliminado() {
+        Gasto gastoEliminado = Gasto.builder()
+                .id(62L)
+                .establecimiento(establecimiento)
+                .fecha(LocalDate.now())
+                .monto(BigDecimal.valueOf(100))
+                .categoria(CategoriaGasto.OTROS)
+                .descripcion("Eliminado")
+                .metodoPago(MetodoPago.EFECTIVO)
+                .usuarioRegistro(dueno)
+                .isActive(false)
+                .build();
+
+        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(200), CategoriaGasto.OTROS, "Intento de edición", MetodoPago.EFECTIVO, null);
+
+        when(gastoRepository.findByIdAndEstablecimientoId(62L, establecimiento.getId())).thenReturn(Optional.of(gastoEliminado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> gastoService.editarGasto(establecimiento.getId(), 62L, request, dueno.getEmail()));
+        verify(gastoRepository, never()).save(any());
+        verify(turnoCajaService, never()).registrarMovimientoSiCorresponde(
+                any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

@@ -49,6 +49,9 @@ class EmpleadoServiceTest {
     @Mock
     private RegistroAuditoriaService registroAuditoriaService;
 
+    @Mock
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
+
     private EmpleadoService empleadoService;
 
     private Usuario dueno;
@@ -56,7 +59,7 @@ class EmpleadoServiceTest {
 
     @BeforeEach
     void setUp() {
-        empleadoService = new EmpleadoService(usuarioRepository, establecimientoRepository, passwordEncoder, new EmpleadoMapper(), registroAuditoriaService);
+        empleadoService = new EmpleadoService(usuarioRepository, establecimientoRepository, passwordEncoder, new EmpleadoMapper(), registroAuditoriaService, autorizacionEmpleadoService);
 
         dueno = Usuario.builder()
                 .id(2L)
@@ -83,7 +86,7 @@ class EmpleadoServiceTest {
         EmpleadoRequest request = new EmpleadoRequest("Juan", "7392", Set.of(PermisoEmpleado.CANCELAR_RESERVA));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
         when(passwordEncoder.encode("7392")).thenReturn("hash-7392");
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
@@ -117,7 +120,7 @@ class EmpleadoServiceTest {
         EmpleadoRequest request = new EmpleadoRequest("Juan", "1234", null);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(true);
 
         // Act & Assert
@@ -136,7 +139,7 @@ class EmpleadoServiceTest {
         EmpleadoRequest request = new EmpleadoRequest("Juan", "7392", null);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
         when(passwordEncoder.encode("7392")).thenReturn("hash-7392");
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
@@ -157,7 +160,7 @@ class EmpleadoServiceTest {
         EmpleadoRequest request = new EmpleadoRequest("Juan", "1234", null);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
 
         // Act & Assert
@@ -177,7 +180,8 @@ class EmpleadoServiceTest {
         Usuario otroDueno = Usuario.builder().id(3L).email("otro@test.com").rol(Role.OWNER).build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
         // Act & Assert
         assertThrows(
@@ -202,7 +206,7 @@ class EmpleadoServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.findByEstablecimientoIdAndRol(establecimiento.getId(), Role.EMPLOYEE)).thenReturn(List.of(empleado));
 
         // Act
@@ -255,7 +259,7 @@ class EmpleadoServiceTest {
                 Set.of(PermisoEmpleado.CANCELAR_RESERVA, PermisoEmpleado.REGISTRAR_VENTA_BUFFET));
 
         when(usuarioRepository.findById(empleado.getId())).thenReturn(Optional.of(empleado));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -319,7 +323,7 @@ class EmpleadoServiceTest {
         CambiarPinRequest request = new CambiarPinRequest("5678");
 
         when(usuarioRepository.findById(empleado.getId())).thenReturn(Optional.of(empleado));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(passwordEncoder.encode("5678")).thenReturn("hash-5678");
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -349,7 +353,7 @@ class EmpleadoServiceTest {
         CambiarPinRequest request = new CambiarPinRequest("0000");
 
         when(usuarioRepository.findById(empleado.getId())).thenReturn(Optional.of(empleado));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act & Assert
         assertThrows(
@@ -373,7 +377,7 @@ class EmpleadoServiceTest {
                 .build();
 
         when(usuarioRepository.findById(empleado.getId())).thenReturn(Optional.of(empleado));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act

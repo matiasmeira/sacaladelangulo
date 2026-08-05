@@ -12,7 +12,7 @@ import java.util.Optional;
 @Repository
 public interface TokenVerificacionEmailRepository extends JpaRepository<TokenVerificacionEmail, Long> {
 
-    Optional<TokenVerificacionEmail> findByToken(String token);
+    Optional<TokenVerificacionEmail> findByTokenHash(String tokenHash);
 
     Optional<TokenVerificacionEmail> findByEmail(String email);
 

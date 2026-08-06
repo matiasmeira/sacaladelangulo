@@ -168,6 +168,29 @@ public class TurnoCajaService {
     }
 
     /**
+     * ¿El último movimiento de caja registrado para esta entidad de origen (venta/gasto)
+     * todavía vive en el turno actualmente ABIERTO del establecimiento? Se usa antes de
+     * compensar una cancelación/edición (ver VentaService.cancelarVenta,
+     * GastoService.editarGasto/eliminarGasto): si el turno donde se registró el movimiento
+     * original ya cerró (o nunca se llegó a registrar nada, porque no había turno abierto en
+     * su momento), la respuesta es false y el caller NO debe tocar la caja — ni revertir ni
+     * registrar un movimiento nuevo — porque cualquiera de las dos cosas ensuciaría el arqueo
+     * de un turno que no tuvo ese billete físico (bug real corregido, ver
+     * REVISION_FUNCIONAL.md).
+     */
+    @Transactional(readOnly = true)
+    public boolean movimientoOriginalSigueEnTurnoAbierto(Establecimiento establecimiento, OrigenMovimientoCaja origen, Long referenciaId) {
+        Optional<TurnoCaja> turnoAbierto = turnoCajaRepository.findByEstablecimientoIdAndEstado(
+                establecimiento.getId(), EstadoTurnoCaja.ABIERTO);
+        if (turnoAbierto.isEmpty()) {
+            return false;
+        }
+        return movimientoCajaRepository.findTopByOrigenAndReferenciaIdOrderByFechaHoraDesc(origen, referenciaId)
+                .map(movimiento -> movimiento.getTurnoCaja().getId().equals(turnoAbierto.get().getId()))
+                .orElse(false);
+    }
+
+    /**
      * Registra un movimiento manual (siempre EFECTIVO) cargado a mano por el operador
      * dentro del turno ABIERTO del establecimiento.
      */

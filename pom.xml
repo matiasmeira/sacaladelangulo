@@ -30,6 +30,12 @@
 		<java.version>21</java.version>
 		<maven.compiler.source>21</maven.compiler.source>
 		<maven.compiler.target>21</maven.compiler.target>
+		<!-- Indirección a través de una property propia (en vez de hardcodear el valor
+		     directo en <excludedGroups> del plugin) para que sí se pueda overridear desde la
+		     línea de comandos: un valor de plugin fijado literal en el XML no es
+		     overrideable con -D aunque el parámetro esté bound a una property, tiene que
+		     pasar por una property intermedia como esta. Ver plugin de surefire más abajo. -->
+		<surefire.excludedGroups>testcontainers</surefire.excludedGroups>
 	</properties>
 	<dependencies>
 
@@ -190,6 +196,21 @@
 						</configuration>
 					</execution>
 				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- Los tests bajo @Tag("testcontainers") (ReservaConcurrenciaIntegrationTest,
+					     TurnoCajaConcurrenciaIntegrationTest) necesitan un daemon de Docker corriendo
+					     para levantar un Postgres real; se excluyen del "./mvnw test" de todos los
+					     dias para que el flujo normal de desarrollo (sin Docker) siga andando exactamente
+					     igual que antes de agregarlos. Para correrlos explicitamente (con Docker activo):
+					     ./mvnw test -Dsurefire.excludedGroups= -Dgroups=testcontainers
+					     o, para correr TODO (suite normal + testcontainers) en una sola pasada:
+					     ./mvnw test -Dsurefire.excludedGroups= -->
+					<excludedGroups>${surefire.excludedGroups}</excludedGroups>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

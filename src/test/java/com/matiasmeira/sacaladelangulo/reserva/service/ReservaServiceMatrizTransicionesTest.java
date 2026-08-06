@@ -177,13 +177,11 @@ class ReservaServiceMatrizTransicionesTest {
         when(reservaRepository.findByIdConEstablecimientoYDueno(RESERVA_ID)).thenReturn(Optional.of(reservaEn(estadoInicial)));
 
         if (FINALIZAR_INVALIDOS.contains(estadoInicial)) {
-            // BUG REAL (ver REVISION_FUNCIONAL.md): para CANCELADA_PRERESERVA este assert
-            // falla contra el código actual. ReservaService.finalizarReserva solo excluye
-            // explícitamente CANCELADA, PENDIENTE_SENA y FINALIZADA — CANCELADA_PRERESERVA
-            // (una prereserva que expiró SIN que nadie pagara la seña) cae en la rama por
-            // defecto y se puede "finalizar" igual, generando cobro y movimiento de caja
-            // sobre una reserva que nunca fue confirmada. No se ajusta la expectativa para
-            // que el test pase: se deja en rojo a propósito.
+            // FIX aplicado (ver REVISION_FUNCIONAL.md): CANCELADA_PRERESERVA (una prereserva
+            // que expiró SIN que nadie pagara la seña) ahora se rechaza explícitamente, igual
+            // que CANCELADA. Antes caía en la rama por defecto y se podía "finalizar" igual,
+            // generando cobro y movimiento de caja sobre una reserva que nunca fue confirmada
+            // — este test lo tuvo en rojo hasta que se corrigió ReservaService.finalizarReserva.
             assertThrows(IllegalArgumentException.class,
                     () -> reservaService.finalizarReserva(RESERVA_ID, MetodoPago.EFECTIVO, dueno.getEmail()));
         } else {

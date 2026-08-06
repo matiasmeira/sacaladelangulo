@@ -20,6 +20,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.Establecimient
 import com.matiasmeira.sacaladelangulo.support.AbstractPostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * apertura, y rollback transaccional real de una venta fallida. Requiere Docker (ver
  * AbstractPostgresIntegrationTest).
  */
+@Tag("testcontainers")
 @DisplayName("TurnoCajaService/VentaService - Postgres real (Testcontainers)")
 class TurnoCajaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTest {
 
@@ -190,25 +192,20 @@ class TurnoCajaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTe
     }
 
     /**
-     * BUG REAL (ver REVISION_FUNCIONAL.md, hallazgo de coherencia de caminos de plata):
-     * VentaService.cancelarVenta / GastoService.editarGasto/eliminarGasto revierten el
+     * FIX aplicado (ver REVISION_FUNCIONAL.md, hallazgo de coherencia de caminos de plata):
+     * VentaService.cancelarVenta / GastoService.editarGasto/eliminarGasto revertían el
      * movimiento de caja original llamando a TurnoCajaService.registrarMovimientoSiCorresponde,
-     * que siempre escribe contra el turno ACTUALMENTE abierto — no contra el turno donde se
-     * originó el movimiento que se está corrigiendo. Si la venta se vendió y se cerró la caja
-     * en el turno A, y recién se cancela con el turno B ya abierto, la reversión "ensucia" el
-     * arqueo del turno B con un movimiento que no corresponde a ningún billete físico que haya
-     * entrado o salido durante el turno B.
-     *
-     * <p>Este test documenta el comportamiento CORRECTO esperado (el arqueo de un turno no
-     * debería verse afectado por una corrección que pertenece a otro turno) y por lo tanto
-     * falla contra el código actual. No se maquilla el assert para que pase: se deja fallando
-     * a propósito (ver instrucciones de la tarea) hasta que se decida el fix real (opciones:
-     * registrar la reversión contra el turno original aunque esté cerrado —requiere permitir
-     * escribir en un turno CERRADO, algo hoy prohibido— o no compensar en absoluto si el turno
-     * original ya cerró, dejando la diferencia documentada solo en el propio Venta/Gasto).
+     * que siempre escribía contra el turno ACTUALMENTE abierto — no contra el turno donde se
+     * originó el movimiento que se estaba corrigiendo. Se optó por la opción "no compensar en
+     * absoluto si el turno original ya cerró" (en vez de permitir escribir en un turno CERRADO):
+     * TurnoCajaService.movimientoOriginalSigueEnTurnoAbierto ahora gatea la reversión, y tanto
+     * VentaService como GastoService la saltean (con un log.warn) si el turno donde vive el
+     * movimiento original ya no es el turno abierto actual. La diferencia queda documentada
+     * solo en el propio Venta.estado/Gasto — que de todas formas es la fuente de verdad para
+     * los reportes (ver ReporteGastosService, que lee de Gasto directo, no de MovimientoCaja).
      */
     @Test
-    @DisplayName("BUG: compensarVentaCanceladaEnOtroTurno_EnsuciaElArqueoDeUnTurnoQueNoTuvoElMovimientoFisico")
+    @DisplayName("compensarVentaCanceladaEnOtroTurno_NoEnsuciaElArqueoDeUnTurnoQueNoTuvoElMovimientoFisico")
     void compensarVentaCanceladaEnOtroTurno_NoDeberiaEnsuciarElArqueoDeUnTurnoAjeno() {
         ProductoBuffet producto = productoBuffetRepository.save(ProductoBuffet.builder()
                 .nombre("Alfajor")

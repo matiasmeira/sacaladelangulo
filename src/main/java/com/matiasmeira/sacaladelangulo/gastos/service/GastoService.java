@@ -50,6 +50,7 @@ public class GastoService {
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
         validarMonto(request.monto());
+        validarCamposObligatorios(request);
 
         Gasto gasto = Gasto.builder()
                 .establecimiento(establecimiento)
@@ -86,6 +87,7 @@ public class GastoService {
             throw new IllegalArgumentException("No se puede editar un gasto eliminado");
         }
         validarMonto(request.monto());
+        validarCamposObligatorios(request);
 
         BigDecimal montoAnterior = gasto.getMonto();
         MetodoPago metodoPagoAnterior = gasto.getMetodoPago();
@@ -99,22 +101,31 @@ public class GastoService {
 
         Gasto gastoActualizado = gastoRepository.save(gasto);
 
-        // Si cambió el monto o el método de pago, revierte el egreso original (si
-        // correspondía) y registra el nuevo, para que el arqueo de caja no quede
-        // desfasado tras editar un gasto ya contabilizado (ver M-04 en la auditoría).
-        // registrarMovimientoSiCorresponde ya es un no-op si el método no era EFECTIVO o
-        // no hay turno abierto, así que no hace falta duplicar esa condición acá.
+        // Si cambió el monto o el método de pago, revierte el egreso original y registra el
+        // nuevo, para que el arqueo de caja no quede desfasado tras editar un gasto ya
+        // contabilizado (ver M-04 en la auditoría) — pero SOLO si el movimiento original
+        // todavía vive en el turno actualmente abierto. Si ese turno ya cerró, ni se revierte
+        // ni se registra un movimiento nuevo: el egreso original ya quedó reflejado
+        // (correctamente, con el monto viejo) en el arqueo ya cerrado de aquel turno, y
+        // registrar el monto nuevo completo en OTRO turno lo duplicaría/ensuciaría sin que
+        // haya entrado o salido ningún billete físico real de ESE turno (bug real corregido,
+        // ver REVISION_FUNCIONAL.md). El Gasto en sí (fuente de verdad para los reportes) ya
+        // quedó actualizado arriba independientemente de esto.
         boolean montoOMetodoCambiaron = montoAnterior.compareTo(request.monto()) != 0 || metodoPagoAnterior != request.metodoPago();
         if (montoOMetodoCambiaron) {
-            turnoCajaService.registrarMovimientoSiCorresponde(
-                    gasto.getEstablecimiento(), TipoMovimientoCaja.INGRESO, OrigenMovimientoCaja.GASTO,
-                    metodoPagoAnterior, montoAnterior,
-                    "Ajuste por edición del gasto #" + gastoId + ": reversión del monto anterior",
-                    gastoId, usuarioAutenticado);
-            turnoCajaService.registrarMovimientoSiCorresponde(
-                    gasto.getEstablecimiento(), TipoMovimientoCaja.EGRESO, OrigenMovimientoCaja.GASTO,
-                    gasto.getMetodoPago(), gasto.getMonto(),
-                    "Gasto editado: " + gasto.getDescripcion(), gastoId, usuarioAutenticado);
+            if (turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(gasto.getEstablecimiento(), OrigenMovimientoCaja.GASTO, gastoId)) {
+                turnoCajaService.registrarMovimientoSiCorresponde(
+                        gasto.getEstablecimiento(), TipoMovimientoCaja.INGRESO, OrigenMovimientoCaja.GASTO,
+                        metodoPagoAnterior, montoAnterior,
+                        "Ajuste por edición del gasto #" + gastoId + ": reversión del monto anterior",
+                        gastoId, usuarioAutenticado);
+                turnoCajaService.registrarMovimientoSiCorresponde(
+                        gasto.getEstablecimiento(), TipoMovimientoCaja.EGRESO, OrigenMovimientoCaja.GASTO,
+                        gasto.getMetodoPago(), gasto.getMonto(),
+                        "Gasto editado: " + gasto.getDescripcion(), gastoId, usuarioAutenticado);
+            } else {
+                log.warn("Gasto {} editado pero su movimiento de caja original ya no está en el turno abierto: no se ajusta la caja.", gastoId);
+            }
         }
 
         registroAuditoriaService.registrarSobreEstablecimiento(usuarioAutenticado, gasto.getEstablecimiento(),
@@ -140,12 +151,18 @@ public class GastoService {
             return;
         }
 
-        // Revierte el egreso original (si correspondía) antes de anular el gasto, para que
-        // el arqueo de caja no quede desfasado (ver M-04 en la auditoría).
-        turnoCajaService.registrarMovimientoSiCorresponde(
-                gasto.getEstablecimiento(), TipoMovimientoCaja.INGRESO, OrigenMovimientoCaja.GASTO,
-                gasto.getMetodoPago(), gasto.getMonto(),
-                "Gasto eliminado: reversión de " + gasto.getDescripcion(), gastoId, usuarioAutenticado);
+        // Revierte el egreso original antes de anular el gasto, para que el arqueo de caja no
+        // quede desfasado (ver M-04 en la auditoría) — solo si ese movimiento todavía vive en
+        // el turno actualmente abierto (mismo criterio que editarGasto/VentaService.cancelarVenta,
+        // ver REVISION_FUNCIONAL.md).
+        if (turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(gasto.getEstablecimiento(), OrigenMovimientoCaja.GASTO, gastoId)) {
+            turnoCajaService.registrarMovimientoSiCorresponde(
+                    gasto.getEstablecimiento(), TipoMovimientoCaja.INGRESO, OrigenMovimientoCaja.GASTO,
+                    gasto.getMetodoPago(), gasto.getMonto(),
+                    "Gasto eliminado: reversión de " + gasto.getDescripcion(), gastoId, usuarioAutenticado);
+        } else {
+            log.warn("Gasto {} eliminado pero su movimiento de caja original ya no está en el turno abierto: no se ajusta la caja.", gastoId);
+        }
 
         gasto.setIsActive(false);
         gastoRepository.save(gasto);
@@ -169,6 +186,22 @@ public class GastoService {
     private void validarMonto(BigDecimal monto) {
         if (monto == null || monto.signum() <= 0) {
             throw new IllegalArgumentException("El monto debe ser mayor a 0");
+        }
+    }
+
+    /**
+     * Re-valida server-side lo que GastoRequest ya exige vía Bean Validation (@NotBlank,
+     * @NotNull) en el controller. Mismo criterio defensivo que validarMonto: este service no
+     * debería confiar ciegamente en que todo caller pasó por el @Valid del controller (ver
+     * REVISION_FUNCIONAL.md — antes, un metodoPago nulo llegaba hasta GastoMapper y reventaba
+     * con NullPointerException en vez de un error de negocio claro).
+     */
+    private void validarCamposObligatorios(GastoRequest request) {
+        if (request.metodoPago() == null) {
+            throw new IllegalArgumentException("El método de pago es obligatorio");
+        }
+        if (request.descripcion() == null || request.descripcion().isBlank()) {
+            throw new IllegalArgumentException("La descripción es obligatoria");
         }
     }
 }

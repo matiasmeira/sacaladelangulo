@@ -508,6 +508,9 @@ class VentaServiceTest {
         when(ventaRepository.findByIdConDetalles(venta.getId())).thenReturn(Optional.of(venta));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // El movimiento original todavía vive en el turno abierto (caso feliz): ver
+        // REVISION_FUNCIONAL.md / TurnoCajaService.movimientoOriginalSigueEnTurnoAbierto.
+        when(turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(establecimiento, OrigenMovimientoCaja.VENTA_BUFFET, venta.getId())).thenReturn(true);
 
         // Act
         VentaResponse response = assertDoesNotThrow(() -> ventaService.cancelarVenta(venta.getId(), dueno.getEmail()));

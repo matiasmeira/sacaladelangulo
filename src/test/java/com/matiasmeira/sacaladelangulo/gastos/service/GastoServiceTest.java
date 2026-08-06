@@ -183,6 +183,9 @@ class GastoServiceTest {
         when(gastoRepository.findByIdAndEstablecimientoId(50L, establecimiento.getId())).thenReturn(Optional.of(gasto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(gastoRepository.save(any(Gasto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // El movimiento original todavía vive en el turno abierto (caso feliz): ver
+        // REVISION_FUNCIONAL.md / TurnoCajaService.movimientoOriginalSigueEnTurnoAbierto.
+        when(turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(establecimiento, OrigenMovimientoCaja.GASTO, 50L)).thenReturn(true);
 
         GastoResponse response = gastoService.editarGasto(establecimiento.getId(), 50L, request, dueno.getEmail());
 
@@ -257,6 +260,7 @@ class GastoServiceTest {
         when(gastoRepository.findByIdAndEstablecimientoId(60L, establecimiento.getId())).thenReturn(Optional.of(gasto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(gastoRepository.save(any(Gasto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(establecimiento, OrigenMovimientoCaja.GASTO, 60L)).thenReturn(true);
 
         gastoService.eliminarGasto(establecimiento.getId(), 60L, dueno.getEmail());
 

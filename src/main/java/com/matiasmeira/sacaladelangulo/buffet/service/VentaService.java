@@ -188,13 +188,18 @@ public class VentaService {
 
         // Revierte el ingreso de caja que generó la venta original (si correspondía), para
         // que el arqueo no reporte un faltante falso tras anular una venta en efectivo (ver
-        // M-04 en la auditoría). Se registra contra el turno actualmente abierto, con el
-        // mismo criterio que registrarMovimientoSiCorresponde: si no hay turno abierto o el
-        // pago no fue en efectivo, es un no-op.
-        turnoCajaService.registrarMovimientoSiCorresponde(
-                venta.getEstablecimiento(), TipoMovimientoCaja.EGRESO, OrigenMovimientoCaja.VENTA_BUFFET,
-                venta.getMetodoPago(), venta.getTotal(),
-                "Venta buffet #" + ventaId + " anulada", ventaId, usuarioAutenticado);
+        // M-04 en la auditoría). Solo se compensa si el movimiento original TODAVÍA vive en
+        // el turno actualmente abierto: si ese turno ya cerró, escribir la reversión contra
+        // el turno abierto ahora ensuciaría su arqueo con un movimiento que no corresponde a
+        // ningún billete físico de ESE turno (bug real corregido, ver REVISION_FUNCIONAL.md).
+        if (turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(venta.getEstablecimiento(), OrigenMovimientoCaja.VENTA_BUFFET, ventaId)) {
+            turnoCajaService.registrarMovimientoSiCorresponde(
+                    venta.getEstablecimiento(), TipoMovimientoCaja.EGRESO, OrigenMovimientoCaja.VENTA_BUFFET,
+                    venta.getMetodoPago(), venta.getTotal(),
+                    "Venta buffet #" + ventaId + " anulada", ventaId, usuarioAutenticado);
+        } else {
+            log.warn("Venta {} cancelada pero su movimiento de caja original ya no está en el turno abierto: no se ajusta la caja.", ventaId);
+        }
 
         return ventaMapper.mapToResponse(ventaCancelada);
     }

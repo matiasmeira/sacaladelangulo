@@ -35,13 +35,17 @@ public final class PrecioReservaCalculator {
 
         BigDecimal precioExacto = preciosPorDuracion.get((int) duracionMinutos);
         if (precioExacto != null) {
-            return precioExacto;
+            return precioExacto.setScale(2, RoundingMode.HALF_UP);
         }
 
         BigDecimal precioPorHora = tarifaAplicable != null ? tarifaAplicable.getPrecio() : cancha.getPrecioBase();
         BigDecimal duracionHoras = BigDecimal.valueOf(duracionMinutos)
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
-        return precioPorHora.multiply(duracionHoras);
+        // El resultado de multiplicar dos BigDecimal normaliza la escala a la SUMA de ambas
+        // escalas (2+2=4 si precioPorHora ya viene con 2 decimales, como vuelve de
+        // NUMERIC(38,2)): sin este setScale final, precioTotal quedaba con una cantidad de
+        // decimales inconsistente según la duración pedida (ver REVISION_FUNCIONAL.md).
+        return precioPorHora.multiply(duracionHoras).setScale(2, RoundingMode.HALF_UP);
     }
 
     private static boolean matchea(Tarifa tarifa, LocalDateTime fechaHoraInicio) {

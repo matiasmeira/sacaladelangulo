@@ -696,7 +696,11 @@ public class ReservaService {
                 reserva.getCancha().getEstablecimiento(), email, PermisoEmpleado.FINALIZAR_RESERVA);
 
         try {
-            if (reserva.getEstado() == EstadoReserva.CANCELADA) {
+            // CANCELADA_PRERESERVA (venció la ventana de 10 min sin que nadie pagara la seña)
+            // se rechaza igual que CANCELADA: sin este chequeo, una prereserva que nadie
+            // confirmó podía "finalizarse" igual, generando cobro y movimiento de caja sobre
+            // un turno que nunca fue confirmado (ver REVISION_FUNCIONAL.md).
+            if (reserva.getEstado() == EstadoReserva.CANCELADA || reserva.getEstado() == EstadoReserva.CANCELADA_PRERESERVA) {
                 throw new IllegalArgumentException("No se puede finalizar una reserva cancelada");
             }
 

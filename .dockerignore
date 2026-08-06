@@ -1,0 +1,32 @@
+# Mantener el build context chico y NO filtrar secretos ni artefactos locales
+# a la imagen. El build solo necesita pom.xml y src/.
+
+# Build output / logs locales
+target/
+logs/
+
+# Secretos y entornos locales (NUNCA deben entrar a la imagen)
+.env
+.env.*
+
+# Git / CI / IDE
+.git/
+.github/
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+*.iml
+
+# Docs y auditorías (no se necesitan para compilar)
+*.md
+saque/
+
+# Herramientas internas
+.superpowers/
+.claude/
+.mvn/wrapper/maven-wrapper.jar
+
+# El propio Dockerfile
+Dockerfile
+.dockerignore

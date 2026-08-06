@@ -6,7 +6,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -14,6 +13,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -72,7 +73,10 @@ public class SolicitudIdempotente {
     @Column(name = "content_type_respuesta")
     private String contentTypeRespuesta;
 
-    @Lob
+    // Mapea a Postgres `text` (coincide con V1__baseline.sql). NO @Lob: sobre Postgres,
+    // @Lob en un String hace que Hibernate espere `oid` (large object / CLOB), no `text`,
+    // y ddl-auto=validate falla contra una base creada por Flyway (que crea `text`).
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "cuerpo_respuesta")
     private String cuerpoRespuesta;
 

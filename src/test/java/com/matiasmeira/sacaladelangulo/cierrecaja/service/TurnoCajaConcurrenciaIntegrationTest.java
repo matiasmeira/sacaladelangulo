@@ -18,6 +18,7 @@ import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.support.AbstractPostgresIntegrationTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -104,7 +105,16 @@ class TurnoCajaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTe
                 barrier.await(10, TimeUnit.SECONDS);
                 turnoCajaService.abrirCaja(establecimiento.getId(), request, dueno.getEmail());
                 return true;
-            } catch (IllegalArgumentException ex) {
+            } catch (IllegalArgumentException | DataIntegrityViolationException ex) {
+                // El perdedor de la carrera real puede recibir una de dos cosas según el
+                // timing: si el ganador ya commiteó, el chequeo de aplicación de abrirCaja
+                // lanza IllegalArgumentException; si ambos hilos pasaron ese chequeo antes de
+                // que cualquiera commiteara, el índice único
+                // uk_turno_caja_abierto_por_establecimiento rechaza al segundo insert con
+                // DataIntegrityViolationException. Los dos son "perder la carrera" y el dato
+                // queda íntegro (un solo turno abierto). Traducir el 2do caso a un error de
+                // negocio limpio (400 en vez de 500) es una mejora de robustez del servicio
+                // que se dejó fuera de alcance a propósito.
                 return false;
             }
         };

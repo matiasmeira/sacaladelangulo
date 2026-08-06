@@ -34,6 +34,8 @@ build/
 
 # Local environment variables (incluye copias/backups: .env.bak, .env.local, etc.)
 .env*
+# ...salvo la plantilla documentada, que SÍ se commitea (sin valores reales).
+!.env.example
 
 logs/
 sacaladelangulo-frontend-design.md

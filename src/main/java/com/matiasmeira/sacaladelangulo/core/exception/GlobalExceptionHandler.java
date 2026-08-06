@@ -145,6 +145,57 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 
+    /**
+     * Violaciones de integridad que llegan desde la base (no desde la validación de Java).
+     *
+     * <p>El caso que motivó este handler es el constraint de exclusión
+     * {@code excl_reservas_solapadas} (ver V10): si dos transacciones logran insertar
+     * reservas solapadas sobre la misma cancha, Postgres rechaza la segunda con SQLSTATE
+     * 23P01 (exclusion_violation). Sin este handler el usuario veía un 500 genérico, cuando
+     * en realidad es el mismo conflicto de concurrencia que ya se comunica como 409 en
+     * handleOptimisticLockingFailure — y por eso comparte el mensaje.
+     *
+     * <p>El resto de las violaciones de integridad (UNIQUE, FK, los CHECK de V12) también
+     * caen acá, pero con un mensaje genérico: son estados que la validación de Java ya
+     * debería haber frenado antes, así que si llegan a la base es un bug nuestro. Se loguea
+     * con el detalle para poder diagnosticarlo, pero NO se expone al cliente (el nombre del
+     * constraint filtraría estructura interna del esquema; ver server.error.include-message
+     * =never en el perfil prod, misma filosofía).
+     */
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex) {
+        Map<String, String> errorResponse = new LinkedHashMap<>();
+        if (esViolacionDeExclusion(ex)) {
+            log.warn("Constraint de exclusión rechazó un solapamiento de reservas", ex);
+            errorResponse.put("error", "Conflicto de concurrencia");
+            errorResponse.put("message", "La cancha acaba de ser reservada o modificada por otro usuario. Por favor, actualiza la disponibilidad e intenta nuevamente.");
+        } else {
+            log.error("Violación de integridad no contemplada al persistir", ex);
+            errorResponse.put("error", "Conflicto de integridad");
+            errorResponse.put("message", "No se pudo guardar la operación porque entra en conflicto con datos existentes.");
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
+    /**
+     * Recorre la cadena de causas buscando el SQLSTATE 23P01 (exclusion_violation). Hay que
+     * caminarla porque Spring envuelve la SQLException original en la jerarquía de
+     * DataAccessException (y Hibernate la envuelve a su vez en ConstraintViolationException),
+     * así que el SQLSTATE no está disponible en la excepción de más afuera.
+     */
+    private boolean esViolacionDeExclusion(Throwable ex) {
+        for (Throwable causa = ex; causa != null; causa = causa.getCause()) {
+            if (causa instanceof java.sql.SQLException sqlEx && "23P01".equals(sqlEx.getSQLState())) {
+                return true;
+            }
+            if (causa.getCause() == causa) {
+                break;
+            }
+        }
+        return false;
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleUnexpectedException(Exception ex) {
         log.error("Error no controlado procesando la petición", ex);

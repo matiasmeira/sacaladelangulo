@@ -3,6 +3,7 @@ package com.matiasmeira.sacaladelangulo.reserva.repository;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -44,6 +45,15 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             @Param("ahora") LocalDateTime ahora
     );
 
+    /**
+     * Trae jugador y cancha en la misma consulta (@EntityGraph): ReservaMapper.mapToResponse
+     * dereferencia ambas asociaciones (getJugador().getNombre(), getCancha().getNombre()) y
+     * las dos son LAZY, así que sin esto cada página del listado dispara una consulta por
+     * fila. Se usa @EntityGraph y no JOIN FETCH porque la consulta es paginada: ambas son
+     * @ManyToOne (to-one), que Hibernate resuelve con un LEFT JOIN sin romper la paginación
+     * (con una colección @OneToMany sí la rompería, paginando en memoria - HHH000104).
+     */
+    @EntityGraph(attributePaths = {"jugador", "cancha"})
     @org.springframework.data.jpa.repository.Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId AND r.fechaHoraInicio < :finDia AND r.fechaHoraFin > :inicioDia AND r.estado NOT IN :estadosExcluidos")
     org.springframework.data.domain.Page<Reserva> findReservasEnRangoDiario(
             @org.springframework.data.repository.query.Param("canchaId") Long canchaId,
@@ -55,8 +65,9 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     /**
      * Misma consulta que findReservasEnRangoDiario pero sin excluir ningún estado, para
      * cuando el dueño/admin pide explícitamente auditar cancelaciones históricas (ver B7
-     * en la auditoría).
+     * en la auditoría). Mismo @EntityGraph, por el mismo motivo.
      */
+    @EntityGraph(attributePaths = {"jugador", "cancha"})
     @org.springframework.data.jpa.repository.Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId AND r.fechaHoraInicio < :finDia AND r.fechaHoraFin > :inicioDia")
     org.springframework.data.domain.Page<Reserva> findReservasEnRangoDiarioIncluyendoCanceladas(
             @org.springframework.data.repository.query.Param("canchaId") Long canchaId,
@@ -73,6 +84,12 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             @Param("fin") LocalDateTime fin
     );
 
+    /**
+     * @EntityGraph por el mismo motivo que findReservasEnRangoDiario. Este es el peor caso
+     * del listado: al ser de todo el establecimiento, la página trae reservas de varias
+     * canchas Y de jugadores distintos, así que el caché de primer nivel casi no ayuda.
+     */
+    @EntityGraph(attributePaths = {"jugador", "cancha"})
     @Query("SELECT r FROM Reserva r WHERE r.cancha.establecimiento.id = :estId " +
            "AND r.fechaHoraInicio BETWEEN :inicio AND :fin " +
            "AND r.estado NOT IN :estadosExcluidos")
@@ -86,8 +103,9 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     /**
      * Misma consulta que findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn
-     * pero sin excluir ningún estado (ver B7 en la auditoría).
+     * pero sin excluir ningún estado (ver B7 en la auditoría). Mismo @EntityGraph.
      */
+    @EntityGraph(attributePaths = {"jugador", "cancha"})
     org.springframework.data.domain.Page<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(
             Long estId,
             LocalDateTime inicio,
@@ -95,8 +113,16 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             org.springframework.data.domain.Pageable pageable
     );
 
+    /**
+     * "Mis reservas" del jugador. El @EntityGraph acá evita sobre todo las consultas por
+     * `cancha` (una por cada cancha distinta de la página); `jugador` es siempre el mismo
+     * para todas las filas, pero se incluye igual para que la garantía sea explícita y no
+     * dependa del caché de primer nivel.
+     */
+    @EntityGraph(attributePaths = {"jugador", "cancha"})
     org.springframework.data.domain.Page<Reserva> findByJugadorId(Long jugadorId, org.springframework.data.domain.Pageable pageable);
 
+    @EntityGraph(attributePaths = {"jugador", "cancha"})
     org.springframework.data.domain.Page<Reserva> findByJugadorIdAndEstado(
             Long jugadorId,
             com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,

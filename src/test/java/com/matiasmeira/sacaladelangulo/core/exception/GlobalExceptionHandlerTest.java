@@ -23,6 +23,37 @@ class GlobalExceptionHandlerTest {
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
     @Test
+    @DisplayName("handleDataIntegrityViolation_ConSqlState23P01_Devuelve409DeConcurrencia")
+    void handleDataIntegrityViolation_ConSqlState23P01_Devuelve409DeConcurrencia() {
+        // Se replica el anidamiento real: Spring envuelve la SQLException de Postgres, así
+        // que el SQLSTATE solo aparece caminando la cadena de causas.
+        java.sql.SQLException sqlEx = new java.sql.SQLException("conflicting key value violates exclusion constraint", "23P01");
+        org.springframework.dao.DataIntegrityViolationException ex =
+                new org.springframework.dao.DataIntegrityViolationException("wrapper", sqlEx);
+
+        ResponseEntity<Map<String, String>> response = handler.handleDataIntegrityViolation(ex);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("Conflicto de concurrencia", response.getBody().get("error"));
+    }
+
+    @Test
+    @DisplayName("handleDataIntegrityViolation_OtraViolacion_Devuelve409SinFiltrarElConstraint")
+    void handleDataIntegrityViolation_OtraViolacion_Devuelve409SinFiltrarElConstraint() {
+        java.sql.SQLException sqlEx = new java.sql.SQLException(
+                "new row violates check constraint \"chk_gastos_monto_positivo\"", "23514");
+        org.springframework.dao.DataIntegrityViolationException ex =
+                new org.springframework.dao.DataIntegrityViolationException("wrapper", sqlEx);
+
+        ResponseEntity<Map<String, String>> response = handler.handleDataIntegrityViolation(ex);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("Conflicto de integridad", response.getBody().get("error"));
+        // El nombre del constraint no debe filtrarse al cliente.
+        assertEquals(false, response.getBody().get("message").contains("chk_gastos_monto_positivo"));
+    }
+
+    @Test
     @DisplayName("handleHttpMessageNotReadableException_Devuelve400")
     void handleHttpMessageNotReadableException_Devuelve400() {
         HttpMessageNotReadableException ex = mock(HttpMessageNotReadableException.class);

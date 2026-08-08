@@ -1,5 +1,7 @@
 package com.matiasmeira.sacaladelangulo.auth.service;
 
+import com.matiasmeira.sacaladelangulo.auth.dto.PerfilMapper;
+import com.matiasmeira.sacaladelangulo.auth.dto.PerfilResponse;
 import com.matiasmeira.sacaladelangulo.auth.model.CodigoVerificacion;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.CodigoVerificacionRepository;
@@ -32,6 +34,7 @@ public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
     private final CodigoVerificacionRepository codigoVerificacionRepository;
+    private final PerfilMapper perfilMapper;
     private final SecureRandom random = new SecureRandom();
 
     /**
@@ -112,5 +115,16 @@ public class UsuarioService {
 
         // Eliminar el código de la base de datos
         codigoVerificacionRepository.deleteByEmail(email);
+    }
+
+    /**
+     * Perfil del usuario autenticado (GET /api/v1/usuarios/me).
+     *
+     * @param email Email del usuario autenticado
+     */
+    public PerfilResponse obtenerPerfil(String email) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        return perfilMapper.mapToResponse(usuario);
     }
 }

@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.auth.controller;
 
+import com.matiasmeira.sacaladelangulo.auth.dto.PerfilResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.SolicitarCodigoRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarCodigoRequest;
 import com.matiasmeira.sacaladelangulo.auth.service.UsuarioService;
@@ -36,5 +37,11 @@ public class UsuarioController {
         String email = userDetails.getUsername();
         usuarioService.verificarCodigo(email, request.codigo());
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<PerfilResponse> me(@AuthenticationPrincipal UserDetails userDetails) {
+        String email = userDetails.getUsername();
+        return ResponseEntity.ok(usuarioService.obtenerPerfil(email));
     }
 }

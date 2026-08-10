@@ -10,10 +10,8 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
-import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
-import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,12 +44,6 @@ class EstablecimientoServiceTest {
     private UsuarioRepository usuarioRepository;
 
     @Mock
-    private ReservaRepository reservaRepository;
-
-    @Mock
-    private CanchaRepository canchaRepository;
-
-    @Mock
     private FeedbackRepository feedbackRepository;
 
     @Mock
@@ -62,55 +54,6 @@ class EstablecimientoServiceTest {
 
     @InjectMocks
     private EstablecimientoService establecimientoService;
-
-    @Test
-    @DisplayName("buscarEstablecimientos sin fecha y hora devuelve resultados cercanos")
-    void buscarEstablecimientosSinFechaYHoraDevuelveResultadosCercanos() {
-        Usuario dueno = Usuario.builder()
-                .id(1L)
-                .email("dueno@test.com")
-                .build();
-
-        Establecimiento establecimiento = Establecimiento.builder()
-                .id(10L)
-                .nombre("Cancha Premium")
-                .direccion("Av. Siempre Viva 123")
-                .latitud(-34.6037)
-                .longitud(-58.3816)
-                .requiereSena(true)
-                .isActive(true)
-                .dueno(dueno)
-                .build();
-
-        when(establecimientoRepository.findCercanosYPorDeporte(-34.6037, -58.3816, 10.0, null))
-                .thenReturn(List.of(establecimiento));
-
-        List<EstablecimientoResponse> resultados = establecimientoService.buscarEstablecimientos(
-                -34.6037,
-                -58.3816,
-                10.0,
-                null,
-                null,
-                null
-        );
-
-        assertEquals(1, resultados.size());
-        EstablecimientoResponse esperado = new EstablecimientoResponse(
-                10L,
-                "Cancha Premium",
-                "Av. Siempre Viva 123",
-                -34.6037,
-                -58.3816,
-                true,
-                true,
-                dueno.getId(),
-                List.of(),
-                null,
-                0L,
-                null
-        );
-        assertEquals(esperado, resultados.get(0));
-    }
 
     @Test
     @DisplayName("crearEstablecimiento_Exito_ConHorariosValidos")

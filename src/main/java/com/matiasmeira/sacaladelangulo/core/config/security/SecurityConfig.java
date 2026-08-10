@@ -64,7 +64,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/establecimientos/buscar").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/publico/**").permitAll()
                         // GET /empleados/activos ya NO es público: requiere cookie de dispositivo
                         // de caja, validada explícitamente en el controller (ver DispositivoCajaGate) —
                         // authorizeHttpRequests no puede inspeccionar la validez de una cookie, así

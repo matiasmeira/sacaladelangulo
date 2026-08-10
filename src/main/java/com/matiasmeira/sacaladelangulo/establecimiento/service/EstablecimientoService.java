@@ -8,24 +8,17 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoReques
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.FeedbackDestacadoDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
-import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
-import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
-import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
-import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,13 +35,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class EstablecimientoService {
 
-    /** Ventana de disponibilidad usada por la búsqueda rápida de establecimientos. */
-    private static final int VENTANA_DISPONIBILIDAD_MINUTOS = 60;
-
     private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
-    private final ReservaRepository reservaRepository;
-    private final CanchaRepository canchaRepository;
     private final FeedbackRepository feedbackRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final SlugGenerator slugGenerator;
@@ -82,47 +70,6 @@ public class EstablecimientoService {
 
         List<Establecimiento> establecimientos = establecimientoRepository.findByDuenoIdAndIsActiveTrue(dueno.getId());
         return mapearConCalificaciones(establecimientos);
-    }
-
-    /**
-     * Busca establecimientos cercanos y, si se indica fecha/hora, filtra a los que tengan
-     * al menos una cancha libre en esa ventana. Resuelto en un puñado de consultas en lote
-     * (en vez de una consulta por establecimiento y otra por cancha) para que este endpoint
-     * público no degrade con el volumen de datos.
-     */
-    @Transactional(readOnly = true)
-    public List<EstablecimientoResponse> buscarEstablecimientos(Double latitud, Double longitud, Double distanciaKm, Deporte deporte, LocalDate fecha, LocalTime hora) {
-        Double radioBusqueda = (distanciaKm != null && distanciaKm > 0) ? distanciaKm : 10.0;
-        List<Establecimiento> establecimientosCercanos = establecimientoRepository.findCercanosYPorDeporte(latitud, longitud, radioBusqueda, deporte);
-
-        if (fecha == null || hora == null) {
-            return mapearConCalificaciones(establecimientosCercanos);
-        }
-
-        List<Long> establecimientoIds = establecimientosCercanos.stream().map(Establecimiento::getId).toList();
-        List<Cancha> canchas = canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(establecimientoIds);
-        if (deporte != null) {
-            canchas = canchas.stream()
-                    .filter(c -> c.getDeportes().contains(deporte))
-                    .toList();
-        }
-
-        Map<Long, List<Cancha>> canchasPorEstablecimiento = canchas.stream()
-                .collect(Collectors.groupingBy(c -> c.getEstablecimiento().getId()));
-
-        LocalDateTime inicioReserva = LocalDateTime.of(fecha, hora);
-        LocalDateTime finReserva = inicioReserva.plusMinutes(VENTANA_DISPONIBILIDAD_MINUTOS);
-
-        List<Long> canchaIds = canchas.stream().map(Cancha::getId).toList();
-        Set<Long> canchasOcupadas = canchaIds.isEmpty()
-                ? Set.of()
-                : new HashSet<>(reservaRepository.findCanchaIdsConSolapamiento(canchaIds, inicioReserva, finReserva));
-
-        List<Establecimiento> establecimientosDisponibles = establecimientosCercanos.stream()
-                .filter(est -> canchasPorEstablecimiento.getOrDefault(est.getId(), List.of()).stream()
-                        .anyMatch(c -> !canchasOcupadas.contains(c.getId())))
-                .toList();
-        return mapearConCalificaciones(establecimientosDisponibles);
     }
 
     public EstablecimientoResponse actualizarEstablecimiento(Long id, EstablecimientoRequest request, String email) {

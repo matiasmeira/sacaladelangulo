@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.publico.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.disponibilidad.service.DisponibilidadService;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.FeedbackDestacadoDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
@@ -266,5 +267,19 @@ public class ComplejoPublicoService {
                 jugador != null ? jugador.getNombre() : null,
                 feedback.getFechaCreacion()
         );
+    }
+
+    /**
+     * Disponibilidad pública de un complejo activo: resuelve slug -> id y reusa
+     * DisponibilidadService tal cual, sin proyección propia. Su árbol de respuesta
+     * (DisponibilidadEstablecimientoResponse -> DisponibilidadDiaResponse ->
+     * DisponibilidadCanchaResponse -> DisponibilidadDuracionResponse ->
+     * SlotDisponibleResponse) ya es 100% libre/ocupado por slot: no tiene ningún campo de
+     * jugador/titular, así que no hace falta filtrar nada acá.
+     */
+    public DisponibilidadEstablecimientoResponse obtenerDisponibilidad(String slug, LocalDate fecha, LocalDate fechaFin) {
+        Establecimiento establecimiento = establecimientoRepository.findBySlugAndIsActiveTrue(slug)
+                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        return disponibilidadService.obtenerDisponibilidad(establecimiento.getId(), fecha, fechaFin);
     }
 }

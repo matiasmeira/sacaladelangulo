@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.publico.service;
 
+import com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.disponibilidad.service.DisponibilidadService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
@@ -21,6 +22,7 @@ import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
@@ -228,5 +230,32 @@ class ComplejoPublicoServiceTest {
         assertThrows(
                 com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
                 () -> complejoPublicoService.obtenerDetalle("complejo-inactivo"));
+    }
+
+    @Test
+    @DisplayName("obtenerDisponibilidad_ResuelveSlugYDelegaEnDisponibilidadService")
+    void obtenerDisponibilidad_ResuelveSlugYDelegaEnDisponibilidadService() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
+        LocalDate fecha = LocalDate.of(2026, 8, 10);
+        com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse respuestaEsperada =
+                new com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse(1L, fecha, fecha, List.of());
+
+        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(disponibilidadService.obtenerDisponibilidad(1L, fecha, fecha)).thenReturn(respuestaEsperada);
+
+        var resultado = complejoPublicoService.obtenerDisponibilidad("complejo-uno", fecha, fecha);
+
+        assertEquals(respuestaEsperada, resultado);
+    }
+
+    @Test
+    @DisplayName("obtenerDisponibilidad_SlugInexistente_LanzaEntityNotFoundException")
+    void obtenerDisponibilidad_SlugInexistente_LanzaEntityNotFoundException() {
+        LocalDate fecha = LocalDate.of(2026, 8, 10);
+        when(establecimientoRepository.findBySlugAndIsActiveTrue("no-existe")).thenReturn(java.util.Optional.empty());
+
+        assertThrows(
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
+                () -> complejoPublicoService.obtenerDisponibilidad("no-existe", fecha, fecha));
     }
 }

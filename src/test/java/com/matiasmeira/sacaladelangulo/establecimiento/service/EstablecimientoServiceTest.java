@@ -57,6 +57,9 @@ class EstablecimientoServiceTest {
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
+    @Mock
+    private SlugGenerator slugGenerator;
+
     @InjectMocks
     private EstablecimientoService establecimientoService;
 

@@ -51,6 +51,7 @@ public class EstablecimientoService {
     private final CanchaRepository canchaRepository;
     private final FeedbackRepository feedbackRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final SlugGenerator slugGenerator;
 
     public EstablecimientoResponse crearEstablecimiento(EstablecimientoRequest request, String email) {
         Usuario dueno = buscarUsuarioPorEmail(email);
@@ -64,6 +65,7 @@ public class EstablecimientoService {
                 .longitud(request.longitud())
                 .requiereSena(requiereSenaForzada || request.requiereSena())
                 .isActive(true)
+                .slug(slugGenerator.generarSlugUnico(request.nombre()))
                 .dueno(dueno)
                 .build();
 

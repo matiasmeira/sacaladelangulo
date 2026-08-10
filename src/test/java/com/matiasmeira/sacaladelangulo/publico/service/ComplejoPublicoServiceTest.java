@@ -27,6 +27,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -181,5 +182,51 @@ class ComplejoPublicoServiceTest {
         assertEquals(2, primeraPagina.getContent().size());
         assertEquals(3, primeraPagina.getTotalElements());
         assertEquals(2, primeraPagina.getTotalPages());
+    }
+
+    @Test
+    @DisplayName("obtenerDetalle_VariasCanchas_DerivaDeportesPrecioDesdeYSenaDesdeYListaCanchas")
+    void obtenerDetalle_VariasCanchas_DerivaDeportesPrecioDesdeYSenaDesdeYListaCanchas() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
+        Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
+        Cancha padel = canchaConTarifa(11L, est, Set.of(Deporte.PADEL), BigDecimal.valueOf(800), BigDecimal.valueOf(3000));
+
+        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
+                .thenReturn(List.of(futbol, padel));
+        when(feedbackRepository.calcularPromedioByEstablecimientoId(1L)).thenReturn(4.5);
+        when(feedbackRepository.contarByEstablecimientoId(1L)).thenReturn(2L);
+        when(feedbackRepository.findDestacadoByEstablecimientoId(1L)).thenReturn(java.util.Optional.empty());
+
+        com.matiasmeira.sacaladelangulo.publico.dto.ComplejoDetalleResponse detalle =
+                complejoPublicoService.obtenerDetalle("complejo-uno");
+
+        assertEquals(Set.of(Deporte.FUTBOL, Deporte.PADEL), detalle.deportes());
+        assertEquals(BigDecimal.valueOf(3000), detalle.precioDesde());
+        assertEquals(BigDecimal.valueOf(800), detalle.senaDesde());
+        assertEquals(2, detalle.canchas().size());
+        assertEquals(4.5, detalle.promedioCalificacion());
+    }
+
+    @Test
+    @DisplayName("obtenerDetalle_SlugInexistente_LanzaEntityNotFoundException")
+    void obtenerDetalle_SlugInexistente_LanzaEntityNotFoundException() {
+        when(establecimientoRepository.findBySlugAndIsActiveTrue("no-existe")).thenReturn(java.util.Optional.empty());
+
+        assertThrows(
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
+                () -> complejoPublicoService.obtenerDetalle("no-existe"));
+    }
+
+    @Test
+    @DisplayName("obtenerDetalle_ComplejoInactivo_LanzaEntityNotFoundException")
+    void obtenerDetalle_ComplejoInactivo_LanzaEntityNotFoundException() {
+        // findBySlugAndIsActiveTrue ya filtra por isActive=true en el repositorio: un
+        // complejo inactivo llega acá como Optional vacío, igual que un slug inexistente.
+        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-inactivo")).thenReturn(java.util.Optional.empty());
+
+        assertThrows(
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
+                () -> complejoPublicoService.obtenerDetalle("complejo-inactivo"));
     }
 }

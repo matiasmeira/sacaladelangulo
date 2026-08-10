@@ -1,6 +1,10 @@
 package com.matiasmeira.sacaladelangulo.publico.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
+import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.disponibilidad.service.DisponibilidadService;
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.FeedbackDestacadoDto;
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
@@ -8,8 +12,11 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.GeoUtils;
+import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
+import com.matiasmeira.sacaladelangulo.publico.dto.CanchaPublicaDto;
 import com.matiasmeira.sacaladelangulo.publico.dto.ComplejoCardResponse;
+import com.matiasmeira.sacaladelangulo.publico.dto.ComplejoDetalleResponse;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -185,5 +192,79 @@ public class ComplejoPublicoService {
         int desde = Math.min((int) pageable.getOffset(), total);
         int hasta = Math.min(desde + pageable.getPageSize(), total);
         return new PageImpl<>(items.subList(desde, hasta), pageable, total);
+    }
+
+    /**
+     * Detalle público de un complejo activo. 404 si el slug no existe o si el complejo
+     * está inactivo (findBySlugAndIsActiveTrue ya filtra eso, así que ambos casos llegan
+     * acá como Optional vacío).
+     */
+    public ComplejoDetalleResponse obtenerDetalle(String slug) {
+        Establecimiento establecimiento = establecimientoRepository.findBySlugAndIsActiveTrue(slug)
+                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+
+        List<Cancha> canchas = canchaRepository
+                .findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(establecimiento.getId()));
+
+        Set<Deporte> deportes = canchas.stream().flatMap(c -> c.getDeportes().stream()).collect(Collectors.toSet());
+        BigDecimal precioDesde = canchas.stream()
+                .flatMap(c -> c.getTarifas().stream())
+                .map(Tarifa::getPrecio)
+                .min(Comparator.naturalOrder())
+                .orElse(null);
+        BigDecimal senaDesde = canchas.stream()
+                .map(Cancha::getMontoSena)
+                .filter(Objects::nonNull)
+                .min(Comparator.naturalOrder())
+                .orElse(null);
+
+        List<CanchaPublicaDto> canchasPublicas = canchas.stream()
+                .map(c -> new CanchaPublicaDto(
+                        c.getId(),
+                        c.getNombre(),
+                        c.getDeportes(),
+                        c.getTarifas().stream().map(Tarifa::getPrecio).min(Comparator.naturalOrder()).orElse(null)))
+                .toList();
+
+        List<HorarioAtencionDto> horarios = establecimiento.getHorariosAtencion() == null ? List.of()
+                : establecimiento.getHorariosAtencion().stream()
+                        .map(h -> new HorarioAtencionDto(h.getDiaSemana(), h.getHoraApertura(), h.getHoraCierre()))
+                        .toList();
+
+        Double promedio = feedbackRepository.calcularPromedioByEstablecimientoId(establecimiento.getId());
+        Long cantidad = feedbackRepository.contarByEstablecimientoId(establecimiento.getId());
+        FeedbackDestacadoDto destacado = feedbackRepository.findDestacadoByEstablecimientoId(establecimiento.getId())
+                .map(this::mapFeedbackDestacado)
+                .orElse(null);
+
+        return new ComplejoDetalleResponse(
+                establecimiento.getSlug(),
+                establecimiento.getNombre(),
+                establecimiento.getDireccion(),
+                establecimiento.getLatitud(),
+                establecimiento.getLongitud(),
+                deportes,
+                establecimiento.getServicios(),
+                establecimiento.getFotos(),
+                horarios,
+                canchasPublicas,
+                precioDesde,
+                establecimiento.getRequiereSena(),
+                senaDesde,
+                promedio,
+                cantidad != null ? cantidad : 0L,
+                destacado
+        );
+    }
+
+    private FeedbackDestacadoDto mapFeedbackDestacado(Feedback feedback) {
+        Usuario jugador = feedback.getReserva().getJugador();
+        return new FeedbackDestacadoDto(
+                feedback.getId(),
+                feedback.getPuntuacion(),
+                feedback.getComentario(),
+                jugador != null ? jugador.getNombre() : null,
+                feedback.getFechaCreacion()
+        );
     }
 }

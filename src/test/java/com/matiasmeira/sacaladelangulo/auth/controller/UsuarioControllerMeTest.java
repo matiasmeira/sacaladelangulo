@@ -138,6 +138,7 @@ class UsuarioControllerMeTest {
         Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
                 .nombre("Cancha Test")
                 .direccion("Calle Falsa 123")
+                .slug("cancha-test")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)

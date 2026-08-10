@@ -2,12 +2,14 @@ package com.matiasmeira.sacaladelangulo.establecimiento.repository;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repositorio JPA para la entidad Establecimiento.
@@ -38,4 +40,29 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
             @Param("distanciaKm") Double distanciaKm,
             @Param("deporte") Deporte deporte
     );
+
+    boolean existsBySlug(String slug);
+
+    Optional<Establecimiento> findBySlugAndIsActiveTrue(String slug);
+
+    /**
+     * Variante de findCercanosYPorDeporte sin filtro geográfico: alimenta el listado
+     * público cuando el visitante no compartió su ubicación (home sin filtros), donde
+     * el orden relevante es el rating y no la distancia.
+     */
+    @Query("SELECT DISTINCT e FROM Establecimiento e LEFT JOIN Cancha c ON c.establecimiento.id = e.id AND c.isActive = true " +
+           "WHERE e.isActive = true AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes)")
+    List<Establecimiento> findActivosPorDeporte(@Param("deporte") Deporte deporte);
+
+    /**
+     * Trae, para el lote de ids indicado, las fotos (@ElementCollection ordenada) ya
+     * inicializadas en la misma consulta: evita un SELECT de fotos por establecimiento al
+     * armar la card pública (fotoPrincipal = primera foto). Las entidades que devuelve son,
+     * dentro de la misma transacción, las mismas instancias gestionadas por la sesión que
+     * ya trajo el listado principal — alcanza con llamar a este método por su efecto de
+     * precarga; el caller sigue usando las entidades originales.
+     */
+    @EntityGraph(attributePaths = {"fotos"})
+    @Query("SELECT e FROM Establecimiento e WHERE e.id IN :ids")
+    List<Establecimiento> precargarFotos(@Param("ids") List<Long> ids);
 }

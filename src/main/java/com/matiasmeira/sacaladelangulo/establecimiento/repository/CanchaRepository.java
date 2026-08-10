@@ -28,10 +28,28 @@ public interface CanchaRepository extends JpaRepository<Cancha, Long> {
     List<Cancha> findByEstablecimientoIdAndIsActiveTrue(Long establecimientoId);
 
     /**
-     * Variante en lote para búsquedas que abarcan varios establecimientos a la vez
-     * (evita hacer una consulta por establecimiento).
+     * Variante en lote para búsquedas que abarcan varios establecimientos a la vez (evita
+     * hacer una consulta por establecimiento). @EntityGraph sobre "deportes": los callers
+     * de este método filtran por c.getDeportes().contains(...) en memoria sobre el
+     * resultado completo (hoy EstablecimientoService.buscarEstablecimientos; a partir de la
+     * Tarea 7 de este plan, el filtro de disponibilidad por fecha/hora de
+     * ComplejoPublicoService) — sin este fetch, ese filtro dispara un SELECT de deportes
+     * por cada cancha (N+1).
      */
+    @EntityGraph(attributePaths = {"deportes"})
     List<Cancha> findByEstablecimientoIdInAndIsActiveTrue(List<Long> establecimientoIds);
+
+    /**
+     * Trae, para el lote de establecimientos indicado, sus canchas activas con deportes y
+     * tarifas ya inicializados en la misma consulta (@EntityGraph): alimenta las
+     * derivaciones públicas (deportes/precioDesde/senaDesde por complejo, ver
+     * ComplejoPublicoService) sin ejecutar una consulta de tarifas por cancha (N+1).
+     * "tarifas" es la única colección tipo lista (bag) del grafo — "deportes" es un Set —
+     * así que no cae en MultipleBagFetchException.
+     */
+    @EntityGraph(attributePaths = {"deportes", "tarifas"})
+    @Query("SELECT c FROM Cancha c WHERE c.establecimiento.id IN :establecimientoIds AND c.isActive = true")
+    List<Cancha> findActivasConDeportesYTarifasByEstablecimientoIdIn(@Param("establecimientoIds") List<Long> establecimientoIds);
 
     /**
      * Adquiere un lock pesimista (SELECT ... FOR UPDATE) sobre las canchas indicadas, en

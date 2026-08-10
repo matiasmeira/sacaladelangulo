@@ -78,6 +78,7 @@ class ReservaExclusionConstraintIntegrationTest extends AbstractPostgresIntegrat
         Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
                 .nombre("Club Exclusión")
                 .direccion("Calle Falsa 456")
+                .slug("club-exclusion")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)

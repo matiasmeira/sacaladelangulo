@@ -94,6 +94,7 @@ class ReservaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTest
         Establecimiento establecimiento = Establecimiento.builder()
                 .nombre("Club Concurrencia")
                 .direccion("Calle Falsa 123")
+                .slug("club-concurrencia")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)

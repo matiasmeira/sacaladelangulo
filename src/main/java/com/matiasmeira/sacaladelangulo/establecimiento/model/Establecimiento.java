@@ -61,6 +61,33 @@ public class Establecimiento {
     @lombok.Builder.Default
     private java.util.List<HorarioAtencion> horariosAtencion = new java.util.ArrayList<>();
 
+    @Column(nullable = false, unique = true)
+    private String slug;
+
+    /**
+     * Servicios/comodidades del complejo (parrilla, vestuarios, etc.), mostrados en la
+     * zona pública. Mismo patrón que Cancha.deportes: @ElementCollection en tabla propia.
+     */
+    @ElementCollection
+    @CollectionTable(name = "establecimiento_servicios", joinColumns = @JoinColumn(name = "establecimiento_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "servicio", nullable = false)
+    @lombok.Builder.Default
+    private java.util.Set<Servicio> servicios = new java.util.HashSet<>();
+
+    /**
+     * URLs de fotos del complejo, en el orden en que se muestran (la primera es la
+     * "fotoPrincipal" de la card pública). @OrderColumn persiste ese orden explícitamente
+     * (columna "orden"): sin ella Hibernate no garantiza qué foto es la primera al releer.
+     * Sin integración con ImageKit todavía: se cargan a mano / seed.
+     */
+    @ElementCollection
+    @CollectionTable(name = "establecimiento_fotos", joinColumns = @JoinColumn(name = "establecimiento_id"))
+    @OrderColumn(name = "orden")
+    @Column(name = "foto_url", nullable = false)
+    @lombok.Builder.Default
+    private java.util.List<String> fotos = new java.util.ArrayList<>();
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dueno_id", nullable = false)
     private Usuario dueno;

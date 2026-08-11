@@ -50,6 +50,7 @@ import java.util.stream.Collectors;
 public class ComplejoPublicoService {
 
     private static final double RADIO_BUSQUEDA_DEFAULT_KM = 10.0;
+    private static final double RADIO_BUSQUEDA_MAXIMO_KM = 100.0;
     private static final int VENTANA_DISPONIBILIDAD_MINUTOS = 60;
 
     private final EstablecimientoRepository establecimientoRepository;
@@ -70,7 +71,10 @@ public class ComplejoPublicoService {
             LocalDate fecha, LocalTime hora, Pageable pageable) {
         validarUbicacion(lat, lng);
         boolean conUbicacion = lat != null && lng != null;
-        Double radio = (distanciaKm != null && distanciaKm > 0) ? distanciaKm : RADIO_BUSQUEDA_DEFAULT_KM;
+        // distanciaKm es un radio pedido por un caller anónimo y sin acotar de por sí puede
+        // forzar un scan efectivamente ilimitado en la query geo-filtrada (ej. distanciaKm=25000):
+        // se clampea al máximo razonable de búsqueda "cercana" en vez de usarlo tal cual.
+        Double radio = (distanciaKm != null && distanciaKm > 0) ? Math.min(distanciaKm, RADIO_BUSQUEDA_MAXIMO_KM) : RADIO_BUSQUEDA_DEFAULT_KM;
 
         List<Establecimiento> candidatos = conUbicacion
                 ? establecimientoRepository.findCercanosYPorDeporte(lat, lng, radio, deporte)
@@ -83,10 +87,12 @@ public class ComplejoPublicoService {
         List<ComplejoCardResponse> cards = mapearACards(candidatos, conUbicacion ? lat : null, conUbicacion ? lng : null, deporte);
         List<ComplejoCardResponse> ordenados = conUbicacion
                 ? cards.stream()
-                        .sorted(Comparator.comparing(ComplejoCardResponse::distanciaKm, Comparator.nullsLast(Comparator.naturalOrder())))
+                        .sorted(Comparator.comparing(ComplejoCardResponse::distanciaKm, Comparator.nullsLast(Comparator.naturalOrder()))
+                                .thenComparing(ComplejoCardResponse::slug))
                         .toList()
                 : cards.stream()
-                        .sorted(Comparator.comparing(ComplejoCardResponse::promedioCalificacion, Comparator.nullsLast(Comparator.reverseOrder())))
+                        .sorted(Comparator.comparing(ComplejoCardResponse::promedioCalificacion, Comparator.nullsLast(Comparator.reverseOrder()))
+                                .thenComparing(ComplejoCardResponse::slug))
                         .toList();
 
         return paginarEnMemoria(ordenados, pageable);
@@ -190,7 +196,12 @@ public class ComplejoPublicoService {
 
     private Page<ComplejoCardResponse> paginarEnMemoria(List<ComplejoCardResponse> items, Pageable pageable) {
         int total = items.size();
-        int desde = Math.min((int) pageable.getOffset(), total);
+        // getOffset() devuelve long y Spring Data no acota el parámetro "page" (solo "size",
+        // en 2000 por default): con un page muy grande el offset puede superar Integer.MAX_VALUE,
+        // así que el clamp tiene que hacerse en long y recién casteamos a int al final -- castear
+        // el long crudo antes de acotar puede dar un negativo (overflow) y romper el subList.
+        long desdeLong = Math.min(Math.max(pageable.getOffset(), 0L), (long) total);
+        int desde = (int) desdeLong;
         int hasta = Math.min(desde + pageable.getPageSize(), total);
         return new PageImpl<>(items.subList(desde, hasta), pageable, total);
     }
@@ -223,7 +234,7 @@ public class ComplejoPublicoService {
                 .map(c -> new CanchaPublicaDto(
                         c.getId(),
                         c.getNombre(),
-                        c.getDeportes(),
+                        Set.copyOf(c.getDeportes()),
                         c.getTarifas().stream().map(Tarifa::getPrecio).min(Comparator.naturalOrder()).orElse(null)))
                 .toList();
 
@@ -245,8 +256,8 @@ public class ComplejoPublicoService {
                 establecimiento.getLatitud(),
                 establecimiento.getLongitud(),
                 deportes,
-                establecimiento.getServicios(),
-                establecimiento.getFotos(),
+                Set.copyOf(establecimiento.getServicios()),
+                List.copyOf(establecimiento.getFotos()),
                 horarios,
                 canchasPublicas,
                 precioDesde,

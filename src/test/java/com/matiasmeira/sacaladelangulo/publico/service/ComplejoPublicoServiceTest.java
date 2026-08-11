@@ -187,6 +187,85 @@ class ComplejoPublicoServiceTest {
     }
 
     @Test
+    @DisplayName("buscarComplejos_SinUbicacionConMismoPromedio_DesempataPorSlugAscendente")
+    void buscarComplejos_SinUbicacionConMismoPromedio_DesempataPorSlugAscendente() {
+        // Dos establecimientos con exactamente el mismo promedioCalificacion: sin un
+        // desempate explícito, el orden entre ellos queda a merced del orden "de casualidad"
+        // en que vino la lista de la base -- acá se los devuelve deliberadamente en orden
+        // "zzz-complejo" antes que "aaa-complejo" para probar que el resultado ordenado no
+        // depende de ese orden de entrada, sino del slug.
+        Establecimiento zzz = establecimiento(1L, "zzz-complejo", "Zzz", false);
+        Establecimiento aaa = establecimiento(2L, "aaa-complejo", "Aaa", false);
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(zzz, aaa));
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L, 2L)))
+                .thenReturn(List.of());
+        when(establecimientoRepository.precargarFotos(List.of(1L, 2L))).thenReturn(List.of(zzz, aaa));
+        when(feedbackRepository.calcularPromediosPorEstablecimientos(List.of(1L, 2L)))
+                .thenReturn(List.of(new Object[]{1L, 4.5}, new Object[]{2L, 4.5}));
+        when(feedbackRepository.contarPorEstablecimientos(List.of(1L, 2L))).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, null, null, PageRequest.of(0, 20));
+
+        assertEquals("aaa-complejo", resultado.getContent().get(0).slug());
+        assertEquals("zzz-complejo", resultado.getContent().get(1).slug());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_ConUbicacionYMismaDistancia_DesempataPorSlugAscendente")
+    void buscarComplejos_ConUbicacionYMismaDistancia_DesempataPorSlugAscendente() {
+        // Misma idea que el test anterior pero en la rama "con ubicación": dos
+        // establecimientos exactamente en el punto de búsqueda (distanciaKm = 0 para
+        // ambos), devueltos en orden "zzz" primero para probar que el desempate es por
+        // slug y no por el orden de la lista de la base.
+        Establecimiento zzz = Establecimiento.builder()
+                .id(1L).nombre("Zzz").direccion("D1").slug("zzz-complejo")
+                .latitud(-34.6037).longitud(-58.3816).requiereSena(false).isActive(true).build();
+        Establecimiento aaa = Establecimiento.builder()
+                .id(2L).nombre("Aaa").direccion("D2").slug("aaa-complejo")
+                .latitud(-34.6037).longitud(-58.3816).requiereSena(false).isActive(true).build();
+
+        when(establecimientoRepository.findCercanosYPorDeporte(-34.6037, -58.3816, 10.0, null))
+                .thenReturn(List.of(zzz, aaa));
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L, 2L)))
+                .thenReturn(List.of());
+        when(establecimientoRepository.precargarFotos(List.of(1L, 2L))).thenReturn(List.of(zzz, aaa));
+        when(feedbackRepository.calcularPromediosPorEstablecimientos(List.of(1L, 2L))).thenReturn(List.of());
+        when(feedbackRepository.contarPorEstablecimientos(List.of(1L, 2L))).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                -34.6037, -58.3816, null, null, null, null, PageRequest.of(0, 20));
+
+        assertEquals("aaa-complejo", resultado.getContent().get(0).slug());
+        assertEquals("zzz-complejo", resultado.getContent().get(1).slug());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_PageMuyGrande_NoLanzaExcepcionYDevuelveVacio")
+    void buscarComplejos_PageMuyGrande_NoLanzaExcepcionYDevuelveVacio() {
+        // pageable.getOffset() es long y Spring Data no acota el parámetro "page" (solo
+        // "size"): un page=1_000_000_000 con size=20 da un offset (~2*10^10) que, casteado a
+        // int SIN acotar antes, desborda a un valor negativo y rompe subList con
+        // IndexOutOfBoundsException. Este test prueba que, tras acotar en long antes de
+        // castear, un page absurdamente grande devuelve una página vacía en vez de explotar.
+        Establecimiento e1 = establecimiento(1L, "uno", "Uno", false);
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(e1));
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
+                .thenReturn(List.of());
+        when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(e1));
+        when(feedbackRepository.calcularPromediosPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+        when(feedbackRepository.contarPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, null, null, PageRequest.of(1_000_000_000, 20));
+
+        assertEquals(0, resultado.getContent().size());
+        assertEquals(1, resultado.getTotalElements());
+    }
+
+    @Test
     @DisplayName("obtenerDetalle_VariasCanchas_DerivaDeportesPrecioDesdeYSenaDesdeYListaCanchas")
     void obtenerDetalle_VariasCanchas_DerivaDeportesPrecioDesdeYSenaDesdeYListaCanchas() {
         Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);

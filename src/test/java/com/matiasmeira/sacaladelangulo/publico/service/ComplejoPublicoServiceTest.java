@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.publico.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.disponibilidad.service.DisponibilidadService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
@@ -8,8 +9,10 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.publico.dto.ComplejoCardResponse;
+import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
@@ -287,6 +291,72 @@ class ComplejoPublicoServiceTest {
         assertEquals(BigDecimal.valueOf(800), detalle.senaDesde());
         assertEquals(2, detalle.canchas().size());
         assertEquals(4.5, detalle.promedioCalificacion());
+    }
+
+    private Feedback feedbackDestacadoDeJugador(String nombreJugador) {
+        Usuario jugador = Usuario.builder().id(9L).nombre(nombreJugador).build();
+        Reserva reserva = Reserva.builder().id(20L).jugador(jugador).build();
+        return Feedback.builder()
+                .id(30L)
+                .reserva(reserva)
+                .puntuacion(5)
+                .comentario("Excelente cancha")
+                .destacado(true)
+                .fechaCreacion(LocalDateTime.of(2026, 8, 1, 10, 0))
+                .build();
+    }
+
+    @Test
+    @DisplayName("obtenerDetalle_ComentarioDestacadoConNombreDeDosPalabras_AnonimizaElApellidoAInicial")
+    void obtenerDetalle_ComentarioDestacadoConNombreDeDosPalabras_AnonimizaElApellidoAInicial() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
+        Feedback destacado = feedbackDestacadoDeJugador("Carlos Fernández");
+
+        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of());
+        when(feedbackRepository.calcularPromedioByEstablecimientoId(1L)).thenReturn(5.0);
+        when(feedbackRepository.contarByEstablecimientoId(1L)).thenReturn(1L);
+        when(feedbackRepository.findDestacadoByEstablecimientoId(1L)).thenReturn(java.util.Optional.of(destacado));
+
+        com.matiasmeira.sacaladelangulo.publico.dto.ComplejoDetalleResponse detalle =
+                complejoPublicoService.obtenerDetalle("complejo-uno");
+
+        assertEquals("Carlos F.", detalle.comentarioDestacado().jugadorNombre());
+    }
+
+    @Test
+    @DisplayName("obtenerDetalle_ComentarioDestacadoConNombreDeUnaPalabra_LoDevuelveSinCambios")
+    void obtenerDetalle_ComentarioDestacadoConNombreDeUnaPalabra_LoDevuelveSinCambios() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
+        Feedback destacado = feedbackDestacadoDeJugador("Carlos");
+
+        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of());
+        when(feedbackRepository.calcularPromedioByEstablecimientoId(1L)).thenReturn(5.0);
+        when(feedbackRepository.contarByEstablecimientoId(1L)).thenReturn(1L);
+        when(feedbackRepository.findDestacadoByEstablecimientoId(1L)).thenReturn(java.util.Optional.of(destacado));
+
+        com.matiasmeira.sacaladelangulo.publico.dto.ComplejoDetalleResponse detalle =
+                complejoPublicoService.obtenerDetalle("complejo-uno");
+
+        assertEquals("Carlos", detalle.comentarioDestacado().jugadorNombre());
+    }
+
+    @Test
+    @DisplayName("obtenerDetalle_SinComentarioDestacado_ComentarioDestacadoEsNulo")
+    void obtenerDetalle_SinComentarioDestacado_ComentarioDestacadoEsNulo() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
+
+        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of());
+        when(feedbackRepository.calcularPromedioByEstablecimientoId(1L)).thenReturn(null);
+        when(feedbackRepository.contarByEstablecimientoId(1L)).thenReturn(0L);
+        when(feedbackRepository.findDestacadoByEstablecimientoId(1L)).thenReturn(java.util.Optional.empty());
+
+        com.matiasmeira.sacaladelangulo.publico.dto.ComplejoDetalleResponse detalle =
+                complejoPublicoService.obtenerDetalle("complejo-uno");
+
+        assertNull(detalle.comentarioDestacado());
     }
 
     @Test

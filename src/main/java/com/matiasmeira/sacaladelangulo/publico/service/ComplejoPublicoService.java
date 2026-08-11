@@ -275,9 +275,27 @@ public class ComplejoPublicoService {
                 feedback.getId(),
                 feedback.getPuntuacion(),
                 feedback.getComentario(),
-                jugador != null ? jugador.getNombre() : null,
+                jugador != null ? anonimizarNombre(jugador.getNombre()) : null,
                 feedback.getFechaCreacion()
         );
+    }
+
+    /**
+     * Esta es la zona pública y anónima del marketplace: no corresponde exponer el nombre
+     * completo del jugador que dejó la reseña a cualquier visitante sin autenticar. Se
+     * muestra el primer nombre tal cual y solo la inicial del segundo token (ej. "Carlos
+     * Fernández" -> "Carlos F."). Si el nombre tiene un solo token no hay nada más para
+     * anonimizar y se devuelve tal cual.
+     */
+    private String anonimizarNombre(String nombreCompleto) {
+        if (nombreCompleto == null || nombreCompleto.isBlank()) {
+            return nombreCompleto;
+        }
+        String[] tokens = nombreCompleto.trim().split("\\s+");
+        if (tokens.length < 2) {
+            return nombreCompleto;
+        }
+        return tokens[0] + " " + Character.toUpperCase(tokens[1].charAt(0)) + ".";
     }
 
     /**

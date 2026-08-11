@@ -8,7 +8,6 @@ import com.matiasmeira.sacaladelangulo.auth.repository.CodigoVerificacionReposit
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.security.TokenHasher;
-import org.hibernate.Hibernate;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -126,14 +125,6 @@ public class UsuarioService {
     public PerfilResponse obtenerPerfil(String email) {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        // Fuerza la inicialización de la colección lazy `permisos` mientras la sesión de
-        // Hibernate de esta transacción sigue abierta. Con spring.jpa.open-in-view=false
-        // (ver application.properties) esa sesión se cierra apenas retorna este método
-        // @Transactional, antes de que Jackson serialice la respuesta en la capa web: sin
-        // este initialize, iterar permisos durante la serialización lanza
-        // LazyInitializationException para usuarios EMPLOYEE (el único rol con permisos
-        // no vacíos; ver PerfilMapper).
-        Hibernate.initialize(usuario.getPermisos());
         return perfilMapper.mapToResponse(usuario);
     }
 }

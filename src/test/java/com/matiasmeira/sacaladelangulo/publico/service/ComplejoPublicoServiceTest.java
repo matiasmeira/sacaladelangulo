@@ -81,7 +81,7 @@ class ComplejoPublicoServiceTest {
                 .deportes(deportes)
                 .capacidad(10)
                 .isActive(true)
-                .precioBase(BigDecimal.valueOf(1000))
+                .precioBase(BigDecimal.valueOf(10000))
                 .montoSena(montoSena)
                 .establecimiento(est)
                 .build();
@@ -141,6 +141,73 @@ class ComplejoPublicoServiceTest {
         assertEquals(Set.of(Deporte.FUTBOL, Deporte.PADEL), card.deportes());
         assertEquals(BigDecimal.valueOf(3000), card.precioDesde());
         assertEquals(BigDecimal.valueOf(800), card.senaDesde());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_CanchaSinTarifas_PrecioDesdeCaeAPrecioBase")
+    void buscarComplejos_CanchaSinTarifas_PrecioDesdeCaeAPrecioBase() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
+        Cancha sinTarifas = Cancha.builder()
+                .id(10L)
+                .nombre("Cancha 10")
+                .deportes(Set.of(Deporte.FUTBOL))
+                .capacidad(10)
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(4000))
+                .montoSena(BigDecimal.valueOf(500))
+                .establecimiento(est)
+                .build();
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
+                .thenReturn(List.of(sinTarifas));
+        when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(est));
+        when(feedbackRepository.calcularPromediosPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+        when(feedbackRepository.contarPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, null, null, PageRequest.of(0, 20));
+
+        ComplejoCardResponse card = resultado.getContent().get(0);
+        assertEquals(BigDecimal.valueOf(4000), card.precioDesde());
+        assertEquals(BigDecimal.valueOf(500), card.senaDesde());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_TarifaMasCaraQuePrecioBase_PrecioDesdeUsaPrecioBase")
+    void buscarComplejos_TarifaMasCaraQuePrecioBase_PrecioDesdeUsaPrecioBase() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
+        Cancha cancha = Cancha.builder()
+                .id(10L)
+                .nombre("Cancha 10")
+                .deportes(Set.of(Deporte.FUTBOL))
+                .capacidad(10)
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(2000))
+                .montoSena(BigDecimal.valueOf(500))
+                .establecimiento(est)
+                .build();
+        cancha.setTarifas(List.of(Tarifa.builder()
+                .cancha(cancha)
+                .diaSemana(DayOfWeek.MONDAY)
+                .horaInicio(LocalTime.of(9, 0))
+                .horaFin(LocalTime.of(23, 0))
+                .precio(BigDecimal.valueOf(9000))
+                .build()));
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
+                .thenReturn(List.of(cancha));
+        when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(est));
+        when(feedbackRepository.calcularPromediosPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+        when(feedbackRepository.contarPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, null, null, PageRequest.of(0, 20));
+
+        // La tarifa (9000) es más cara que precioBase (2000): precioDesde tiene que reflejar
+        // el mínimo real, no solo el precio de tarifa.
+        assertEquals(BigDecimal.valueOf(2000), resultado.getContent().get(0).precioDesde());
     }
 
     @Test

@@ -130,7 +130,7 @@ class ComplejoPublicoControllerIntegrationTest {
         mockMvc.perform(get("/api/v1/publico/complejos/complejo-e2e"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.slug").value("complejo-e2e"))
-                .andExpect(jsonPath("$.precioDesde").value(6000))
+                .andExpect(jsonPath("$.precioDesde").value(5000))
                 .andExpect(jsonPath("$.senaDesde").value(1000))
                 .andExpect(content().string(not(containsString("duenoId"))));
     }

@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Zona pública del marketplace: listado, detalle y disponibilidad de complejos para un
@@ -164,8 +165,7 @@ public class ComplejoPublicoService {
                 : canchas.stream().filter(c -> c.getDeportes().contains(deporte)).toList();
 
         BigDecimal precioDesde = relevantes.stream()
-                .flatMap(c -> c.getTarifas().stream())
-                .map(Tarifa::getPrecio)
+                .map(this::precioMinimoDeCancha)
                 .min(Comparator.naturalOrder())
                 .orElse(null);
         BigDecimal senaDesde = relevantes.stream()
@@ -194,6 +194,20 @@ public class ComplejoPublicoService {
         );
     }
 
+    /**
+     * Precio mínimo que puede llegar a cobrar esta cancha: el menor entre sus
+     * Tarifa.precio configuradas y su precioBase (que PrecioReservaCalculator ya usa
+     * como fallback cuando ninguna Tarifa matchea una reserva puntual). precioBase es
+     * NOT NULL en el modelo, así que esto nunca devuelve null -- a diferencia de antes,
+     * cuando una cancha sin tarifas no aportaba ningún candidato y precioDesde podía
+     * quedar en null pese a ser reservable.
+     */
+    private BigDecimal precioMinimoDeCancha(Cancha cancha) {
+        return Stream.concat(cancha.getTarifas().stream().map(Tarifa::getPrecio), Stream.of(cancha.getPrecioBase()))
+                .min(Comparator.naturalOrder())
+                .orElseThrow();
+    }
+
     private Page<ComplejoCardResponse> paginarEnMemoria(List<ComplejoCardResponse> items, Pageable pageable) {
         int total = items.size();
         // getOffset() devuelve long y Spring Data no acota el parámetro "page" (solo "size",
@@ -220,8 +234,7 @@ public class ComplejoPublicoService {
 
         Set<Deporte> deportes = canchas.stream().flatMap(c -> c.getDeportes().stream()).collect(Collectors.toSet());
         BigDecimal precioDesde = canchas.stream()
-                .flatMap(c -> c.getTarifas().stream())
-                .map(Tarifa::getPrecio)
+                .map(this::precioMinimoDeCancha)
                 .min(Comparator.naturalOrder())
                 .orElse(null);
         BigDecimal senaDesde = canchas.stream()
@@ -235,7 +248,7 @@ public class ComplejoPublicoService {
                         c.getId(),
                         c.getNombre(),
                         Set.copyOf(c.getDeportes()),
-                        c.getTarifas().stream().map(Tarifa::getPrecio).min(Comparator.naturalOrder()).orElse(null)))
+                        precioMinimoDeCancha(c)))
                 .toList();
 
         List<HorarioAtencionDto> horarios = establecimiento.getHorariosAtencion() == null ? List.of()

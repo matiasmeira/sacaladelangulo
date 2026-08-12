@@ -23,6 +23,17 @@ public class VentaMapper {
         );
     }
 
+    public VentaResumenResponse mapToResumenResponse(Venta venta) {
+        return new VentaResumenResponse(
+                venta.getId(),
+                venta.getFechaHora(),
+                venta.getTotal(),
+                venta.getEstado().name(),
+                venta.getMetodoPago().name(),
+                venta.getReserva() != null ? venta.getReserva().getId() : null
+        );
+    }
+
     /**
      * El precio unitario se deriva de subtotal/cantidad (no del precio actual del
      * producto) para que el detalle de una venta vieja siga reflejando el precio

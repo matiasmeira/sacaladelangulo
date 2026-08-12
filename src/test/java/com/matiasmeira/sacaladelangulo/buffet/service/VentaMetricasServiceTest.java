@@ -3,6 +3,8 @@ package com.matiasmeira.sacaladelangulo.buffet.service;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.buffet.dto.MetricasVentasResponse;
+import com.matiasmeira.sacaladelangulo.buffet.dto.VentaMapper;
+import com.matiasmeira.sacaladelangulo.buffet.dto.VentaResumenResponse;
 import com.matiasmeira.sacaladelangulo.buffet.model.DetalleVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.EstadoVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.ProductoBuffet;
@@ -19,10 +21,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,6 +58,9 @@ class VentaMetricasServiceTest {
 
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
+
+    @Mock
+    private VentaMapper ventaMapper;
 
     @InjectMocks
     private VentaMetricasService ventaMetricasService;
@@ -211,5 +222,85 @@ class VentaMetricasServiceTest {
                 () -> ventaMetricasService.obtenerMetricas(
                         establecimiento.getId(), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31), otroDueno.getEmail())
         );
+    }
+
+    @Test
+    @DisplayName("listarVentas_Exito_PasaFiltrosAlRepositorioYMapea")
+    void listarVentas_Exito_PasaFiltrosAlRepositorioYMapea() {
+        Venta venta = Venta.builder()
+                .id(400L)
+                .establecimiento(establecimiento)
+                .fechaHora(LocalDateTime.of(2026, 1, 10, 12, 0))
+                .total(BigDecimal.valueOf(1500))
+                .estado(EstadoVenta.CONFIRMADA)
+                .metodoPago(MetodoPago.EFECTIVO)
+                .build();
+
+        LocalDate desde = LocalDate.of(2026, 1, 1);
+        LocalDate hasta = LocalDate.of(2026, 1, 31);
+        Pageable pageable = PageRequest.of(0, 20);
+        VentaResumenResponse resumen = new VentaResumenResponse(
+                400L, venta.getFechaHora(), venta.getTotal(), "CONFIRMADA", "EFECTIVO", null);
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(ventaRepository.buscarPaginado(eq(establecimiento.getId()), eq(EstadoVenta.CONFIRMADA),
+                eq(desde.atStartOfDay()), eq(hasta.atTime(LocalTime.MAX)), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(venta)));
+        when(ventaMapper.mapToResumenResponse(eq(venta))).thenReturn(resumen);
+
+        Page<VentaResumenResponse> page = ventaMetricasService.listarVentas(
+                establecimiento.getId(), desde, hasta, EstadoVenta.CONFIRMADA, dueno.getEmail(), pageable);
+
+        assertEquals(1, page.getTotalElements());
+        assertEquals(resumen, page.getContent().get(0));
+    }
+
+    @Test
+    @DisplayName("listarVentas_SinEstado_PasaNullAlRepositorio")
+    void listarVentas_SinEstado_PasaNullAlRepositorio() {
+        LocalDate desde = LocalDate.of(2026, 1, 1);
+        LocalDate hasta = LocalDate.of(2026, 1, 31);
+        Pageable pageable = PageRequest.of(0, 20);
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(ventaRepository.buscarPaginado(eq(establecimiento.getId()), isNull(),
+                eq(desde.atStartOfDay()), eq(hasta.atTime(LocalTime.MAX)), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        ventaMetricasService.listarVentas(establecimiento.getId(), desde, hasta, null, dueno.getEmail(), pageable);
+
+        verify(ventaRepository).buscarPaginado(eq(establecimiento.getId()), isNull(),
+                eq(desde.atStartOfDay()), eq(hasta.atTime(LocalTime.MAX)), eq(pageable));
+    }
+
+    @Test
+    @DisplayName("listarVentas_Fallo_DesdeMayorQueHasta")
+    void listarVentas_Fallo_DesdeMayorQueHasta() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+
+        assertThrows(IllegalArgumentException.class, () -> ventaMetricasService.listarVentas(
+                establecimiento.getId(), LocalDate.of(2026, 2, 1), LocalDate.of(2026, 1, 1),
+                null, dueno.getEmail(), PageRequest.of(0, 20)));
+    }
+
+    @Test
+    @DisplayName("listarVentas_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
+    void listarVentas_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
+        Usuario otroDueno = Usuario.builder()
+                .id(3L)
+                .email("otro-dueno@test.com")
+                .rol(Role.OWNER)
+                .build();
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> ventaMetricasService.listarVentas(
+                establecimiento.getId(), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31),
+                null, otroDueno.getEmail(), PageRequest.of(0, 20)));
     }
 }

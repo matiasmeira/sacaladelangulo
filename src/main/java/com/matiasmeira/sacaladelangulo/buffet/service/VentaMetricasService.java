@@ -2,6 +2,8 @@ package com.matiasmeira.sacaladelangulo.buffet.service;
 
 import com.matiasmeira.sacaladelangulo.buffet.dto.MetricasVentasResponse;
 import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoMasVendidoResponse;
+import com.matiasmeira.sacaladelangulo.buffet.dto.VentaMapper;
+import com.matiasmeira.sacaladelangulo.buffet.dto.VentaResumenResponse;
 import com.matiasmeira.sacaladelangulo.buffet.model.DetalleVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.EstadoVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
@@ -11,6 +13,8 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +39,7 @@ public class VentaMetricasService {
     private final VentaRepository ventaRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final VentaMapper ventaMapper;
 
     /**
      * Métricas de ventas del buffet en un rango de fechas (inclusive): ingreso total,
@@ -66,6 +71,27 @@ public class VentaMetricasService {
         return new MetricasVentasResponse(
                 establecimientoId, desde, hasta, ingresoTotal, cantidadVentas, ticketPromedio,
                 calcularProductosMasVendidos(ventas));
+    }
+
+    /**
+     * Listado paginado de ventas de buffet de un establecimiento en un rango de
+     * fechas (inclusive), para la tabla del front — sin desglose de ítems (ver
+     * VentaResumenResponse). Mismo criterio de autorización y de rango de fechas
+     * que obtenerMetricas.
+     */
+    @Transactional(readOnly = true)
+    public Page<VentaResumenResponse> listarVentas(Long establecimientoId, LocalDate desde, LocalDate hasta,
+                                                     EstadoVenta estado, String email, Pageable pageable) {
+        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
+                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+
+        if (desde.isAfter(hasta)) {
+            throw new IllegalArgumentException("La fecha 'desde' no puede ser posterior a 'hasta'");
+        }
+
+        return ventaRepository.buscarPaginado(establecimientoId, estado, desde.atStartOfDay(), hasta.atTime(LocalTime.MAX), pageable)
+                .map(ventaMapper::mapToResumenResponse);
     }
 
     private List<ProductoMasVendidoResponse> calcularProductosMasVendidos(List<Venta> ventas) {

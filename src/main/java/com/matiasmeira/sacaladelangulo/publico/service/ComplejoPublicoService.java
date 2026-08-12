@@ -28,6 +28,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -87,7 +88,7 @@ public class ComplejoPublicoService {
 
         List<Establecimiento> candidatos = conUbicacion
                 ? establecimientoRepository.findCercanosYPorDeporte(lat, lng, radio, deporte)
-                : establecimientoRepository.findActivosPorDeporte(deporte, PageRequest.of(0, MAX_CANDIDATOS_SIN_UBICACION));
+                : establecimientoRepository.findActivosPorDeporte(deporte, PageRequest.of(0, MAX_CANDIDATOS_SIN_UBICACION, Sort.by("id")));
 
         if (fecha != null && hora != null) {
             candidatos = filtrarPorDisponibilidad(candidatos, deporte, fecha, hora);

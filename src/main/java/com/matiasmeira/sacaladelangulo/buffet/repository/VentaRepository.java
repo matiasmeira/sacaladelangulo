@@ -5,6 +5,8 @@ import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -33,4 +35,21 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
      */
     @Query("SELECT v FROM Venta v JOIN FETCH v.detalles d JOIN FETCH d.productoBuffet WHERE v.id = :id")
     Optional<Venta> findByIdConDetalles(@Param("id") Long id);
+
+    /**
+     * Listado paginado de ventas para GET /api/v1/buffet/ventas. A diferencia de
+     * findByEstablecimientoIdAndEstadoAndFechaHoraBetween, estado es opcional (sin
+     * filtro trae CONFIRMADA y CANCELADA) y no hace JOIN FETCH de detalles: la
+     * respuesta de ese endpoint es un resumen sin el desglose de ítems, así que no
+     * hace falta traerlos y se evita la trampa de combinar fetch join de una
+     * colección con Pageable (Hibernate paginaría en memoria, warning HHH90003004).
+     */
+    @Query("SELECT v FROM Venta v WHERE v.establecimiento.id = :establecimientoId " +
+            "AND (:estado IS NULL OR v.estado = :estado) " +
+            "AND v.fechaHora BETWEEN :desde AND :hasta")
+    Page<Venta> buscarPaginado(@Param("establecimientoId") Long establecimientoId,
+                                @Param("estado") EstadoVenta estado,
+                                @Param("desde") LocalDateTime desde,
+                                @Param("hasta") LocalDateTime hasta,
+                                Pageable pageable);
 }

@@ -6,13 +6,17 @@ import com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablec
 import com.matiasmeira.sacaladelangulo.disponibilidad.service.DisponibilidadService;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.FeedbackDestacadoDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.GeoUtils;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.HorarioAtencionCalculator;
 import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.publico.dto.CanchaPublicaDto;
@@ -59,6 +63,8 @@ public class ComplejoPublicoService {
     private final ReservaRepository reservaRepository;
     private final FeedbackRepository feedbackRepository;
     private final DisponibilidadService disponibilidadService;
+    private final BloqueoCanchaRepository bloqueoCanchaRepository;
+    private final DiaNoLaborableRepository diaNoLaborableRepository;
 
     /**
      * Listado público de complejos: sirve tanto al home (sin lat/lng, ordenado por rating)
@@ -107,6 +113,8 @@ public class ComplejoPublicoService {
 
     private List<Establecimiento> filtrarPorDisponibilidad(List<Establecimiento> candidatos, Deporte deporte, LocalDate fecha, LocalTime hora) {
         List<Long> establecimientoIds = candidatos.stream().map(Establecimiento::getId).toList();
+        establecimientoRepository.precargarHorarios(establecimientoIds);
+
         List<Cancha> canchas = canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(establecimientoIds);
         if (deporte != null) {
             canchas = canchas.stream().filter(c -> c.getDeportes().contains(deporte)).toList();
@@ -119,14 +127,42 @@ public class ComplejoPublicoService {
         LocalDateTime finReserva = inicioReserva.plusMinutes(VENTANA_DISPONIBILIDAD_MINUTOS);
 
         List<Long> canchaIds = canchas.stream().map(Cancha::getId).toList();
-        Set<Long> canchasOcupadas = canchaIds.isEmpty()
-                ? Set.of()
+        Set<Long> canchasNoDisponibles = canchaIds.isEmpty()
+                ? new HashSet<>()
                 : new HashSet<>(reservaRepository.findCanchaIdsConSolapamiento(canchaIds, inicioReserva, finReserva));
+        // A diferencia de la query de reservas (que filtra por canchaId y no tiene sentido
+        // disparar si no hay ninguna cancha activa), esta filtra por establecimientoId: se
+        // consulta siempre, igual que precargarHorarios y diaNoLaborableRepository más abajo.
+        bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(establecimientoIds, inicioReserva, finReserva).stream()
+                .map(b -> b.getCancha().getId())
+                .forEach(canchasNoDisponibles::add);
+
+        Set<Long> establecimientosNoLaborables = diaNoLaborableRepository
+                .findByEstablecimientoIdInAndFecha(establecimientoIds, fecha).stream()
+                .map(d -> d.getEstablecimiento().getId())
+                .collect(Collectors.toSet());
 
         return candidatos.stream()
+                .filter(est -> !establecimientosNoLaborables.contains(est.getId()))
+                .filter(est -> estaAbiertoEnVentana(est, fecha, inicioReserva, finReserva))
                 .filter(est -> canchasPorEstablecimiento.getOrDefault(est.getId(), List.of()).stream()
-                        .anyMatch(c -> !canchasOcupadas.contains(c.getId())))
+                        .anyMatch(c -> !canchasNoDisponibles.contains(c.getId())))
                 .toList();
+    }
+
+    /**
+     * ¿El complejo tiene un HorarioAtencion para el día de la semana de "fecha" que cubra
+     * por completo la ventana [inicioReserva, finReserva)? Mismo criterio que
+     * DisponibilidadService.generarSlotsLibres: el turno completo tiene que entrar en el
+     * horario, no solo su inicio.
+     */
+    private boolean estaAbiertoEnVentana(Establecimiento establecimiento, LocalDate fecha, LocalDateTime inicioReserva, LocalDateTime finReserva) {
+        return establecimiento.getHorariosAtencion().stream()
+                .filter(h -> h.getDiaSemana() == fecha.getDayOfWeek())
+                .findFirst()
+                .map(horario -> HorarioAtencionCalculator.calcularVentana(horario, fecha))
+                .map(ventana -> !inicioReserva.isBefore(ventana.inicio()) && !finReserva.isAfter(ventana.fin()))
+                .orElse(false);
     }
 
     private List<ComplejoCardResponse> mapearACards(List<Establecimiento> establecimientos, Double lat, Double lng, Deporte deporte) {

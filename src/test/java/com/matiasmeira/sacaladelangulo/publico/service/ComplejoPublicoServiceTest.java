@@ -3,11 +3,16 @@ package com.matiasmeira.sacaladelangulo.publico.service;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.disponibilidad.service.DisponibilidadService;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
@@ -57,6 +62,12 @@ class ComplejoPublicoServiceTest {
 
     @Mock
     private DisponibilidadService disponibilidadService;
+
+    @Mock
+    private BloqueoCanchaRepository bloqueoCanchaRepository;
+
+    @Mock
+    private DiaNoLaborableRepository diaNoLaborableRepository;
 
     @InjectMocks
     private ComplejoPublicoService complejoPublicoService;
@@ -333,6 +344,180 @@ class ComplejoPublicoServiceTest {
                 null, null, null, null, null, null, PageRequest.of(1_000_000_000, 20));
 
         assertEquals(0, resultado.getContent().size());
+        assertEquals(1, resultado.getTotalElements());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_ConFechaYHora_IncluyeComplejoAbiertoConCanchaLibre")
+    void buscarComplejos_ConFechaYHora_IncluyeComplejoAbiertoConCanchaLibre() {
+        // 2026-08-10 es lunes.
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", false);
+        est.setHorariosAtencion(List.of(HorarioAtencion.builder()
+                .diaSemana(DayOfWeek.MONDAY)
+                .horaApertura(LocalTime.of(9, 0))
+                .horaCierre(LocalTime.of(23, 0))
+                .build()));
+        Cancha cancha = Cancha.builder()
+                .id(10L).nombre("Cancha 10").deportes(Set.of(Deporte.FUTBOL)).capacidad(10).isActive(true)
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(200)).establecimiento(est).build();
+
+        LocalDate fecha = LocalDate.of(2026, 8, 10);
+        LocalTime hora = LocalTime.of(10, 0);
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
+        when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
+        when(reservaRepository.findCanchaIdsConSolapamiento(eq(List.of(10L)), any(), any())).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of(cancha));
+        when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(est));
+        when(feedbackRepository.calcularPromediosPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+        when(feedbackRepository.contarPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, fecha, hora, PageRequest.of(0, 20));
+
+        assertEquals(1, resultado.getTotalElements());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_ConFechaYHora_ExcluyeComplejoSinHorarioAtencionEseDia")
+    void buscarComplejos_ConFechaYHora_ExcluyeComplejoSinHorarioAtencionEseDia() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", false);
+        est.setHorariosAtencion(List.of()); // sin horarios cargados para ningún día
+
+        LocalDate fecha = LocalDate.of(2026, 8, 10);
+        LocalTime hora = LocalTime.of(10, 0);
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
+        when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, fecha, hora, PageRequest.of(0, 20));
+
+        assertEquals(0, resultado.getTotalElements());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_ConFechaYHora_ExcluyeComplejoConDiaNoLaborable")
+    void buscarComplejos_ConFechaYHora_ExcluyeComplejoConDiaNoLaborable() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", false);
+        est.setHorariosAtencion(List.of(HorarioAtencion.builder()
+                .diaSemana(DayOfWeek.MONDAY)
+                .horaApertura(LocalTime.of(9, 0))
+                .horaCierre(LocalTime.of(23, 0))
+                .build()));
+
+        LocalDate fecha = LocalDate.of(2026, 8, 10);
+        LocalTime hora = LocalTime.of(10, 0);
+        DiaNoLaborable feriado = DiaNoLaborable.builder().fecha(fecha).motivo("Feriado").establecimiento(est).build();
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
+        when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of(feriado));
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, fecha, hora, PageRequest.of(0, 20));
+
+        assertEquals(0, resultado.getTotalElements());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_ConFechaYHora_ExcluyeCanchaConBloqueoAunSinReservaSuperpuesta")
+    void buscarComplejos_ConFechaYHora_ExcluyeCanchaConBloqueoAunSinReservaSuperpuesta() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", false);
+        est.setHorariosAtencion(List.of(HorarioAtencion.builder()
+                .diaSemana(DayOfWeek.MONDAY)
+                .horaApertura(LocalTime.of(9, 0))
+                .horaCierre(LocalTime.of(23, 0))
+                .build()));
+        Cancha cancha = Cancha.builder()
+                .id(10L).nombre("Cancha 10").deportes(Set.of(Deporte.FUTBOL)).capacidad(10).isActive(true)
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(200)).establecimiento(est).build();
+        BloqueoCancha bloqueo = BloqueoCancha.builder()
+                .cancha(cancha)
+                .fechaInicio(LocalDateTime.of(2026, 8, 10, 9, 30))
+                .fechaFin(LocalDateTime.of(2026, 8, 10, 12, 0))
+                .motivo("Mantenimiento")
+                .build();
+
+        LocalDate fecha = LocalDate.of(2026, 8, 10);
+        LocalTime hora = LocalTime.of(10, 0);
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
+        when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
+        when(reservaRepository.findCanchaIdsConSolapamiento(eq(List.of(10L)), any(), any())).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of(bloqueo));
+        when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, fecha, hora, PageRequest.of(0, 20));
+
+        assertEquals(0, resultado.getTotalElements());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_ConFechaYHora_ExcluyeSiLaVentanaSolicitadaNoEntraCompletaEnElHorario")
+    void buscarComplejos_ConFechaYHora_ExcluyeSiLaVentanaSolicitadaNoEntraCompletaEnElHorario() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", false);
+        est.setHorariosAtencion(List.of(HorarioAtencion.builder()
+                .diaSemana(DayOfWeek.MONDAY)
+                .horaApertura(LocalTime.of(9, 0))
+                .horaCierre(LocalTime.of(22, 0)) // cierra a las 22:00
+                .build()));
+
+        LocalDate fecha = LocalDate.of(2026, 8, 10);
+        LocalTime hora = LocalTime.of(21, 30); // + 60 min de ventana = termina 22:30, después del cierre
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
+        when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, fecha, hora, PageRequest.of(0, 20));
+
+        assertEquals(0, resultado.getTotalElements());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_ConFechaYHora_IncluyeHorarioQueCruzaMedianocheSiLaVentanaEntra")
+    void buscarComplejos_ConFechaYHora_IncluyeHorarioQueCruzaMedianocheSiLaVentanaEntra() {
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", false);
+        est.setHorariosAtencion(List.of(HorarioAtencion.builder()
+                .diaSemana(DayOfWeek.MONDAY)
+                .horaApertura(LocalTime.of(20, 0))
+                .horaCierre(LocalTime.of(2, 0)) // cruza medianoche
+                .build()));
+        Cancha cancha = Cancha.builder()
+                .id(10L).nombre("Cancha 10").deportes(Set.of(Deporte.FUTBOL)).capacidad(10).isActive(true)
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(200)).establecimiento(est).build();
+
+        LocalDate fecha = LocalDate.of(2026, 8, 10); // lunes
+        LocalTime hora = LocalTime.of(23, 0); // + 60 min = 00:00 del martes, sigue dentro de la ventana (hasta las 02:00)
+
+        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
+        when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
+        when(reservaRepository.findCanchaIdsConSolapamiento(eq(List.of(10L)), any(), any())).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
+        when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of(cancha));
+        when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(est));
+        when(feedbackRepository.calcularPromediosPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+        when(feedbackRepository.contarPorEstablecimientos(List.of(1L))).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, fecha, hora, PageRequest.of(0, 20));
+
         assertEquals(1, resultado.getTotalElements());
     }
 

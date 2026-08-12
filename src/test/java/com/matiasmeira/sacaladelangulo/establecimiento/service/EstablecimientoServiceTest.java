@@ -74,7 +74,8 @@ class EstablecimientoServiceTest {
                 List.of(
                         new HorarioAtencionDto(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(23, 0)),
                         new HorarioAtencionDto(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(23, 0))
-                )
+                ),
+                null
         );
 
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
@@ -105,7 +106,8 @@ class EstablecimientoServiceTest {
                 List.of(
                         new HorarioAtencionDto(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0)),
                         new HorarioAtencionDto(DayOfWeek.TUESDAY, LocalTime.of(15, 0), LocalTime.of(23, 0))
-                )
+                ),
+                null
         );
 
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
@@ -134,7 +136,8 @@ class EstablecimientoServiceTest {
                 -34.6,
                 -58.4,
                 false,
-                List.of(new HorarioAtencionDto(DayOfWeek.WEDNESDAY, LocalTime.of(9, 0), LocalTime.of(9, 0)))
+                List.of(new HorarioAtencionDto(DayOfWeek.WEDNESDAY, LocalTime.of(9, 0), LocalTime.of(9, 0))),
+                null
         );
 
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
@@ -181,7 +184,8 @@ class EstablecimientoServiceTest {
                 -34.6,
                 -58.4,
                 true,
-                List.of(new HorarioAtencionDto(DayOfWeek.FRIDAY, LocalTime.of(10, 0), LocalTime.of(22, 0)))
+                List.of(new HorarioAtencionDto(DayOfWeek.FRIDAY, LocalTime.of(10, 0), LocalTime.of(22, 0))),
+                null
         );
 
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(existente));

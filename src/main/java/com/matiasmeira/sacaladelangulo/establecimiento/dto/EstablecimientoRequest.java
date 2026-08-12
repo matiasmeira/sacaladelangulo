@@ -1,12 +1,18 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.dto;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Servicio;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * DTO para crear un establecimiento.
+ * DTO para crear/actualizar un establecimiento.
+ *
+ * servicios == null significa "no modificar" (dejar los existentes intactos);
+ * servicios == Set.of() significa "borrar todos". Necesario porque el frontend hace
+ * PUT del objeto entero desde formularios por sección: si null se tratara como
+ * "vaciar", cualquier PUT que no toque servicios (p. ej. editar horarios) los borraría.
  */
 public record EstablecimientoRequest(
         @NotBlank(message = "El nombre es obligatorio")
@@ -25,6 +31,8 @@ public record EstablecimientoRequest(
         Boolean requiereSena,
 
         @Valid
-        java.util.List<HorarioAtencionDto> horariosAtencion
+        java.util.List<HorarioAtencionDto> horariosAtencion,
+
+        java.util.Set<Servicio> servicios
 ) {
 }

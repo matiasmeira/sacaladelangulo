@@ -58,6 +58,9 @@ public class EstablecimientoService {
                 .build();
 
         establecimiento.setHorariosAtencion(mapearHorarios(request.horariosAtencion(), establecimiento));
+        if (request.servicios() != null) {
+            establecimiento.setServicios(new HashSet<>(request.servicios()));
+        }
 
         Establecimiento establecimientoGuardado = establecimientoRepository.save(establecimiento);
 
@@ -81,6 +84,11 @@ public class EstablecimientoService {
         establecimiento.setLatitud(request.latitud());
         establecimiento.setLongitud(request.longitud());
         establecimiento.setRequiereSena(esPlanLimitado(usuarioAutenticado.getPlanSuscripcion()) || request.requiereSena());
+
+        if (request.servicios() != null) {
+            establecimiento.getServicios().clear();
+            establecimiento.getServicios().addAll(request.servicios());
+        }
 
         if (establecimiento.getHorariosAtencion() == null) {
             establecimiento.setHorariosAtencion(new ArrayList<>());
@@ -200,6 +208,7 @@ public class EstablecimientoService {
                 establecimiento.getHorariosAtencion() == null ? List.of() : establecimiento.getHorariosAtencion().stream()
                         .map(h -> new HorarioAtencionDto(h.getDiaSemana(), h.getHoraApertura(), h.getHoraCierre()))
                         .toList(),
+                Set.copyOf(establecimiento.getServicios()),
                 promedioCalificacion,
                 cantidadCalificaciones,
                 comentarioDestacado

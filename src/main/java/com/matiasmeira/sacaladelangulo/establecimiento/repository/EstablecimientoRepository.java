@@ -65,4 +65,16 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
     @EntityGraph(attributePaths = {"fotos"})
     @Query("SELECT e FROM Establecimiento e WHERE e.id IN :ids")
     List<Establecimiento> precargarFotos(@Param("ids") List<Long> ids);
+
+    /**
+     * Trae, para el lote de ids indicado, los horarios de atención ya inicializados en la
+     * misma consulta: evita un SELECT de horarios por establecimiento al filtrar
+     * candidatos por fecha/hora en la búsqueda pública (ver
+     * ComplejoPublicoService.filtrarPorDisponibilidad). Mismo patrón de "precarga por
+     * efecto" que precargarFotos: dentro de la misma transacción, las entidades que
+     * devuelve son las mismas instancias que ya tiene el caller.
+     */
+    @EntityGraph(attributePaths = {"horariosAtencion"})
+    @Query("SELECT e FROM Establecimiento e WHERE e.id IN :ids")
+    List<Establecimiento> precargarHorarios(@Param("ids") List<Long> ids);
 }

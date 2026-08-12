@@ -23,4 +23,15 @@ public interface BloqueoCanchaRepository extends JpaRepository<BloqueoCancha, Lo
     List<BloqueoCancha> findByEstablecimientoAndRango(@Param("establecimientoId") Long establecimientoId,
                                                        @Param("inicio") LocalDateTime inicio,
                                                        @Param("fin") LocalDateTime fin);
+
+    /**
+     * Variante en lote de findByEstablecimientoAndRango para el filtro de disponibilidad
+     * de la búsqueda pública: trae los bloqueos de todos los complejos candidatos en una
+     * sola consulta.
+     */
+    @Query("SELECT b FROM BloqueoCancha b WHERE b.cancha.establecimiento.id IN :establecimientoIds AND " +
+           "(b.fechaInicio < :fin AND b.fechaFin > :inicio)")
+    List<BloqueoCancha> findByEstablecimientoIdInAndRango(@Param("establecimientoIds") List<Long> establecimientoIds,
+                                                           @Param("inicio") LocalDateTime inicio,
+                                                           @Param("fin") LocalDateTime fin);
 }

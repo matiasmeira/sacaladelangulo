@@ -20,4 +20,12 @@ public interface DiaNoLaborableRepository extends JpaRepository<DiaNoLaborable, 
      * laborables del rango consultado en una sola consulta, en vez de una por día.
      */
     List<DiaNoLaborable> findByEstablecimientoIdAndFechaBetween(Long establecimientoId, LocalDate desde, LocalDate hasta);
+
+    /**
+     * Variante en lote para el filtro de disponibilidad de la búsqueda pública (ver
+     * ComplejoPublicoService.filtrarPorDisponibilidad): consulta todos los complejos
+     * candidatos de una sola vez para una fecha puntual, en vez de una consulta por
+     * complejo.
+     */
+    List<DiaNoLaborable> findByEstablecimientoIdInAndFecha(List<Long> establecimientoIds, LocalDate fecha);
 }

@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.establecimiento.repository;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -48,11 +49,14 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
     /**
      * Variante de findCercanosYPorDeporte sin filtro geográfico: alimenta el listado
      * público cuando el visitante no compartió su ubicación (home sin filtros), donde
-     * el orden relevante es el rating y no la distancia.
+     * el orden relevante es el rating y no la distancia. Acotada por el Pageable que le
+     * pase el caller: sin ubicación no hay límite geográfico natural, así que
+     * ComplejoPublicoService le pasa un tope fijo de filas (ver M-final-2 / Goal 3 del
+     * follow-up de zona pública).
      */
     @Query("SELECT DISTINCT e FROM Establecimiento e LEFT JOIN Cancha c ON c.establecimiento.id = e.id AND c.isActive = true " +
            "WHERE e.isActive = true AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes)")
-    List<Establecimiento> findActivosPorDeporte(@Param("deporte") Deporte deporte);
+    List<Establecimiento> findActivosPorDeporte(@Param("deporte") Deporte deporte, Pageable pageable);
 
     /**
      * Trae, para el lote de ids indicado, las fotos (@ElementCollection ordenada) ya

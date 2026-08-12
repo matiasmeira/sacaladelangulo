@@ -27,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -113,7 +114,7 @@ class ComplejoPublicoServiceTest {
         Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
         Cancha padel = canchaConTarifa(11L, est, Set.of(Deporte.PADEL), BigDecimal.valueOf(800), BigDecimal.valueOf(3000));
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
                 .thenReturn(List.of(futbol, padel));
         when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(est));
@@ -138,7 +139,7 @@ class ComplejoPublicoServiceTest {
         Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
         Cancha padel = canchaConTarifa(11L, est, Set.of(Deporte.PADEL), BigDecimal.valueOf(800), BigDecimal.valueOf(3000));
 
-        when(establecimientoRepository.findActivosPorDeporte(Deporte.PADEL)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(eq(Deporte.PADEL), any(Pageable.class))).thenReturn(List.of(est));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
                 .thenReturn(List.of(futbol, padel));
         when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(est));
@@ -169,7 +170,7 @@ class ComplejoPublicoServiceTest {
                 .establecimiento(est)
                 .build();
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
                 .thenReturn(List.of(sinTarifas));
         when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(est));
@@ -206,7 +207,7 @@ class ComplejoPublicoServiceTest {
                 .precio(BigDecimal.valueOf(9000))
                 .build()));
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
                 .thenReturn(List.of(cancha));
         when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(est));
@@ -253,7 +254,7 @@ class ComplejoPublicoServiceTest {
         Establecimiento e2 = establecimiento(2L, "dos", "Dos", false);
         Establecimiento e3 = establecimiento(3L, "tres", "Tres", false);
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(e1, e2, e3));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(e1, e2, e3));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L, 2L, 3L)))
                 .thenReturn(List.of());
         when(establecimientoRepository.precargarFotos(List.of(1L, 2L, 3L))).thenReturn(List.of(e1, e2, e3));
@@ -279,7 +280,7 @@ class ComplejoPublicoServiceTest {
         Establecimiento zzz = establecimiento(1L, "zzz-complejo", "Zzz", false);
         Establecimiento aaa = establecimiento(2L, "aaa-complejo", "Aaa", false);
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(zzz, aaa));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(zzz, aaa));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L, 2L)))
                 .thenReturn(List.of());
         when(establecimientoRepository.precargarFotos(List.of(1L, 2L))).thenReturn(List.of(zzz, aaa));
@@ -333,7 +334,7 @@ class ComplejoPublicoServiceTest {
         // castear, un page absurdamente grande devuelve una página vacía en vez de explotar.
         Establecimiento e1 = establecimiento(1L, "uno", "Uno", false);
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(e1));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(e1));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
                 .thenReturn(List.of());
         when(establecimientoRepository.precargarFotos(List.of(1L))).thenReturn(List.of(e1));
@@ -364,7 +365,7 @@ class ComplejoPublicoServiceTest {
         LocalDate fecha = LocalDate.of(2026, 8, 10);
         LocalTime hora = LocalTime.of(10, 0);
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
         when(reservaRepository.findCanchaIdsConSolapamiento(eq(List.of(10L)), any(), any())).thenReturn(List.of());
@@ -390,7 +391,7 @@ class ComplejoPublicoServiceTest {
         LocalDate fecha = LocalDate.of(2026, 8, 10);
         LocalTime hora = LocalTime.of(10, 0);
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
@@ -416,7 +417,7 @@ class ComplejoPublicoServiceTest {
         LocalTime hora = LocalTime.of(10, 0);
         DiaNoLaborable feriado = DiaNoLaborable.builder().fecha(fecha).motivo("Feriado").establecimiento(est).build();
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
@@ -450,7 +451,7 @@ class ComplejoPublicoServiceTest {
         LocalDate fecha = LocalDate.of(2026, 8, 10);
         LocalTime hora = LocalTime.of(10, 0);
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
         when(reservaRepository.findCanchaIdsConSolapamiento(eq(List.of(10L)), any(), any())).thenReturn(List.of());
@@ -476,7 +477,7 @@ class ComplejoPublicoServiceTest {
         LocalDate fecha = LocalDate.of(2026, 8, 10);
         LocalTime hora = LocalTime.of(21, 30); // + 60 min de ventana = termina 22:30, después del cierre
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
@@ -504,7 +505,7 @@ class ComplejoPublicoServiceTest {
         LocalDate fecha = LocalDate.of(2026, 8, 10); // lunes
         LocalTime hora = LocalTime.of(23, 0); // + 60 min = 00:00 del martes, sigue dentro de la ventana (hasta las 02:00)
 
-        when(establecimientoRepository.findActivosPorDeporte(null)).thenReturn(List.of(est));
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
         when(reservaRepository.findCanchaIdsConSolapamiento(eq(List.of(10L)), any(), any())).thenReturn(List.of());

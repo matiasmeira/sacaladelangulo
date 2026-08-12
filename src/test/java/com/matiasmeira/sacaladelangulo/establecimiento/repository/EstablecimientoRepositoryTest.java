@@ -192,10 +192,45 @@ class EstablecimientoRepositoryTest {
                 .build());
         entityManager.flush();
 
-        List<Establecimiento> resultado = establecimientoRepository.findActivosPorDeporte(Deporte.PADEL);
+        List<Establecimiento> resultado = establecimientoRepository
+                .findActivosPorDeporte(Deporte.PADEL, org.springframework.data.domain.Pageable.unpaged());
 
         assertEquals(1, resultado.size());
         assertEquals(conPadel.getId(), resultado.get(0).getId());
-        assertEquals(2, establecimientoRepository.findActivosPorDeporte(null).size());
+        assertEquals(2, establecimientoRepository
+                .findActivosPorDeporte(null, org.springframework.data.domain.Pageable.unpaged()).size());
+    }
+
+    @Test
+    @DisplayName("findActivosPorDeporte_ConPageable_AcotaLaCantidadDeFilasDevueltas")
+    void findActivosPorDeporte_ConPageable_AcotaLaCantidadDeFilasDevueltas() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-cap@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+        for (int i = 0; i < 3; i++) {
+            entityManager.persist(Establecimiento.builder()
+                    .nombre("Complejo Cap " + i)
+                    .direccion("Calle " + i)
+                    .slug("complejo-cap-" + i)
+                    .latitud(-34.6)
+                    .longitud(-58.4)
+                    .requiereSena(false)
+                    .isActive(true)
+                    .dueno(dueno)
+                    .build());
+        }
+        entityManager.flush();
+
+        List<Establecimiento> resultado = establecimientoRepository
+                .findActivosPorDeporte(null, org.springframework.data.domain.PageRequest.of(0, 2));
+
+        assertEquals(2, resultado.size());
     }
 }

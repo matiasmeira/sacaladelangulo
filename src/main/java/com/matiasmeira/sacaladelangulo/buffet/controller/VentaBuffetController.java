@@ -3,10 +3,17 @@ package com.matiasmeira.sacaladelangulo.buffet.controller;
 import com.matiasmeira.sacaladelangulo.buffet.dto.MetricasVentasResponse;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaRequest;
 import com.matiasmeira.sacaladelangulo.buffet.dto.VentaResponse;
+import com.matiasmeira.sacaladelangulo.buffet.dto.VentaResumenResponse;
+import com.matiasmeira.sacaladelangulo.buffet.model.EstadoVenta;
 import com.matiasmeira.sacaladelangulo.buffet.service.VentaMetricasService;
 import com.matiasmeira.sacaladelangulo.buffet.service.VentaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -65,5 +72,23 @@ public class VentaBuffetController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ventaMetricasService.obtenerMetricas(establecimientoId, desde, hasta, userDetails.getUsername()));
+    }
+
+    /**
+     * Listado paginado de ventas de buffet de un establecimiento en un rango de
+     * fechas, para la tabla de ventas del front (sin desglose de ítems). Sin
+     * estado, incluye CONFIRMADA y CANCELADA.
+     */
+    @GetMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<Page<VentaResumenResponse>> listarVentas(
+            @RequestParam Long establecimientoId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @RequestParam(required = false) EstadoVenta estado,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @ParameterObject @PageableDefault(size = 20, sort = "fechaHora", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(ventaMetricasService.listarVentas(
+                establecimientoId, desde, hasta, estado, userDetails.getUsername(), pageable));
     }
 }

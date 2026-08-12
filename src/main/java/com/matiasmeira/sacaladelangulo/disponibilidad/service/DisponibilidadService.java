@@ -112,10 +112,10 @@ public class DisponibilidadService {
         }
 
         HorarioAtencion horario = horarioOpt.get();
-        LocalDateTime ventanaInicio = fecha.atTime(horario.getHoraApertura());
-        LocalDateTime ventanaFin = horario.getHoraCierre().isBefore(horario.getHoraApertura())
-                ? fecha.plusDays(1).atTime(horario.getHoraCierre())
-                : fecha.atTime(horario.getHoraCierre());
+        com.matiasmeira.sacaladelangulo.establecimiento.service.HorarioAtencionCalculator.VentanaHoraria ventana =
+                com.matiasmeira.sacaladelangulo.establecimiento.service.HorarioAtencionCalculator.calcularVentana(horario, fecha);
+        LocalDateTime ventanaInicio = ventana.inicio();
+        LocalDateTime ventanaFin = ventana.fin();
 
         List<DisponibilidadCanchaResponse> canchasResponse = canchas.stream()
                 .map(cancha -> calcularDisponibilidadDeCancha(cancha, ventanaInicio, ventanaFin, canchas, bloqueos, reservas, ahora))

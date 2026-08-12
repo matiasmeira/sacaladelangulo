@@ -87,7 +87,7 @@ public class VentaBuffetController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
             @RequestParam(required = false) EstadoVenta estado,
             @AuthenticationPrincipal UserDetails userDetails,
-            @ParameterObject @PageableDefault(size = 20, sort = "fechaHora", direction = Sort.Direction.DESC) Pageable pageable) {
+            @ParameterObject @PageableDefault(size = 20, sort = {"fechaHora", "id"}, direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(ventaMetricasService.listarVentas(
                 establecimientoId, desde, hasta, estado, userDetails.getUsername(), pageable));
     }

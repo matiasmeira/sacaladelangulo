@@ -20,10 +20,11 @@ public final class UsuarioUserDetailsMapper {
     }
 
     public static UserDetails map(Usuario usuario) {
+        boolean enabled = Boolean.TRUE.equals(usuario.getIsActive()) && usuario.getDeletedAt() == null;
         return new UsuarioPrincipal(
                 usuario.getEmail(),
                 usuario.getPassword(),
-                Boolean.TRUE.equals(usuario.getIsActive()),
+                enabled,
                 List.of(new SimpleGrantedAuthority("ROLE_" + usuario.getRol().name())),
                 usuario.getTokenVersion() == null ? 0 : usuario.getTokenVersion()
         );

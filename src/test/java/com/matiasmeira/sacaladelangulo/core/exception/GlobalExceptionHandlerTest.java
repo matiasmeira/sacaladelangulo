@@ -106,4 +106,16 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
+
+    @Test
+    @DisplayName("handleEstablecimientosActivosException_Devuelve400ConElMensaje")
+    void handleEstablecimientosActivosException_Devuelve400ConElMensaje() {
+        EstablecimientosActivosException ex =
+                new EstablecimientosActivosException("Desactivá o transferí tus complejos antes de eliminar la cuenta");
+
+        ResponseEntity<Map<String, String>> response = handler.handleEstablecimientosActivosException(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("Desactivá o transferí tus complejos antes de eliminar la cuenta", response.getBody().get("error"));
+    }
 }

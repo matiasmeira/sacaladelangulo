@@ -151,9 +151,13 @@ sobrecargado hoy, ver Hallazgos), ni en que el email placeholder alcance por sí
   "reactivar cuenta" mal implementado), esto evita revivir el login de una cuenta ya
   anonimizada. Barato y queda testeable con un caso dedicado.
 - **Recuperación de contraseña** — dos cambios: (1) `RecuperacionPasswordService.
-  solicitarRecuperacion` agrega un chequeo explícito de `deletedAt`/`isActive` sobre el
-  usuario encontrado por email (en vez de depender solo de que el email ya no matchee tras
-  la anonimización), mismo criterio que en Login. (2) `resetPassword`: si el token es
+  solicitarRecuperacion` agrega un chequeo explícito de `deletedAt` (NO de `isActive`) sobre
+  el usuario encontrado por email, en vez de depender solo de que el email ya no matchee
+  tras la anonimización. Deliberadamente no se mira `isActive` acá, a diferencia de Login:
+  `isActive=false` también es el estado normal de un PLAYER recién registrado que todavía
+  no verificó el teléfono (ver Hallazgos), y esa cuenta sí debe poder recuperar su
+  contraseña — gatear por `isActive` rompería ese caso legítimo. (2) `resetPassword`: si el
+  token es
   válido pero el usuario resuelto ya tiene `deletedAt != null` (caso borde: se pidió
   recuperación antes de eliminar la cuenta y el token stale se usa después), se trata igual
   que un token inválido (`TokenInvalidoException`) en vez de completar el cambio de

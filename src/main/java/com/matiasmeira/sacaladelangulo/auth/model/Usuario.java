@@ -102,6 +102,14 @@ public class Usuario {
     private Integer tokenVersion = 0;
 
     /**
+     * Momento en que se dio de baja la cuenta (soft-delete + anonimización). Discriminador
+     * real de "cuenta eliminada": isActive por sí solo no alcanza, porque ya se reutiliza
+     * para "onboarding no completado" en PLAYER y para desactivación de EMPLOYEE.
+     */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    /**
      * Establecimiento al que pertenece este usuario cuando rol = EMPLOYEE.
      * Nulo para el resto de los roles.
      */

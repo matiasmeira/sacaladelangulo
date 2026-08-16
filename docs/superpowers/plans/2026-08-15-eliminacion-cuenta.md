@@ -929,6 +929,17 @@ git commit -m "fix: la recuperacion de password rechaza explicitamente cuentas e
 
 ## Task 7: `UsuarioEliminacionService` — autoeliminación (self-delete)
 
+> **Post-implementación (ruling durante la revisión):** el método de abajo,
+> `ReservaRepository.findByJugadorIdAndEstadoIn(Long, List<EstadoReserva>)`, se implementó y
+> commiteó finalmente como `findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(Long jugadorId,
+> List<EstadoReserva> estados, LocalDateTime ahora)` (3 argumentos, con filtro de fecha). La
+> justificación original de "sin filtro de fecha porque CONFIRMADA/PENDIENTE_SENA ya implican
+> no jugada" resultó ser incorrecta para este código (no hay job que auto-finalice reservas
+> viejas; `finalizarReserva` es una acción manual del dueño/empleado) — sin el filtro, una
+> cuenta con historial viejo sin finalizar habría mass-cancelado reservas ya jugadas. El código
+> y los tests de abajo quedan como registro histórico de lo que se planeó; el código real usa
+> la firma de 3 argumentos. Ver ledger de la ejecución (Task 7, fix round 1) para el detalle.
+
 **Files:**
 - Create: `src/main/java/com/matiasmeira/sacaladelangulo/auth/service/CuentaEliminadaEvent.java`
 - Create: `src/main/java/com/matiasmeira/sacaladelangulo/auth/service/UsuarioEliminacionService.java`
@@ -1439,7 +1450,7 @@ Agregar a `src/test/java/com/matiasmeira/sacaladelangulo/auth/service/UsuarioEli
         when(passwordEncoder.encode(anyString())).thenReturn("hash-random");
         when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L)).thenReturn(
                 List.of(Establecimiento.builder().id(10L).build(), Establecimiento.builder().id(11L).build()));
-        when(reservaRepository.findByJugadorIdAndEstadoIn(eq(1L), any())).thenReturn(List.of());
+        when(reservaRepository.findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(eq(1L), any(), any())).thenReturn(List.of());
 
         usuarioEliminacionService.eliminarComoAdmin("admin@test.com", 1L, true);
 

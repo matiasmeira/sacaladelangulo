@@ -288,4 +288,52 @@ class RecuperacionPasswordServiceTest {
         verify(tokenRecuperacionPasswordRepository, never()).findByTokenHash(anyString());
         verify(tokenRecuperacionPasswordRepository, never()).findByEmail(anyString());
     }
+
+    @Test
+    @DisplayName("solicitarRecuperacion_CuentaEliminada_NoHaceNadaYNoLanzaExcepcion")
+    void solicitarRecuperacion_CuentaEliminada_NoHaceNadaYNoLanzaExcepcion() {
+        SolicitarRecuperacionPasswordRequest request = new SolicitarRecuperacionPasswordRequest("eliminado@test.com");
+        Usuario usuarioEliminado = Usuario.builder()
+                .id(1L)
+                .email("eliminado@test.com")
+                .deletedAt(LocalDateTime.now())
+                .build();
+        when(usuarioRepository.findByEmail("eliminado@test.com")).thenReturn(Optional.of(usuarioEliminado));
+
+        recuperacionPasswordService.solicitarRecuperacion(request);
+
+        verify(tokenRecuperacionPasswordRepository, never()).deleteByEmail(anyString());
+        verify(tokenRecuperacionPasswordRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("resetPassword_Fallo_UsuarioYaEliminado")
+    void resetPassword_Fallo_UsuarioYaEliminado() {
+        TokenRecuperacionPassword token = TokenRecuperacionPassword.builder()
+                .id(1L)
+                .email("eliminado@test.com")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
+                .intentos(0)
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        Usuario usuarioEliminado = Usuario.builder()
+                .id(1L)
+                .email("eliminado@test.com")
+                .password("hash-random")
+                .tokenVersion(5)
+                .deletedAt(LocalDateTime.now().minusDays(1))
+                .build();
+        ResetPasswordRequest request = new ResetPasswordRequest("token-valido", null, null, "NuevaPass123");
+
+        when(tokenRecuperacionPasswordRepository.findByTokenHash(TokenHasher.sha256Hex("token-valido"))).thenReturn(Optional.of(token));
+        when(usuarioRepository.findByEmail("eliminado@test.com")).thenReturn(Optional.of(usuarioEliminado));
+
+        assertThrows(TokenInvalidoException.class, () -> recuperacionPasswordService.resetPassword(request));
+
+        verify(usuarioRepository, never()).save(any());
+        verify(tokenRecuperacionPasswordRepository, never()).delete(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
 }

@@ -24,6 +24,7 @@ import org.springframework.util.StringUtils;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -83,8 +84,9 @@ public class RecuperacionPasswordService {
             throw new RateLimitExceededException("Demasiadas solicitudes de recuperación. Intentá nuevamente en unos minutos.");
         }
 
-        if (usuarioRepository.findByEmail(email).isEmpty()) {
-            log.info("Solicitud de recuperación de contraseña para email no registrado");
+        Optional<Usuario> usuarioEncontrado = usuarioRepository.findByEmail(email);
+        if (usuarioEncontrado.isEmpty() || usuarioEncontrado.get().getDeletedAt() != null) {
+            log.info("Solicitud de recuperación de contraseña para email no registrado o cuenta eliminada");
             return;
         }
 
@@ -120,6 +122,10 @@ public class RecuperacionPasswordService {
 
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+
+        if (usuario.getDeletedAt() != null) {
+            throw new TokenInvalidoException("El token de recuperación no es válido");
+        }
 
         usuario.setPassword(passwordEncoder.encode(request.nuevaPassword()));
         usuario.setTokenVersion(usuario.getTokenVersion() + 1);

@@ -58,7 +58,7 @@ public class ReservaNotificacionListener {
         Map<String, Object> modelo = construirModeloBase(reserva);
 
         Usuario jugador = reserva.getJugador();
-        if (jugador != null && StringUtils.hasText(jugador.getEmail())) {
+        if (puedeNotificar(jugador)) {
             String htmlJugador = emailRenderer.render("reserva-confirmada", modelo);
             emailService.enviar(jugador.getEmail(), ASUNTO_JUGADOR, htmlJugador);
         }
@@ -85,7 +85,7 @@ public class ReservaNotificacionListener {
 
         if (esElJugador) {
             Usuario jugador = reserva.getJugador();
-            if (StringUtils.hasText(jugador.getEmail())) {
+            if (puedeNotificar(jugador)) {
                 String htmlJugador = emailRenderer.render("reserva-cancelada-jugador", modelo);
                 emailService.enviar(jugador.getEmail(), ASUNTO_CANCELACION_JUGADOR, htmlJugador);
             }
@@ -95,7 +95,7 @@ public class ReservaNotificacionListener {
             emailService.enviar(emailDueno, ASUNTO_LIBERACION_DUENO, htmlDueno);
         } else {
             Usuario jugador = reserva.getJugador();
-            if (jugador != null && StringUtils.hasText(jugador.getEmail())) {
+            if (puedeNotificar(jugador)) {
                 boolean huboSeña = reserva.getSenaPagada() != null && reserva.getSenaPagada().compareTo(BigDecimal.ZERO) > 0;
                 Map<String, Object> modeloJugador = new HashMap<>(modelo);
                 modeloJugador.put("huboSeña", huboSeña);
@@ -103,6 +103,16 @@ public class ReservaNotificacionListener {
                 emailService.enviar(jugador.getEmail(), ASUNTO_CANCELACION_POR_ESTABLECIMIENTO, htmlJugador);
             }
         }
+    }
+
+    /**
+     * Corta el envío si el jugador ya fue anonimizado (ver UsuarioEliminacionService): su
+     * email pasa a ser un placeholder @saque.deleted que no existe, y un bounce contra un
+     * dominio inexistente pega directo contra la reputación de envío del dominio real en
+     * Resend.
+     */
+    private boolean puedeNotificar(Usuario usuario) {
+        return usuario != null && usuario.getDeletedAt() == null && StringUtils.hasText(usuario.getEmail());
     }
 
     private Map<String, Object> construirModeloBase(Reserva reserva) {

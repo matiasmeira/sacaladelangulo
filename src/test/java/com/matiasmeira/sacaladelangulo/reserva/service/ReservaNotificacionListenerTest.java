@@ -270,4 +270,101 @@ class ReservaNotificacionListenerTest {
         verify(emailService, never()).enviar(any(), any(), any());
         verify(emailRenderer, never()).render(any(), anyMap());
     }
+
+    @Test
+    @DisplayName("enviarNotificacionesConfirmacion_JugadorEliminado_NoEnviaMailAlJugadorPeroSiAlDueno")
+    void enviarNotificacionesConfirmacion_JugadorEliminado_NoEnviaMailAlJugadorPeroSiAlDueno() {
+        Usuario jugadorEliminado = Usuario.builder()
+                .id(1L)
+                .email("deleted+1@saque.deleted")
+                .nombre("Usuario eliminado")
+                .rol(Role.PLAYER)
+                .deletedAt(LocalDateTime.now())
+                .build();
+
+        Reserva reserva = Reserva.builder()
+                .id(52L)
+                .jugador(jugadorEliminado)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(52L)).thenReturn(Optional.of(reserva));
+        when(emailRenderer.render(eq("reserva-nueva-dueno"), anyMap())).thenReturn("<html>dueno</html>");
+
+        listener.enviarNotificacionesConfirmacion(new ReservaConfirmadaEvent(52L));
+
+        verify(emailService, never()).enviar(eq("deleted+1@saque.deleted"), any(), any());
+        verify(emailRenderer, never()).render(eq("reserva-confirmada"), anyMap());
+        verify(emailService).enviar(eq("dueno@test.com"), eq("Nueva reserva confirmada en tu establecimiento"), eq("<html>dueno</html>"));
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesCancelacion_CanceladaPorElJugadorYaEliminado_NoEnviaReciboAlJugadorPeroSiLiberacionAlDueno")
+    void enviarNotificacionesCancelacion_CanceladaPorElJugadorYaEliminado_NoEnviaReciboAlJugadorPeroSiLiberacionAlDueno() {
+        Usuario jugadorEliminado = Usuario.builder()
+                .id(1L)
+                .email("deleted+1@saque.deleted")
+                .nombre("Usuario eliminado")
+                .rol(Role.PLAYER)
+                .deletedAt(LocalDateTime.now())
+                .build();
+
+        Reserva reserva = Reserva.builder()
+                .id(53L)
+                .jugador(jugadorEliminado)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CANCELADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(53L)).thenReturn(Optional.of(reserva));
+        when(emailRenderer.render(eq("reserva-liberada-dueno"), anyMap())).thenReturn("<html>dueno</html>");
+
+        listener.enviarNotificacionesCancelacion(new ReservaCanceladaEvent(53L, 1L));
+
+        verify(emailService, never()).enviar(eq("deleted+1@saque.deleted"), any(), any());
+        verify(emailRenderer, never()).render(eq("reserva-cancelada-jugador"), anyMap());
+        verify(emailService).enviar(eq("dueno@test.com"), eq("Se liberó una cancha"), eq("<html>dueno</html>"));
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesCancelacion_CanceladaPorDuenoConJugadorEliminado_NoEnviaNingunMailAlJugador")
+    void enviarNotificacionesCancelacion_CanceladaPorDuenoConJugadorEliminado_NoEnviaNingunMailAlJugador() {
+        Usuario jugadorEliminado = Usuario.builder()
+                .id(1L)
+                .email("deleted+1@saque.deleted")
+                .nombre("Usuario eliminado")
+                .rol(Role.PLAYER)
+                .deletedAt(LocalDateTime.now())
+                .build();
+
+        Reserva reserva = Reserva.builder()
+                .id(54L)
+                .jugador(jugadorEliminado)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CANCELADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(54L)).thenReturn(Optional.of(reserva));
+
+        listener.enviarNotificacionesCancelacion(new ReservaCanceladaEvent(54L, 2L));
+
+        verify(emailService, never()).enviar(any(), any(), any());
+        verify(emailRenderer, never()).render(any(), anyMap());
+    }
 }

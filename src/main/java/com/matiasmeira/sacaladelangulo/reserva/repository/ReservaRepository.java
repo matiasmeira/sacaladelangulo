@@ -122,6 +122,18 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     @EntityGraph(attributePaths = {"jugador", "cancha"})
     org.springframework.data.domain.Page<Reserva> findByJugadorId(Long jugadorId, org.springframework.data.domain.Pageable pageable);
 
+    /**
+     * Reservas futuras (fechaHoraInicio posterior a "ahora") de un jugador en los estados
+     * dados, sin paginar: usado por UsuarioEliminacionService para cancelar solo lo que
+     * todavía no se jugó al eliminar la cuenta. Restringido explícitamente a futuras y no a
+     * "todo CONFIRMADA/PENDIENTE_SENA": este dominio no tiene un job que auto-finalice
+     * reservas pasadas (finalizarReserva es una acción manual del dueño/empleado), así que
+     * sin este filtro una cuenta con historial viejo sin finalizar mass-cancelaría reservas
+     * ya jugadas, corrompiendo el historial y disparando notificaciones de liberación de
+     * cancha para turnos que ya pasaron.
+     */
+    List<Reserva> findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(Long jugadorId, List<EstadoReserva> estados, LocalDateTime ahora);
+
     @EntityGraph(attributePaths = {"jugador", "cancha"})
     org.springframework.data.domain.Page<Reserva> findByJugadorIdAndEstado(
             Long jugadorId,

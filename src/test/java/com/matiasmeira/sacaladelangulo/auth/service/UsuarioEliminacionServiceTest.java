@@ -233,4 +233,84 @@ class UsuarioEliminacionServiceTest {
         verify(eventPublisher, never()).publishEvent(any());
         verify(passwordEncoder, never()).matches(any(), any());
     }
+
+    @Test
+    @DisplayName("eliminarComoAdmin_ActorNoAdmin_LanzaAccessDeniedException")
+    void eliminarComoAdmin_ActorNoAdmin_LanzaAccessDeniedException() {
+        Usuario noAdmin = Usuario.builder().id(2L).email("owner@test.com").rol(Role.OWNER).build();
+        when(usuarioRepository.findByEmail("owner@test.com")).thenReturn(Optional.of(noAdmin));
+
+        assertThrows(AccessDeniedException.class,
+                () -> usuarioEliminacionService.eliminarComoAdmin("owner@test.com", 1L, false));
+
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("eliminarComoAdmin_TargetEmployee_LanzaIllegalArgumentException")
+    void eliminarComoAdmin_TargetEmployee_LanzaIllegalArgumentException() {
+        Usuario admin = Usuario.builder().id(9L).email("admin@test.com").rol(Role.ADMIN).build();
+        jugador.setRol(Role.EMPLOYEE);
+        when(usuarioRepository.findByEmail("admin@test.com")).thenReturn(Optional.of(admin));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(jugador));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> usuarioEliminacionService.eliminarComoAdmin("admin@test.com", 1L, false));
+
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("eliminarComoAdmin_TargetOwnerConEstablecimientosActivosSinForzar_LanzaExcepcion")
+    void eliminarComoAdmin_TargetOwnerConEstablecimientosActivosSinForzar_LanzaExcepcion() {
+        Usuario admin = Usuario.builder().id(9L).email("admin@test.com").rol(Role.ADMIN).build();
+        jugador.setRol(Role.OWNER);
+        when(usuarioRepository.findByEmail("admin@test.com")).thenReturn(Optional.of(admin));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(jugador));
+        when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L))
+                .thenReturn(List.of(Establecimiento.builder().id(10L).build()));
+
+        assertThrows(EstablecimientosActivosException.class,
+                () -> usuarioEliminacionService.eliminarComoAdmin("admin@test.com", 1L, false));
+
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("eliminarComoAdmin_TargetOwnerConEstablecimientosActivosForzando_AnonimizaYRegistraDetalleEnAuditoria")
+    void eliminarComoAdmin_TargetOwnerConEstablecimientosActivosForzando_AnonimizaYRegistraDetalleEnAuditoria() {
+        Usuario admin = Usuario.builder().id(9L).email("admin@test.com").rol(Role.ADMIN).build();
+        jugador.setRol(Role.OWNER);
+        when(usuarioRepository.findByEmail("admin@test.com")).thenReturn(Optional.of(admin));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(jugador));
+        when(passwordEncoder.encode(anyString())).thenReturn("hash-random");
+        when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L)).thenReturn(
+                List.of(Establecimiento.builder().id(10L).build(), Establecimiento.builder().id(11L).build()));
+        when(reservaRepository.findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(eq(1L), any(), any())).thenReturn(List.of());
+
+        usuarioEliminacionService.eliminarComoAdmin("admin@test.com", 1L, true);
+
+        verify(usuarioRepository).save(any(Usuario.class));
+        verify(passwordEncoder, never()).matches(any(), any());
+
+        ArgumentCaptor<AuditoriaEliminacionUsuario> auditoriaCaptor = ArgumentCaptor.forClass(AuditoriaEliminacionUsuario.class);
+        verify(auditoriaEliminacionUsuarioRepository).save(auditoriaCaptor.capture());
+        assertEquals(TipoEliminacionCuenta.ELIMINACION_ADMIN, auditoriaCaptor.getValue().getTipo());
+        assertEquals(9L, auditoriaCaptor.getValue().getActorId());
+        assertEquals("Forzado: 2 establecimiento(s) activo(s) sin desactivar", auditoriaCaptor.getValue().getDetalle());
+    }
+
+    @Test
+    @DisplayName("eliminarComoAdmin_TargetYaEliminado_NoRepiteNingunEfecto")
+    void eliminarComoAdmin_TargetYaEliminado_NoRepiteNingunEfecto() {
+        Usuario admin = Usuario.builder().id(9L).email("admin@test.com").rol(Role.ADMIN).build();
+        jugador.setDeletedAt(LocalDateTime.now().minusDays(1));
+        when(usuarioRepository.findByEmail("admin@test.com")).thenReturn(Optional.of(admin));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(jugador));
+
+        usuarioEliminacionService.eliminarComoAdmin("admin@test.com", 1L, false);
+
+        verify(usuarioRepository, never()).save(any());
+        verify(auditoriaEliminacionUsuarioRepository, never()).save(any());
+    }
 }

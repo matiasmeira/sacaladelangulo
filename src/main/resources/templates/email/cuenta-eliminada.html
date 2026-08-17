@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Tu cuenta fue eliminada</title>
+</head>
+<body>
+
+<div th:replace="~{layout :: email(titulo='Tu cuenta fue eliminada', contenidoHtml=~{::#contenido})}">
+
+    <div id="contenido">
+        <p style="margin:0 0 16px 0;">
+            Hola <span th:text="${nombre}">Usuario</span>, confirmamos que tu cuenta de Saque
+            fue eliminada.
+        </p>
+        <p style="margin:0;">
+            Tus datos personales fueron anonimizados. Si no fuiste vos quien solicitó esta
+            baja, contactanos lo antes posible.
+        </p>
+    </div>
+
+</div>
+
+</body>
+</html>

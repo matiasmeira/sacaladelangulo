@@ -338,6 +338,106 @@ class ReservaNotificacionListenerTest {
     }
 
     @Test
+    @DisplayName("enviarNotificacionesConfirmacion_DuenoEliminado_NoEnviaMailAlDuenoPeroSiAlJugador")
+    void enviarNotificacionesConfirmacion_DuenoEliminado_NoEnviaMailAlDuenoPeroSiAlJugador() {
+        Usuario duenoEliminado = Usuario.builder()
+                .id(2L)
+                .email("deleted+2@saque.deleted")
+                .nombre("Usuario eliminado")
+                .rol(Role.OWNER)
+                .deletedAt(LocalDateTime.now())
+                .build();
+        Establecimiento establecimientoConDuenoEliminado = Establecimiento.builder()
+                .id(10L)
+                .nombre("Establecimiento Test")
+                .dueno(duenoEliminado)
+                .build();
+        Cancha canchaConDuenoEliminado = Cancha.builder()
+                .id(100L)
+                .nombre("Cancha A")
+                .establecimiento(establecimientoConDuenoEliminado)
+                .build();
+
+        Usuario jugador = Usuario.builder()
+                .id(1L)
+                .email("jugador@test.com")
+                .nombre("Juan")
+                .rol(Role.PLAYER)
+                .build();
+
+        Reserva reserva = Reserva.builder()
+                .id(55L)
+                .jugador(jugador)
+                .cancha(canchaConDuenoEliminado)
+                .deporteSeleccionado(Deporte.FUTBOL)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(55L)).thenReturn(Optional.of(reserva));
+        when(emailRenderer.render(eq("reserva-confirmada"), anyMap())).thenReturn("<html>jugador</html>");
+
+        listener.enviarNotificacionesConfirmacion(new ReservaConfirmadaEvent(55L));
+
+        verify(emailService).enviar(eq("jugador@test.com"), eq("Tu reserva fue confirmada"), eq("<html>jugador</html>"));
+        verify(emailService, never()).enviar(eq("deleted+2@saque.deleted"), any(), any());
+        verify(emailRenderer, never()).render(eq("reserva-nueva-dueno"), anyMap());
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesCancelacion_CanceladaPorElJugadorConDuenoEliminado_NoEnviaMailAlDuenoPeroSiAlJugador")
+    void enviarNotificacionesCancelacion_CanceladaPorElJugadorConDuenoEliminado_NoEnviaMailAlDuenoPeroSiAlJugador() {
+        Usuario duenoEliminado = Usuario.builder()
+                .id(2L)
+                .email("deleted+2@saque.deleted")
+                .nombre("Usuario eliminado")
+                .rol(Role.OWNER)
+                .deletedAt(LocalDateTime.now())
+                .build();
+        Establecimiento establecimientoConDuenoEliminado = Establecimiento.builder()
+                .id(10L)
+                .nombre("Establecimiento Test")
+                .dueno(duenoEliminado)
+                .build();
+        Cancha canchaConDuenoEliminado = Cancha.builder()
+                .id(100L)
+                .nombre("Cancha A")
+                .establecimiento(establecimientoConDuenoEliminado)
+                .build();
+
+        Usuario jugador = Usuario.builder()
+                .id(1L)
+                .email("jugador@test.com")
+                .nombre("Juan")
+                .rol(Role.PLAYER)
+                .build();
+
+        Reserva reserva = Reserva.builder()
+                .id(56L)
+                .jugador(jugador)
+                .cancha(canchaConDuenoEliminado)
+                .deporteSeleccionado(Deporte.FUTBOL)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CANCELADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(56L)).thenReturn(Optional.of(reserva));
+        when(emailRenderer.render(eq("reserva-cancelada-jugador"), anyMap())).thenReturn("<html>jugador</html>");
+
+        listener.enviarNotificacionesCancelacion(new ReservaCanceladaEvent(56L, 1L));
+
+        verify(emailService).enviar(eq("jugador@test.com"), eq("Cancelaste tu reserva"), eq("<html>jugador</html>"));
+        verify(emailService, never()).enviar(eq("deleted+2@saque.deleted"), any(), any());
+        verify(emailRenderer, never()).render(eq("reserva-liberada-dueno"), anyMap());
+    }
+
+    @Test
     @DisplayName("enviarNotificacionesCancelacion_CanceladaPorDuenoConJugadorEliminado_NoEnviaNingunMailAlJugador")
     void enviarNotificacionesCancelacion_CanceladaPorDuenoConJugadorEliminado_NoEnviaNingunMailAlJugador() {
         Usuario jugadorEliminado = Usuario.builder()

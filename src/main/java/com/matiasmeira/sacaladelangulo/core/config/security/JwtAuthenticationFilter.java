@@ -9,7 +9,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -51,7 +53,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            var userDetails = userDetailsService.loadUserByUsername(username);
+            UserDetails userDetails;
+            try {
+                userDetails = userDetailsService.loadUserByUsername(username);
+            } catch (UsernameNotFoundException ex) {
+                // El JWT es válido y no expiró, pero su subject (email) ya no resuelve a
+                // ningún usuario: pasa con una cuenta eliminada, cuyo email fue anonimizado
+                // (ver UsuarioEliminacionService). Mismo criterio que arriba: se continúa sin
+                // autenticar y es authorizeHttpRequests quien decide el status (401/403).
+                filterChain.doFilter(request, response);
+                return;
+            }
             if (jwtService.isTokenValid(token, userDetails) && userDetails.isEnabled()) {
                 var authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,

@@ -5,6 +5,9 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.TipoEliminacionCuenta;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.AuditoriaEliminacionUsuarioRepository;
+import com.matiasmeira.sacaladelangulo.auth.repository.CodigoVerificacionRepository;
+import com.matiasmeira.sacaladelangulo.auth.repository.TokenRecuperacionPasswordRepository;
+import com.matiasmeira.sacaladelangulo.auth.repository.TokenVerificacionEmailRepository;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.exception.EstablecimientosActivosException;
@@ -44,6 +47,9 @@ public class UsuarioEliminacionService {
     private final EstablecimientoRepository establecimientoRepository;
     private final ReservaRepository reservaRepository;
     private final AuditoriaEliminacionUsuarioRepository auditoriaEliminacionUsuarioRepository;
+    private final TokenRecuperacionPasswordRepository tokenRecuperacionPasswordRepository;
+    private final TokenVerificacionEmailRepository tokenVerificacionEmailRepository;
+    private final CodigoVerificacionRepository codigoVerificacionRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -99,13 +105,15 @@ public class UsuarioEliminacionService {
     }
 
     private void eliminar(Usuario usuario, Long actorId, TipoEliminacionCuenta tipo, boolean forzar) {
+        LocalDateTime ahora = LocalDateTime.now();
+
         String detalleAuditoria = null;
         if (usuario.getRol() == Role.OWNER) {
             List<Establecimiento> activos = establecimientoRepository.findByDuenoIdAndIsActiveTrue(usuario.getId());
             if (!activos.isEmpty()) {
                 if (!forzar) {
                     throw new EstablecimientosActivosException(
-                            "Desactivá o transferí tus complejos antes de eliminar la cuenta");
+                            "No podés eliminar tu cuenta mientras tengas complejos activos. Contactá a soporte para gestionarlo.");
                 }
                 detalleAuditoria = "Forzado: " + activos.size() + " establecimiento(s) activo(s) sin desactivar";
                 log.warn("Eliminación forzada de OWNER {} con {} establecimiento(s) activo(s)",
@@ -116,8 +124,16 @@ public class UsuarioEliminacionService {
         String emailReal = usuario.getEmail();
         String nombreReal = usuario.getNombre();
 
+        // Otras tablas guardan PII de la misma persona en texto plano, indexadas por email
+        // (y, en el caso de CodigoVerificacion, el teléfono real pendiente de verificar).
+        // Se limpian acá, con el email pre-anonimización, porque después de este punto
+        // usuario.getEmail() ya es el placeholder y no matchearía nada.
+        tokenRecuperacionPasswordRepository.deleteByEmail(emailReal);
+        tokenVerificacionEmailRepository.deleteByEmail(emailReal);
+        codigoVerificacionRepository.deleteByEmail(emailReal);
+
         List<Reserva> reservasActivas = reservaRepository.findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(
-                usuario.getId(), ESTADOS_A_CANCELAR, LocalDateTime.now());
+                usuario.getId(), ESTADOS_A_CANCELAR, ahora);
         for (Reserva reserva : reservasActivas) {
             reserva.setEstado(EstadoReserva.CANCELADA);
             reservaRepository.save(reserva);
@@ -130,7 +146,7 @@ public class UsuarioEliminacionService {
         usuario.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
         usuario.setAceptaMarketing(false);
         usuario.setIsActive(false);
-        usuario.setDeletedAt(LocalDateTime.now());
+        usuario.setDeletedAt(ahora);
         usuario.setTokenVersion(usuario.getTokenVersion() + 1);
         usuarioRepository.save(usuario);
 
@@ -139,7 +155,7 @@ public class UsuarioEliminacionService {
                 .actorId(actorId)
                 .tipo(tipo)
                 .detalle(detalleAuditoria)
-                .fechaHora(LocalDateTime.now())
+                .fechaHora(ahora)
                 .build());
 
         eventPublisher.publishEvent(new CuentaEliminadaEvent(emailReal, nombreReal));

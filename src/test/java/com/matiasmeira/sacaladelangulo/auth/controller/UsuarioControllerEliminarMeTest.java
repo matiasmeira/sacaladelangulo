@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -72,6 +73,35 @@ class UsuarioControllerEliminarMeTest {
         assertEquals("Usuario eliminado", recargado.getNombre());
         assertNotNull(recargado.getDeletedAt());
         assertEquals(false, recargado.getIsActive());
+    }
+
+    @Test
+    @DisplayName("tokenReutilizadoTrasEliminar_Devuelve401YNo500")
+    void tokenReutilizadoTrasEliminar_Devuelve401YNo500() throws Exception {
+        Usuario jugador = usuarioRepository.save(Usuario.builder()
+                .email("jugador3@eliminar-me-test.com")
+                .password(passwordEncoder.encode("Password123"))
+                .nombre("Jugador Test 3")
+                .rol(Role.PLAYER)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        String token = tokenPara(jugador);
+
+        mockMvc.perform(delete("/api/v1/usuarios/me")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content("{\"password\":\"Password123\"}"))
+                .andExpect(status().isNoContent());
+
+        // El mismo token, ahora con un subject (email) que ya no resuelve a ningún usuario
+        // (fue anonimizado): debe devolver 401, no un 500 por UsernameNotFoundException
+        // escapando del filtro.
+        mockMvc.perform(get("/api/v1/usuarios/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

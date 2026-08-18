@@ -5,6 +5,9 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.TipoEliminacionCuenta;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.AuditoriaEliminacionUsuarioRepository;
+import com.matiasmeira.sacaladelangulo.auth.repository.CodigoVerificacionRepository;
+import com.matiasmeira.sacaladelangulo.auth.repository.TokenRecuperacionPasswordRepository;
+import com.matiasmeira.sacaladelangulo.auth.repository.TokenVerificacionEmailRepository;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EstablecimientosActivosException;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
@@ -26,6 +29,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -36,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -58,6 +63,15 @@ class UsuarioEliminacionServiceTest {
 
     @Mock
     private AuditoriaEliminacionUsuarioRepository auditoriaEliminacionUsuarioRepository;
+
+    @Mock
+    private TokenRecuperacionPasswordRepository tokenRecuperacionPasswordRepository;
+
+    @Mock
+    private TokenVerificacionEmailRepository tokenVerificacionEmailRepository;
+
+    @Mock
+    private CodigoVerificacionRepository codigoVerificacionRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -124,6 +138,10 @@ class UsuarioEliminacionServiceTest {
         verify(eventPublisher).publishEvent(eventoCaptor.capture());
         assertEquals("jugador@test.com", eventoCaptor.getValue().email());
         assertEquals("Juan Jugador", eventoCaptor.getValue().nombre());
+
+        verify(tokenRecuperacionPasswordRepository).deleteByEmail("jugador@test.com");
+        verify(tokenVerificacionEmailRepository).deleteByEmail("jugador@test.com");
+        verify(codigoVerificacionRepository).deleteByEmail("jugador@test.com");
     }
 
     @Test
@@ -172,8 +190,10 @@ class UsuarioEliminacionServiceTest {
         when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L))
                 .thenReturn(List.of(Establecimiento.builder().id(10L).build()));
 
-        assertThrows(EstablecimientosActivosException.class,
+        EstablecimientosActivosException ex = assertThrows(EstablecimientosActivosException.class,
                 () -> usuarioEliminacionService.autoeliminar("jugador@test.com", "Password123"));
+        assertEquals("No podés eliminar tu cuenta mientras tengas complejos activos. Contactá a soporte para gestionarlo.",
+                ex.getMessage());
 
         verify(usuarioRepository, never()).save(any());
     }
@@ -216,8 +236,13 @@ class UsuarioEliminacionServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<EstadoReserva>> estadosCaptor = ArgumentCaptor.forClass(List.class);
-        verify(reservaRepository).findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(eq(1L), estadosCaptor.capture(), any());
+        ArgumentCaptor<LocalDateTime> cortesCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(reservaRepository).findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(
+                eq(1L), estadosCaptor.capture(), cortesCaptor.capture());
         assertEquals(List.of(EstadoReserva.CONFIRMADA, EstadoReserva.PENDIENTE_SENA), estadosCaptor.getValue());
+        // Pin de regresión: el corte debe ser "ahora", no una fecha arbitraria en el pasado
+        // (el bug que reintroduciría una cancelación masiva que ya se arregló en este plan).
+        assertTrue(Duration.between(cortesCaptor.getValue(), LocalDateTime.now()).abs().getSeconds() < 5);
     }
 
     @Test

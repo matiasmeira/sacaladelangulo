@@ -65,9 +65,11 @@ public class ReservaNotificacionListener {
 
         Map<String, Object> modeloDueno = new HashMap<>(modelo);
         modeloDueno.put("nombreCliente", jugador != null ? jugador.getNombre() : reserva.getNombreClienteManual());
-        String htmlDueno = emailRenderer.render("reserva-nueva-dueno", modeloDueno);
-        String emailDueno = reserva.getCancha().getEstablecimiento().getDueno().getEmail();
-        emailService.enviar(emailDueno, ASUNTO_DUENO, htmlDueno);
+        Usuario dueno = reserva.getCancha().getEstablecimiento().getDueno();
+        if (puedeNotificar(dueno)) {
+            String htmlDueno = emailRenderer.render("reserva-nueva-dueno", modeloDueno);
+            emailService.enviar(dueno.getEmail(), ASUNTO_DUENO, htmlDueno);
+        }
     }
 
     @Async
@@ -90,9 +92,11 @@ public class ReservaNotificacionListener {
                 emailService.enviar(jugador.getEmail(), ASUNTO_CANCELACION_JUGADOR, htmlJugador);
             }
 
-            String htmlDueno = emailRenderer.render("reserva-liberada-dueno", modelo);
-            String emailDueno = reserva.getCancha().getEstablecimiento().getDueno().getEmail();
-            emailService.enviar(emailDueno, ASUNTO_LIBERACION_DUENO, htmlDueno);
+            Usuario dueno = reserva.getCancha().getEstablecimiento().getDueno();
+            if (puedeNotificar(dueno)) {
+                String htmlDueno = emailRenderer.render("reserva-liberada-dueno", modelo);
+                emailService.enviar(dueno.getEmail(), ASUNTO_LIBERACION_DUENO, htmlDueno);
+            }
         } else {
             Usuario jugador = reserva.getJugador();
             if (puedeNotificar(jugador)) {

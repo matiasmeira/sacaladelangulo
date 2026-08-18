@@ -117,6 +117,16 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-thymeleaf</artifactId>
 		</dependency>
+		<!-- StandardDialect (usado por el TemplateEngine de EmailRenderer) necesita OGNL para
+		     su evaluador de expresiones estándar. thymeleaf-3.1.5.RELEASE la declara como
+		     dependencia opcional, así que no la trae transitivamente el starter: hay que
+		     declararla a mano. Versión fijada a la que ese mismo thymeleaf-parent gestiona
+		     (ognl.version en su POM), en vez de dejarla flotar sin gestionar. -->
+		<dependency>
+			<groupId>ognl</groupId>
+			<artifactId>ognl</artifactId>
+			<version>3.3.4</version>
+		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-core</artifactId>

@@ -39,7 +39,7 @@ public class AvisoFinPruebaService {
 
     private void procesarUmbral7() {
         LocalDateTime[] rango = rangoParaUmbral(7);
-        List<Usuario> usuarios = usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse(
+        List<Usuario> usuarios = usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull(
                 rango[0], rango[1]);
         if (usuarios.isEmpty()) {
             return;
@@ -57,7 +57,7 @@ public class AvisoFinPruebaService {
 
     private void procesarUmbral3() {
         LocalDateTime[] rango = rangoParaUmbral(3);
-        List<Usuario> usuarios = usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalse(
+        List<Usuario> usuarios = usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalseAndDeletedAtIsNull(
                 rango[0], rango[1]);
         if (usuarios.isEmpty()) {
             return;
@@ -75,7 +75,7 @@ public class AvisoFinPruebaService {
 
     private void procesarUmbral1() {
         LocalDateTime[] rango = rangoParaUmbral(1);
-        List<Usuario> usuarios = usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalse(
+        List<Usuario> usuarios = usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalseAndDeletedAtIsNull(
                 rango[0], rango[1]);
         if (usuarios.isEmpty()) {
             return;

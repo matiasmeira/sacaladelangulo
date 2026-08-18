@@ -44,12 +44,16 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
      * Usuarios cuya prueba gratuita vence dentro de la ventana [desde, hasta) y que todavía
      * no recibieron el aviso de ese umbral (ver AvisoFinPruebaService, Fase 5): el llamador
      * pasa el rango correspondiente al día calendario que cae exactamente N días desde hoy.
+     * AndDeletedAtIsNull para no mandarle el aviso a una cuenta ya eliminada: el email ya es
+     * el placeholder @saque.deleted (ver UsuarioEliminacionService) y un envío ahí genera un
+     * bounce contra la reputación del dominio real en Resend (mismo criterio que
+     * ReservaNotificacionListener.puedeNotificar).
      */
-    List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse(LocalDateTime desde, LocalDateTime hasta);
+    List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull(LocalDateTime desde, LocalDateTime hasta);
 
-    List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalse(LocalDateTime desde, LocalDateTime hasta);
+    List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalseAndDeletedAtIsNull(LocalDateTime desde, LocalDateTime hasta);
 
-    List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalse(LocalDateTime desde, LocalDateTime hasta);
+    List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalseAndDeletedAtIsNull(LocalDateTime desde, LocalDateTime hasta);
 
     /**
      * Usado para resolver el token del link de "darme de baja" de un email de marketing

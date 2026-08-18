@@ -42,11 +42,11 @@ class AvisoFinPruebaServiceTest {
     @DisplayName("avisarFinDePrueba_UsuarioEnUmbral7_PublicaEventoConDiasRestantesYMarcaFlagYGuarda")
     void avisarFinDePrueba_UsuarioEnUmbral7_PublicaEventoConDiasRestantesYMarcaFlagYGuarda() {
         Usuario usuario = usuarioDePrueba(1L);
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(List.of(usuario));
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(Collections.emptyList());
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(Collections.emptyList());
 
         service.avisarFinDePrueba();
@@ -68,11 +68,11 @@ class AvisoFinPruebaServiceTest {
     @DisplayName("avisarFinDePrueba_UsuarioEnUmbral3_PublicaEventoConDiasRestantesYMarcaFlag")
     void avisarFinDePrueba_UsuarioEnUmbral3_PublicaEventoConDiasRestantesYMarcaFlag() {
         Usuario usuario = usuarioDePrueba(2L);
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(Collections.emptyList());
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(List.of(usuario));
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(Collections.emptyList());
 
         service.avisarFinDePrueba();
@@ -88,11 +88,11 @@ class AvisoFinPruebaServiceTest {
     @DisplayName("avisarFinDePrueba_UsuarioEnUmbral1_PublicaEventoConDiasRestantesYMarcaFlag")
     void avisarFinDePrueba_UsuarioEnUmbral1_PublicaEventoConDiasRestantesYMarcaFlag() {
         Usuario usuario = usuarioDePrueba(3L);
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(Collections.emptyList());
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(Collections.emptyList());
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(List.of(usuario));
 
         service.avisarFinDePrueba();
@@ -107,11 +107,11 @@ class AvisoFinPruebaServiceTest {
     @Test
     @DisplayName("avisarFinDePrueba_SinUsuariosEnNingunUmbral_NoPublicaEventosNiGuarda")
     void avisarFinDePrueba_SinUsuariosEnNingunUmbral_NoPublicaEventosNiGuarda() {
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(Collections.emptyList());
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(Collections.emptyList());
-        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalse(any(), any()))
+        when(usuarioRepository.findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalseAndDeletedAtIsNull(any(), any()))
                 .thenReturn(Collections.emptyList());
 
         service.avisarFinDePrueba();

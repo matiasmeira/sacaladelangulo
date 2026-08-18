@@ -36,8 +36,8 @@ class UsuarioRepositoryFinPruebaTest {
     private UsuarioRepository usuarioRepository;
 
     @Test
-    @DisplayName("findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse_SoloDevuelveElUsuarioDentroDelRangoYSinAvisoEnviado")
-    void findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse_SoloDevuelveElUsuarioDentroDelRangoYSinAvisoEnviado() {
+    @DisplayName("findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull_SoloDevuelveElUsuarioDentroDelRangoYSinAvisoEnviado")
+    void findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull_SoloDevuelveElUsuarioDentroDelRangoYSinAvisoEnviado() {
         LocalDateTime desde = LocalDateTime.now().plusDays(7).withHour(0).withMinute(0).withSecond(0).withNano(0);
         LocalDateTime hasta = desde.plusDays(1);
 
@@ -53,10 +53,28 @@ class UsuarioRepositoryFinPruebaTest {
         entityManager.flush();
 
         List<Usuario> resultado = usuarioRepository
-                .findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalse(desde, hasta);
+                .findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull(desde, hasta);
 
         assertEquals(1, resultado.size());
         assertEquals(dentroDelRangoSinAviso.getId(), resultado.get(0).getId());
+    }
+
+    @Test
+    @DisplayName("findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull_ExcluyeAlDuenoConCuentaEliminada")
+    void findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull_ExcluyeAlDuenoConCuentaEliminada() {
+        LocalDateTime desde = LocalDateTime.now().plusDays(7).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime hasta = desde.plusDays(1);
+
+        Usuario duenoEliminado = usuarioDePrueba("dueno-eliminado@test.com", desde.plusHours(2), false);
+        duenoEliminado.setDeletedAt(LocalDateTime.now());
+        entityManager.persist(duenoEliminado);
+
+        entityManager.flush();
+
+        List<Usuario> resultado = usuarioRepository
+                .findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull(desde, hasta);
+
+        assertEquals(0, resultado.size());
     }
 
     private Usuario usuarioDePrueba(String email, LocalDateTime fechaFinPrueba, boolean aviso7Enviado) {

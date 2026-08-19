@@ -261,4 +261,48 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
            "GROUP BY r.jugador.id")
     List<Object[]> countAusenciasPorJugadoresEnRango(@Param("estId") Long estId, @Param("jugadorIds") List<Long> jugadorIds,
                                                        @Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
+
+    // ===== Padrón de clientes (ClienteService) =====
+    // A diferencia de los reportes de arriba, quién integra el padrón NO se restringe a
+    // FINALIZADA: cualquier jugador con una reserva (de cualquier estado) en el
+    // establecimiento es un cliente conocido (incluye a quien solo tiene una reserva
+    // CONFIRMADA futura). reservasTotales/totalGastado/ultimaReserva siguen contando solo
+    // lo FINALIZADA y ausencias solo lo AUSENTE, mismo criterio que los reportes.
+
+    @Query("SELECT DISTINCT r.jugador.id FROM Reserva r WHERE r.cancha.establecimiento.id = :estId AND r.jugador IS NOT NULL")
+    List<Long> jugadorIdsDelEstablecimiento(@Param("estId") Long estId);
+
+    @Query("SELECT r.jugador.id, COUNT(r), SUM(r.precioTotal), MAX(r.fechaHoraInicio) FROM Reserva r " +
+           "WHERE r.cancha.establecimiento.id = :estId AND r.estado = 'FINALIZADA' AND r.jugador IS NOT NULL " +
+           "GROUP BY r.jugador.id")
+    List<Object[]> historicoAgregadoPorJugador(@Param("estId") Long estId);
+
+    @Query("SELECT r.jugador.id, COUNT(r) FROM Reserva r WHERE r.cancha.establecimiento.id = :estId " +
+           "AND r.estado = 'AUSENTE' AND r.jugador IS NOT NULL GROUP BY r.jugador.id")
+    List<Object[]> countAusenciasPorJugador(@Param("estId") Long estId);
+
+    /**
+     * Variantes escalares (un solo jugador) de historicoAgregadoPorJugador/countAusenciasPorJugador,
+     * para la ficha individual del cliente: evita traer el agregado de todo el establecimiento
+     * para mostrar un solo registro. Devuelve List<Object[]> (siempre una sola fila, incluso sin
+     * matches) y no Object[] a secas: Spring Data envuelve mal un retorno Object[] crudo desde una
+     * consulta multi-columna (el caller termina con un array anidado en vez de la fila).
+     */
+    @Query("SELECT COUNT(r), SUM(r.precioTotal), MAX(r.fechaHoraInicio) FROM Reserva r " +
+           "WHERE r.cancha.establecimiento.id = :estId AND r.jugador.id = :jugadorId AND r.estado = 'FINALIZADA'")
+    List<Object[]> historicoAgregadoDeJugador(@Param("estId") Long estId, @Param("jugadorId") Long jugadorId);
+
+    @Query("SELECT COUNT(r) FROM Reserva r WHERE r.cancha.establecimiento.id = :estId " +
+           "AND r.jugador.id = :jugadorId AND r.estado = 'AUSENTE'")
+    long countAusenciasDeJugador(@Param("estId") Long estId, @Param("jugadorId") Long jugadorId);
+
+    boolean existsByJugador_IdAndCancha_Establecimiento_Id(Long jugadorId, Long establecimientoId);
+
+    /**
+     * Historial completo (todos los estados) de reservas de un jugador en un establecimiento,
+     * para la ficha del cliente. Mismo @EntityGraph que el resto de los listados paginados de
+     * Reserva, por el mismo motivo (evitar N+1 sobre jugador/cancha, ambas LAZY).
+     */
+    @EntityGraph(attributePaths = {"jugador", "cancha"})
+    org.springframework.data.domain.Page<Reserva> findByJugador_IdAndCancha_Establecimiento_Id(Long jugadorId, Long establecimientoId, Pageable pageable);
  }

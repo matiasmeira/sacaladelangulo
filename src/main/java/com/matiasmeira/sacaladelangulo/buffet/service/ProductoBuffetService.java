@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetResponse;
 import com.matiasmeira.sacaladelangulo.buffet.model.ProductoBuffet;
 import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
@@ -40,6 +41,8 @@ public class ProductoBuffetService {
                 .descripcion(request.descripcion())
                 .precio(request.precio())
                 .stock(request.stock())
+                // Opcional: si no viene, el @Builder.Default de la entidad deja 5.
+                .umbralAlerta(request.umbralAlerta() == null ? 5 : request.umbralAlerta())
                 .establecimiento(establecimiento)
                 .build();
 
@@ -60,6 +63,9 @@ public class ProductoBuffetService {
         producto.setNombre(request.nombre());
         producto.setDescripcion(request.descripcion());
         producto.setPrecio(request.precio());
+        if (request.umbralAlerta() != null) {
+            producto.setUmbralAlerta(request.umbralAlerta());
+        }
 
         ProductoBuffet productoActualizado = productoBuffetRepository.save(producto);
         log.info("Producto de buffet actualizado. ID: {}", productoId);
@@ -68,8 +74,8 @@ public class ProductoBuffetService {
     }
 
     /**
-     * Suma o resta stock según el signo de la cantidad. El stock resultante nunca
-     * puede quedar por debajo de cero.
+     * Suma o resta stock según el signo de la cantidad. El resultado PUEDE quedar
+     * por debajo de cero: el stock es informativo, no una condición para vender.
      */
     public ProductoBuffetResponse ajustarStock(Long establecimientoId, Long productoId, AjustarStockRequest request, String email) {
         ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimientoId, productoId);
@@ -81,11 +87,12 @@ public class ProductoBuffetService {
 
         int nuevoStock = producto.getStock() + request.cantidad();
         if (nuevoStock < 0) {
-            log.warn("Ajuste de stock rechazado. Producto: {}, Stock actual: {}, Ajuste: {}",
+            // Se permite, no se rechaza: el stock es informativo y puede estar
+            // desfasado de la realidad del mostrador. Bloquear el ajuste dejaría
+            // sin forma de corregir un producto que ya quedó en negativo por una
+            // venta (ver V16). Queda el warn para poder detectarlo.
+            log.warn("Ajuste deja el stock en negativo. Producto: {}, Stock actual: {}, Ajuste: {}",
                     productoId, producto.getStock(), request.cantidad());
-            throw new IllegalArgumentException(
-                    "El stock no puede quedar por debajo de 0 (stock actual: " + producto.getStock() +
-                            ", ajuste solicitado: " + request.cantidad() + ")");
         }
 
         producto.setStock(nuevoStock);
@@ -98,7 +105,9 @@ public class ProductoBuffetService {
     @Transactional(readOnly = true)
     public List<ProductoBuffetResponse> listarPorEstablecimiento(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        // El que puede vender puede ver qué vender. Las mutaciones de arriba siguen
+        // con validarPropietarioOAdmin.
+        autorizacionEmpleadoService.validarAccion(establecimiento, email, PermisoEmpleado.REGISTRAR_VENTA_BUFFET);
 
         return productoBuffetRepository.findByEstablecimientoId(establecimientoId).stream()
                 .map(productoBuffetMapper::mapToResponse)

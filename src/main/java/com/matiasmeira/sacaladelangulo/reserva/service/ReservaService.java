@@ -91,6 +91,7 @@ public class ReservaService {
     private static final List<EstadoReserva> ESTADOS_CANCELADOS =
             List.of(EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
 
+
     private final ReservaRepository reservaRepository;
     private final CanchaRepository canchaRepository;
     private final BloqueoCanchaRepository bloqueoCanchaRepository;
@@ -962,7 +963,8 @@ public class ReservaService {
     public Page<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, LocalDate fecha, boolean incluirCanceladas, Pageable pageable, String email) {
         Establecimiento establecimiento = establecimientoRepository.findById(estId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarLectura(establecimiento, email,
+                AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
 
         LocalDateTime inicioDia = fecha.atStartOfDay();
         LocalDateTime finDia = fecha.atTime(23, 59, 59);

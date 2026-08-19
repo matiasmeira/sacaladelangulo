@@ -1933,7 +1933,7 @@ class ReservaServiceTest {
         LocalDate fecha = LocalDate.of(2030, 1, 15);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(autorizacionEmpleadoService.validarLectura(eq(establecimiento), eq(dueno.getEmail()), any())).thenReturn(dueno);
         List<EstadoReserva> estadosCancelados = List.of(EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
         when(reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn(
                 eq(establecimiento.getId()), any(), any(), eq(estadosCancelados), eq(pageable)))
@@ -1959,7 +1959,7 @@ class ReservaServiceTest {
         LocalDate fecha = LocalDate.of(2030, 1, 15);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(autorizacionEmpleadoService.validarLectura(eq(establecimiento), eq(dueno.getEmail()), any())).thenReturn(dueno);
         when(reservaRepository.findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(
                 eq(establecimiento.getId()), any(), any(), eq(pageable)))
                 .thenReturn(pageVacia);

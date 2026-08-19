@@ -8,6 +8,7 @@ public record ProductoBuffetResponse(
         String descripcion,
         BigDecimal precio,
         Integer stock,
+        Integer umbralAlerta,
         Long establecimientoId
 ) {
 }

@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -84,7 +85,11 @@ public class CanchaService {
     @Transactional(readOnly = true)
     public List<CanchaResponse> obtenerCanchasPorEstablecimiento(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        // Mismo conjunto que la agenda: se dibuja POR cancha, así que sin este listado
+        // no se renderiza aunque el empleado sólo vaya a cobrar. Alta, edición y baja
+        // de canchas siguen siendo del dueño.
+        autorizacionEmpleadoService.validarLectura(establecimiento, email,
+                AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
 
         return canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId).stream()
                 .map(this::mapToResponse)
@@ -232,28 +237,43 @@ public class CanchaService {
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
     }
 
+    /** Mismo motivo que mapToResponse: preciosPorDuracion es @ElementCollection. */
     private TarifaDto mapToTarifaDto(Tarifa tarifa) {
         return new TarifaDto(
                 tarifa.getDiaSemana(),
                 tarifa.getHoraInicio(),
                 tarifa.getHoraFin(),
                 tarifa.getPrecio(),
-                tarifa.getPreciosPorDuracion()
+                Map.copyOf(tarifa.getPreciosPorDuracion())
         );
     }
 
+    /**
+     * Las colecciones se COPIAN, no se pasan por referencia.
+     *
+     * Con open-in-view=false la sesión ya está cerrada cuando Jackson serializa
+     * la respuesta, así que meter una colección perezosa de Hibernate en el DTO
+     * termina en LazyInitializationException al escribir el JSON — fuera del
+     * @Transactional, donde el @ControllerAdvice sólo puede devolver un 500
+     * genérico. Copiar acá fuerza la inicialización dentro de la transacción y
+     * además evita que un proxy de Hibernate se filtre a la capa de transporte.
+     *
+     * El síntoma era engañoso: tarifas y canchasFisicas no fallaban porque el
+     * .stream() de abajo ya las inicializa; sólo reventaban duracionesPermitidas
+     * y preciosPorDuracion, que eran las únicas que nadie recorría.
+     */
     private CanchaResponse mapToResponse(Cancha cancha) {
         return new CanchaResponse(
                 cancha.getId(),
                 cancha.getNombre(),
-                cancha.getDeportes(),
+                Set.copyOf(cancha.getDeportes()),
                 cancha.getCapacidad(),
                 cancha.getIsActive(),
                 cancha.getEstablecimiento().getId(),
                 cancha.getPrecioBase(),
                 cancha.getMontoSena(),
-                cancha.getDuracionesPermitidas(),
-                cancha.getPreciosPorDuracion(),
+                List.copyOf(cancha.getDuracionesPermitidas()),
+                Map.copyOf(cancha.getPreciosPorDuracion()),
                 cancha.getPermiteInicioMediaHora(),
                 cancha.getTarifas().stream().map(this::mapToTarifaDto).collect(Collectors.toList()),
                 cancha.getCanchasFisicas().stream().map(Cancha::getId).toList(),

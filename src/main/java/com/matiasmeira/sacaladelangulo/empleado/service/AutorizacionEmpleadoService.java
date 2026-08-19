@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import java.util.Set;
+
 /**
  * Autorización compartida por los servicios que ahora permiten que, además del dueño
  * real o un administrador, un EMPLOYEE con el permiso puntual habilitado realice la
@@ -18,6 +20,25 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class AutorizacionEmpleadoService {
+
+    /**
+     * Permisos que habilitan a un empleado a leer lo que se necesita para OPERAR el
+     * mostrador: la agenda del día y el listado de canchas sobre el que se dibuja.
+     *
+     * Es el conjunto de acciones que se ejercen desde la agenda. No se pide un permiso
+     * puntual porque la pantalla no le pertenece a ninguna: quien cobra, quien cancela y
+     * quien marca ausencias necesitan la misma lista, y sin ella no hay forma de llegar
+     * al id de la reserva sobre la que actuar.
+     *
+     * Las canchas van en el mismo conjunto y no sólo en CREAR_RESERVA_MANUAL: la agenda
+     * se dibuja POR cancha, así que sin ese listado no se renderiza aunque el empleado
+     * sólo vaya a cobrar.
+     */
+    public static final Set<PermisoEmpleado> PERMISOS_OPERATIVOS_DE_RESERVA = Set.of(
+            PermisoEmpleado.CREAR_RESERVA_MANUAL,
+            PermisoEmpleado.FINALIZAR_RESERVA,
+            PermisoEmpleado.CANCELAR_RESERVA,
+            PermisoEmpleado.MARCAR_AUSENTE);
 
     private final UsuarioRepository usuarioRepository;
 
@@ -36,6 +57,31 @@ public class AutorizacionEmpleadoService {
 
         if (!esAdmin && !esDueno && !tienePermiso(usuarioAutenticado, establecimiento, permisoRequerido)) {
             throw new AccessDeniedException("No autorizado para realizar esta acción en este establecimiento");
+        }
+        return usuarioAutenticado;
+    }
+
+    /**
+     * Igual que validarAccion pero alcanza con UNO de varios permisos.
+     *
+     * Existe para los LISTADOS, que no se corresponden con una acción sola: la agenda
+     * la necesita tanto el que cobra (FINALIZAR_RESERVA) como el que cancela
+     * (CANCELAR_RESERVA) o el que marca ausencias, y exigir un permiso puntual dejaría
+     * afuera a los otros dos. La lectura se habilita si el empleado puede hacer al
+     * menos una de las cosas que se hacen desde esa pantalla.
+     */
+    public Usuario validarLectura(Establecimiento establecimiento, String email, Set<PermisoEmpleado> permisosQueHabilitan) {
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+
+        boolean esAdmin = usuarioAutenticado.getRol() == Role.ADMIN;
+        boolean esDueno = usuarioAutenticado.getRol() == Role.OWNER
+                && establecimiento.getDueno().getId().equals(usuarioAutenticado.getId());
+        boolean esEmpleadoHabilitado = permisosQueHabilitan.stream()
+                .anyMatch(permiso -> tienePermiso(usuarioAutenticado, establecimiento, permiso));
+
+        if (!esAdmin && !esDueno && !esEmpleadoHabilitado) {
+            throw new AccessDeniedException("No autorizado para ver esta información de este establecimiento");
         }
         return usuarioAutenticado;
     }

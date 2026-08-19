@@ -200,8 +200,14 @@ public class ReservaController {
         return ResponseEntity.ok(reservaService.obtenerReservasPorCanchaYFecha(canchaId, fecha, incluirCanceladas, pageable, userDetails.getUsername()));
     }
 
+    /**
+     * Agenda del día. Además del dueño y un admin, la puede leer un EMPLOYEE que tenga
+     * al menos uno de los permisos que se ejercen desde ella (crear a mano, finalizar,
+     * cancelar, marcar ausente): sin este listado no hay forma de llegar al id de la
+     * reserva sobre la que actuar, y esos permisos quedaban sin poder usarse.
+     */
     @GetMapping("/establecimiento/{estId}")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Page<ReservaResponse>> obtenerReservasPorEstablecimiento(
             @PathVariable Long estId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,

@@ -8,8 +8,9 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
 /**
- * DTO para crear o actualizar un producto de buffet. En la actualización solo se
- * aplican nombre, descripción y precio; el stock se maneja exclusivamente a través
+ * DTO para crear o actualizar un producto de buffet. En la actualización se
+ * aplican nombre, descripción, precio y umbral de alerta; el stock se maneja
+ * exclusivamente a través
  * del endpoint de ajuste (PATCH .../stock) — ver el @Schema de stock, que documenta
  * esto también en el OpenAPI expuesto a integradores (ver B9 en la auditoría).
  */
@@ -28,6 +29,11 @@ public record ProductoBuffetRequest(
         @Schema(description = "Solo se aplica al crear el producto. En una actualización " +
                 "(PUT) este valor se ignora: el stock se ajusta exclusivamente a través " +
                 "del endpoint PATCH .../stock.")
-        Integer stock
+        Integer stock,
+
+        @Min(value = 0, message = "El umbral de alerta no puede ser negativo")
+        @Schema(description = "Con stock igual o menor a este número, el producto se marca " +
+                "\"stock bajo\". Opcional: si no se envía, queda en 5.")
+        Integer umbralAlerta
 ) {
 }

@@ -34,8 +34,13 @@ public class CanchaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(cancha);
     }
 
+    /**
+     * Canchas activas del establecimiento. La puede leer también un EMPLOYEE con
+     * CREAR_RESERVA_MANUAL: es el catálogo sobre el que se elige dónde cargar el turno
+     * que ese permiso lo autoriza a crear. Alta, edición y baja siguen siendo del dueño.
+     */
     @GetMapping
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<CanchaResponse>> obtenerCanchasPorEstablecimiento(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails) {

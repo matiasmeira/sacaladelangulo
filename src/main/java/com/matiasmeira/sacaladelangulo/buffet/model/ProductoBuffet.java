@@ -35,8 +35,19 @@ public class ProductoBuffet {
     @Column(nullable = false)
     private BigDecimal precio;
 
+    /**
+     * Informativo: PUEDE quedar negativo. Una venta real ya cobrada en el
+     * mostrador no se bloquea porque el inventario del sistema esté
+     * desactualizado; el número en negativo es la señal de que hay que reponer
+     * o corregir la carga (ver V16).
+     */
     @Column(nullable = false)
     private Integer stock;
+
+    /** Con stock igual o menor a este número, el producto se marca "stock bajo". */
+    @Column(name = "umbral_alerta", nullable = false)
+    @Builder.Default
+    private Integer umbralAlerta = 5;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "establecimiento_id", nullable = false)

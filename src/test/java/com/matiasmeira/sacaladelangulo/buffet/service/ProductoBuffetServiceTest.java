@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.buffet.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
+import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.buffet.dto.AjustarStockRequest;
 import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetMapper;
 import com.matiasmeira.sacaladelangulo.buffet.dto.ProductoBuffetRequest;
@@ -75,7 +76,7 @@ class ProductoBuffetServiceTest {
     @DisplayName("crearProducto_Exito")
     void crearProducto_Exito() {
         // Arrange
-        ProductoBuffetRequest request = new ProductoBuffetRequest("Agua mineral", "500ml", BigDecimal.valueOf(1500), 20);
+        ProductoBuffetRequest request = new ProductoBuffetRequest("Agua mineral", "500ml", BigDecimal.valueOf(1500), 20, null);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
@@ -100,7 +101,7 @@ class ProductoBuffetServiceTest {
     @DisplayName("crearProducto_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
     void crearProducto_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
         // Arrange
-        ProductoBuffetRequest request = new ProductoBuffetRequest("Agua mineral", "500ml", BigDecimal.valueOf(1500), 20);
+        ProductoBuffetRequest request = new ProductoBuffetRequest("Agua mineral", "500ml", BigDecimal.valueOf(1500), 20, null);
 
         Usuario otroDueno = Usuario.builder()
                 .id(3L)
@@ -133,7 +134,7 @@ class ProductoBuffetServiceTest {
                 .establecimiento(establecimiento)
                 .build();
 
-        ProductoBuffetRequest request = new ProductoBuffetRequest("Agua con gas", "500ml, con gas", BigDecimal.valueOf(1800), 99);
+        ProductoBuffetRequest request = new ProductoBuffetRequest("Agua con gas", "500ml, con gas", BigDecimal.valueOf(1800), 99, null);
 
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
@@ -201,9 +202,15 @@ class ProductoBuffetServiceTest {
         assertEquals(15, response.stock());
     }
 
+    /**
+     * Antes esto era ajustarStock_Fallo_StockInsuficiente y esperaba una excepción.
+     * Desde V16 el stock es informativo y PUEDE quedar negativo: bloquear el ajuste
+     * dejaría sin forma de corregir un producto que ya quedó en negativo por una
+     * venta real.
+     */
     @Test
-    @DisplayName("ajustarStock_Fallo_StockInsuficiente")
-    void ajustarStock_Fallo_StockInsuficiente() {
+    @DisplayName("ajustarStock_DejaNegativo_SeAplicaIgual")
+    void ajustarStock_DejaNegativo_SeAplicaIgual() {
         // Arrange
         ProductoBuffet producto = ProductoBuffet.builder()
                 .id(1L)
@@ -217,13 +224,16 @@ class ProductoBuffetServiceTest {
 
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        // El mapper es real (ver setUp), así que sólo hace falta que save devuelva
+        // la entidad que recibe.
+        when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(i -> i.getArgument(0));
 
-        // Act & Assert
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> productoBuffetService.ajustarStock(establecimiento.getId(), producto.getId(), request, dueno.getEmail())
-        );
-        verify(productoBuffetRepository, never()).save(any());
+        // Act
+        ProductoBuffetResponse response = productoBuffetService.ajustarStock(
+                establecimiento.getId(), producto.getId(), request, dueno.getEmail());
+
+        // Assert
+        assertEquals(-5, response.stock());
     }
 
     @Test
@@ -239,7 +249,7 @@ class ProductoBuffetServiceTest {
                 .build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(autorizacionEmpleadoService.validarAccion(establecimiento, dueno.getEmail(), PermisoEmpleado.REGISTRAR_VENTA_BUFFET)).thenReturn(dueno);
         when(productoBuffetRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(producto));
 
         // Act

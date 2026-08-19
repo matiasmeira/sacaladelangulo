@@ -57,8 +57,14 @@ public class ProductoBuffetController {
         return ResponseEntity.ok(producto);
     }
 
+    /**
+     * Catálogo del buffet. Lo puede leer también un EMPLOYEE con
+     * REGISTRAR_VENTA_BUFFET: sin el listado de productos no hay forma de armar la
+     * venta que ese mismo permiso lo autoriza a registrar. Alta, edición, ajuste de
+     * stock y baja siguen siendo solo del dueño.
+     */
     @GetMapping
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<ProductoBuffetResponse>> listarPorEstablecimiento(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails) {

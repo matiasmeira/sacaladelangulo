@@ -13,6 +13,7 @@ public class ProductoBuffetMapper {
                 producto.getDescripcion(),
                 producto.getPrecio(),
                 producto.getStock(),
+                producto.getUmbralAlerta(),
                 producto.getEstablecimiento().getId()
         );
     }

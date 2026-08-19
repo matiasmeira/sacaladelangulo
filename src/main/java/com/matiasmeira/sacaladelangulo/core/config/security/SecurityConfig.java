@@ -65,11 +65,21 @@ public class SecurityConfig {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/publico/**").permitAll()
-                        // GET /empleados/activos ya NO es público: requiere cookie de dispositivo
-                        // de caja, validada explícitamente en el controller (ver DispositivoCajaGate) —
-                        // authorizeHttpRequests no puede inspeccionar la validez de una cookie, así
-                        // que esta ruta cae en la regla general anyRequest().authenticated() de abajo
-                        // salvo que sea explícitamente permitAll, cosa que dejó de ser correcta.
+                        // GET /empleados/activos es la puerta de entrada del Modo Caja: la PC del
+                        // mostrador muestra los nombres del local ANTES de que ningún empleado
+                        // inicie sesión, así que en ese momento no hay ni puede haber un JWT.
+                        // Exigir uno obligaría a dejar la credencial del dueño en la tablet, que es
+                        // exactamente lo que este modo evita.
+                        //
+                        // Que sea permitAll acá NO lo deja abierto: la autorización real la hace
+                        // DispositivoCajaGate dentro del controller, que exige la cookie de
+                        // dispositivo (token opaco, guardado hasheado) y además verifica que ese
+                        // dispositivo pertenezca a ESTE establecimiento. Es un criterio más estricto
+                        // que "cualquier usuario autenticado". authorizeHttpRequests no puede
+                        // inspeccionar la validez de una cookie, por eso la decisión vive en el
+                        // controller y acá sólo se le saca de encima el filtro de JWT.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/v1/establecimientos/*/empleados/activos").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/caja/emparejar").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/webhooks/resend").permitAll()
                         // Sin autenticación a propósito: el link de "darme de baja" de un email de

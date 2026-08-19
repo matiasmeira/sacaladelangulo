@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.empleado.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
@@ -76,6 +77,10 @@ public class EmpleadoService {
                 .password(passwordEncoder.encode(request.pin()))
                 .nombre(nombre)
                 .rol(Role.EMPLOYEE)
+                // FREE porque la suscripción es del dueño: el empleado es sólo una
+                // identidad operativa dentro de su establecimiento, no un cliente. Antes
+                // quedaba en null (la columna lo permite) y el empleado no tenía plan.
+                .planSuscripcion(PlanSuscripcion.FREE)
                 .establecimiento(establecimiento)
                 .permisos(request.permisos() == null ? new HashSet<>() : new HashSet<>(request.permisos()))
                 .isActive(true)

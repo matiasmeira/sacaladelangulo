@@ -54,8 +54,19 @@ public class RegistroAuditoriaService {
      * Audita una acción administrativa del dueño/admin sobre un empleado (alta, cambio de
      * permisos/PIN, baja) — a diferencia de {@link #registrar}, acá el actor no es el
      * propio `empleado` sino quien lo administra (ver M31 en la auditoría).
+     *
+     * REQUIRED y no REQUIRES_NEW, a diferencia de {@link #registrar}: en el alta, el
+     * empleado se acaba de crear en la transacción de afuera y todavía no commiteó. Una
+     * transacción nueva no puede verlo, así que el insert de auditoría violaba la FK
+     * registro_auditoria_empleados.empleado_id → usuarios.id y TODA alta de empleado
+     * moría en un 409.
+     *
+     * REQUIRES_NEW tiene sentido en {@link #registrar}, que audita acciones FALLIDAS: ahí
+     * la transacción de afuera se revierte y el registro tiene que sobrevivir igual. Acá
+     * es al revés — sólo se auditan acciones exitosas, y conviene que el registro sea
+     * atómico con la acción que describe: si no se puede auditar, no se hace.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRED)
     public void registrarAdministrativa(Usuario actor, Usuario empleadoAfectado, AccionAuditoria accion, String detalle) {
         RegistroAuditoria registro = RegistroAuditoria.builder()
                 .empleado(empleadoAfectado)

@@ -4,6 +4,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.core.exception.LimiteEstablecimientosException;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
@@ -79,12 +80,71 @@ class EstablecimientoServiceTest {
         );
 
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(0L);
         when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         EstablecimientoResponse response = assertDoesNotThrow(
                 () -> establecimientoService.crearEstablecimiento(request, dueno.getEmail()));
 
         assertEquals(2, response.horariosAtencion().size());
+    }
+
+    @Test
+    @DisplayName("crearEstablecimiento_Exito_ConDosEstablecimientosActivosPreexistentes")
+    void crearEstablecimiento_Exito_ConDosEstablecimientosActivosPreexistentes() {
+        Usuario dueno = Usuario.builder()
+                .id(1L)
+                .email("dueno@test.com")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .build();
+
+        EstablecimientoRequest request = new EstablecimientoRequest(
+                "Complejo Test",
+                "Calle Falsa 123",
+                -34.6,
+                -58.4,
+                false,
+                List.of(),
+                null
+        );
+
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(2L);
+        when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertDoesNotThrow(() -> establecimientoService.crearEstablecimiento(request, dueno.getEmail()));
+        verify(establecimientoRepository).save(any(Establecimiento.class));
+    }
+
+    @Test
+    @DisplayName("crearEstablecimiento_Fallo_LimiteDeEstablecimientosAlcanzado")
+    void crearEstablecimiento_Fallo_LimiteDeEstablecimientosAlcanzado() {
+        Usuario dueno = Usuario.builder()
+                .id(1L)
+                .email("dueno@test.com")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .build();
+
+        EstablecimientoRequest request = new EstablecimientoRequest(
+                "Complejo Test",
+                "Calle Falsa 123",
+                -34.6,
+                -58.4,
+                false,
+                List.of(),
+                null
+        );
+
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(3L);
+
+        assertThrows(
+                LimiteEstablecimientosException.class,
+                () -> establecimientoService.crearEstablecimiento(request, dueno.getEmail())
+        );
+        verify(establecimientoRepository, never()).save(any());
     }
 
     @Test

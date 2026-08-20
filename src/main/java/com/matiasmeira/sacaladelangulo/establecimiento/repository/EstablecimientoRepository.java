@@ -20,6 +20,8 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
 
     List<Establecimiento> findByDuenoIdAndIsActiveTrue(Long duenoId);
 
+    long countByDuenoIdAndIsActiveTrue(Long duenoId);
+
     /**
      * Pre-filtro por bounding box de latitud/longitud (comparación numérica simple, sí
      * indexable) antes de calcular Haversine exacto: sin esto, la fórmula trigonométrica

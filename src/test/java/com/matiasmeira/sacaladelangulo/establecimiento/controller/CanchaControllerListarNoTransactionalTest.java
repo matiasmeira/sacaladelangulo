@@ -97,8 +97,7 @@ class CanchaControllerListarNoTransactionalTest {
 
         canchaRepository.save(Cancha.builder()
                 .nombre("Cancha 1")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .isActive(true)
                 .establecimiento(establecimiento)
                 .precioBase(new BigDecimal("18000"))
@@ -111,7 +110,7 @@ class CanchaControllerListarNoTransactionalTest {
         mockMvc.perform(get("/api/v1/establecimientos/" + establecimiento.getId() + "/canchas"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].nombre").value("Cancha 1"))
-                .andExpect(jsonPath("$[0].deportes[0]").value("FUTBOL"))
+                .andExpect(jsonPath("$[0].deportes[0]").value("FUTBOL_5"))
                 // Las dos que reventaban:
                 .andExpect(jsonPath("$[0].duracionesPermitidas",
                         org.hamcrest.Matchers.containsInAnyOrder(60, 90)))

@@ -58,7 +58,6 @@ class BloqueoCanchaRepositoryTest {
                 .build());
         Cancha cancha = entityManager.persist(Cancha.builder()
                 .nombre("Cancha 1")
-                .capacidad(10)
                 .isActive(true)
                 .precioBase(BigDecimal.valueOf(1000))
                 .montoSena(BigDecimal.valueOf(200))

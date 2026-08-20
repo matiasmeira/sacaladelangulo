@@ -62,8 +62,7 @@ class CanchaRepositoryTest {
                 .build());
         Cancha cancha = entityManager.persist(Cancha.builder()
                 .nombre("Cancha 1")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .isActive(true)
                 .precioBase(BigDecimal.valueOf(5000))
                 .montoSena(BigDecimal.valueOf(1000))
@@ -83,7 +82,7 @@ class CanchaRepositoryTest {
                 .findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(establecimiento.getId()));
 
         assertEquals(1, resultado.size());
-        assertTrue(resultado.get(0).getDeportes().contains(Deporte.FUTBOL));
+        assertTrue(resultado.get(0).getDeportes().contains(Deporte.FUTBOL_5));
         assertEquals(1, resultado.get(0).getTarifas().size());
         assertEquals(0, BigDecimal.valueOf(6000).compareTo(resultado.get(0).getTarifas().get(0).getPrecio()));
     }

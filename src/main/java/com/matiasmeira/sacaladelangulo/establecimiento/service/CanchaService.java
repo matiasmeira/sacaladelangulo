@@ -59,7 +59,6 @@ public class CanchaService {
         Cancha cancha = Cancha.builder()
                 .nombre(request.nombre())
                 .deportes(request.deportes())
-                .capacidad(request.capacidad())
                 .precioBase(request.precioBase())
                 .montoSena(montoSena)
                 .duracionesPermitidas(duracionesPermitidas)
@@ -118,7 +117,6 @@ public class CanchaService {
 
         cancha.setNombre(request.nombre());
         cancha.setDeportes(request.deportes());
-        cancha.setCapacidad(request.capacidad());
         cancha.setPrecioBase(request.precioBase());
         cancha.setMontoSena(montoSena);
         cancha.setDuracionesPermitidas(duracionesPermitidas);
@@ -267,7 +265,6 @@ public class CanchaService {
                 cancha.getId(),
                 cancha.getNombre(),
                 Set.copyOf(cancha.getDeportes()),
-                cancha.getCapacidad(),
                 cancha.getIsActive(),
                 cancha.getEstablecimiento().getId(),
                 cancha.getPrecioBase(),

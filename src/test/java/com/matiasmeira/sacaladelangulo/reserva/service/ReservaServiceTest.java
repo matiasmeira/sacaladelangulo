@@ -180,8 +180,7 @@ class ReservaServiceTest {
         cancha = Cancha.builder()
                 .id(100L)
                 .nombre("Cancha A")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .precioBase(BigDecimal.valueOf(1500))
                 .montoSena(BigDecimal.valueOf(500))
                 .duracionesPermitidas(new ArrayList<>(List.of(60)))
@@ -228,7 +227,7 @@ class ReservaServiceTest {
         // Arrange
         LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
         LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
 
         Reserva reservaGuardada = Reserva.builder()
                 .id(1L)
@@ -261,7 +260,7 @@ class ReservaServiceTest {
         // Arrange
         LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
         LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
@@ -283,7 +282,7 @@ class ReservaServiceTest {
         // Arrange: más de 31 días de anticipación (mismo tope que DisponibilidadService)
         LocalDateTime fechaInicio = FECHA_BASE.plusDays(40).atTime(10, 0);
         LocalDateTime fechaFin = FECHA_BASE.plusDays(40).atTime(11, 0);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
@@ -303,7 +302,7 @@ class ReservaServiceTest {
         // Arrange
         LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
         LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
 
         Reserva reservaExistente = Reserva.builder()
                 .id(2L)
@@ -336,7 +335,7 @@ class ReservaServiceTest {
         // Arrange
         LocalDateTime fechaInicio = FECHA_BASE.atTime(11, 0);
         LocalDateTime fechaFin = FECHA_BASE.atTime(12, 0);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
 
         Reserva reservaGuardada = Reserva.builder()
                 .id(3L)
@@ -373,8 +372,7 @@ class ReservaServiceTest {
         Cancha canchaFisicaUno = Cancha.builder()
                 .id(1L)
                 .nombre("Cancha F5 1")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .precioBase(BigDecimal.valueOf(1000))
                 .montoSena(BigDecimal.valueOf(300))
                 .duracionesPermitidas(new ArrayList<>(List.of(60)))
@@ -388,8 +386,7 @@ class ReservaServiceTest {
         Cancha canchaFisicaDos = Cancha.builder()
                 .id(2L)
                 .nombre("Cancha F5 2")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .precioBase(BigDecimal.valueOf(1000))
                 .montoSena(BigDecimal.valueOf(300))
                 .duracionesPermitidas(new ArrayList<>(List.of(60)))
@@ -403,8 +400,7 @@ class ReservaServiceTest {
         Cancha canchaLogica = Cancha.builder()
                 .id(200L)
                 .nombre("Cancha F7")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(14)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .precioBase(BigDecimal.valueOf(2000))
                 .montoSena(BigDecimal.valueOf(700))
                 .duracionesPermitidas(new ArrayList<>(List.of(60)))
@@ -446,7 +442,7 @@ class ReservaServiceTest {
         // Act
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> reservaService.crearReserva(new ReservaRequest(canchaLogica.getId(), fechaInicio, fechaFin, Deporte.FUTBOL), jugador.getEmail())
+                () -> reservaService.crearReserva(new ReservaRequest(canchaLogica.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5), jugador.getEmail())
         );
 
         // Assert
@@ -459,7 +455,7 @@ class ReservaServiceTest {
         // Arrange
         LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
         LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
 
         com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha bloqueo =
                 com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha.builder()
@@ -494,7 +490,7 @@ class ReservaServiceTest {
 
         LocalDateTime fechaInicio = FECHA_BASE.atTime(23, 0);
         LocalDateTime fechaFin = FECHA_BASE.plusDays(1).atTime(1, 0);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
 
         Reserva reservaGuardada = Reserva.builder()
                 .id(10L)
@@ -540,7 +536,7 @@ class ReservaServiceTest {
 
         LocalDateTime fechaInicio = FECHA_BASE.atTime(3, 0);
         LocalDateTime fechaFin = FECHA_BASE.atTime(4, 0);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
@@ -564,7 +560,7 @@ class ReservaServiceTest {
         LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
         LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
         ReservaManualRequest request = new ReservaManualRequest(
-                cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL, "Cliente Mostrador", "1122334455", false);
+                cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5, "Cliente Mostrador", "1122334455", false);
 
         Reserva reservaGuardada = Reserva.builder()
                 .id(20L)
@@ -606,7 +602,7 @@ class ReservaServiceTest {
         LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
         LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 11, 0);
         ReservaManualRequest request = new ReservaManualRequest(
-                cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL, "Cliente Mostrador", null, null);
+                cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5, "Cliente Mostrador", null, null);
 
         Usuario otroDueno = Usuario.builder()
                 .id(3L)
@@ -638,7 +634,7 @@ class ReservaServiceTest {
                 .id(40L)
                 .jugador(jugador)
                 .cancha(cancha)
-                .deporteSeleccionado(Deporte.FUTBOL)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
                 .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
                 .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
                 .estado(EstadoReserva.PENDIENTE_SENA)
@@ -671,7 +667,7 @@ class ReservaServiceTest {
                 .id(41L)
                 .jugador(jugador)
                 .cancha(cancha)
-                .deporteSeleccionado(Deporte.FUTBOL)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
                 .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
                 .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
                 .estado(EstadoReserva.CONFIRMADA)
@@ -704,7 +700,7 @@ class ReservaServiceTest {
 
         ReservaSemanalRequest request = new ReservaSemanalRequest(
                 cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
-                horaInicio, horaFin, Deporte.FUTBOL, null, "Cliente Fijo", "1122334455");
+                horaInicio, horaFin, Deporte.FUTBOL_5, null, "Cliente Fijo", "1122334455");
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
@@ -742,7 +738,7 @@ class ReservaServiceTest {
 
         ReservaSemanalRequest request = new ReservaSemanalRequest(
                 cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
-                horaInicio, horaFin, Deporte.FUTBOL, dueno.getId(), null, null);
+                horaInicio, horaFin, Deporte.FUTBOL_5, dueno.getId(), null, null);
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
@@ -768,7 +764,7 @@ class ReservaServiceTest {
 
         ReservaSemanalRequest request = new ReservaSemanalRequest(
                 cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
-                horaInicio, horaFin, Deporte.FUTBOL, null, "Cliente Fijo", null);
+                horaInicio, horaFin, Deporte.FUTBOL_5, null, "Cliente Fijo", null);
 
         LocalDateTime inicioBloqueado = LocalDate.of(2030, 1, 22).atTime(horaInicio);
         LocalDateTime finBloqueado = LocalDate.of(2030, 1, 22).atTime(horaFin);
@@ -805,7 +801,7 @@ class ReservaServiceTest {
         // Arrange
         ReservaSemanalRequest request = new ReservaSemanalRequest(
                 cancha.getId(), LocalDate.of(2030, 1, 8), LocalDate.of(2030, 1, 22), DayOfWeek.TUESDAY,
-                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.FUTBOL, null, "Cliente Fijo", null);
+                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.FUTBOL_5, null, "Cliente Fijo", null);
 
         Usuario otroDueno = Usuario.builder()
                 .id(4L)
@@ -840,7 +836,7 @@ class ReservaServiceTest {
                 .id(30L)
                 .jugador(jugador)
                 .cancha(cancha)
-                .deporteSeleccionado(Deporte.FUTBOL)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
                 .fechaHoraInicio(fechaInicio)
                 .fechaHoraFin(fechaFin)
                 .estado(EstadoReserva.CONFIRMADA)
@@ -851,8 +847,7 @@ class ReservaServiceTest {
         Cancha canchaDestino = Cancha.builder()
                 .id(300L)
                 .nombre("Cancha B")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .precioBase(BigDecimal.valueOf(1500))
                 .montoSena(BigDecimal.valueOf(500))
                 .duracionesPermitidas(new ArrayList<>(List.of(60)))
@@ -914,8 +909,7 @@ class ReservaServiceTest {
         Cancha canchaDeOtroEstablecimiento = Cancha.builder()
                 .id(301L)
                 .nombre("Cancha Otro Predio")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .precioBase(BigDecimal.valueOf(1500))
                 .montoSena(BigDecimal.valueOf(500))
                 .duracionesPermitidas(new ArrayList<>(List.of(60)))
@@ -1037,7 +1031,7 @@ class ReservaServiceTest {
         // Arrange
         LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
         LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
 
         DiaNoLaborable diaNoLaborable = DiaNoLaborable.builder()
                 .id(1L)
@@ -1071,7 +1065,7 @@ class ReservaServiceTest {
 
         ReservaSemanalRequest request = new ReservaSemanalRequest(
                 cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
-                horaInicio, horaFin, Deporte.FUTBOL, null, "Cliente Fijo", null);
+                horaInicio, horaFin, Deporte.FUTBOL_5, null, "Cliente Fijo", null);
 
         DiaNoLaborable diaNoLaborable = DiaNoLaborable.builder()
                 .id(1L)
@@ -1172,8 +1166,7 @@ class ReservaServiceTest {
         Cancha canchaDestinoSinHockey = Cancha.builder()
                 .id(400L)
                 .nombre("Cancha Solo Futbol")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .precioBase(BigDecimal.valueOf(1500))
                 .montoSena(BigDecimal.valueOf(500))
                 .duracionesPermitidas(new ArrayList<>(List.of(60)))

@@ -83,7 +83,7 @@ class ClienteControllerTest {
 
     private Cancha crearCancha(Establecimiento establecimiento) {
         return canchaRepository.save(Cancha.builder()
-                .nombre("Cancha 1").deportes(Set.of(Deporte.FUTBOL)).capacidad(10).isActive(true)
+                .nombre("Cancha 1").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(100)).montoSena(BigDecimal.valueOf(20))
                 .establecimiento(establecimiento).build());
     }
@@ -96,7 +96,7 @@ class ClienteControllerTest {
 
     private void crearReserva(Usuario jugador, Cancha cancha, EstadoReserva estado, LocalDateTime inicio, BigDecimal precio) {
         reservaRepository.save(Reserva.builder()
-                .jugador(jugador).cancha(cancha).deporteSeleccionado(Deporte.FUTBOL)
+                .jugador(jugador).cancha(cancha).deporteSeleccionado(Deporte.FUTBOL_5)
                 .fechaHoraInicio(inicio).fechaHoraFin(inicio.plusHours(1))
                 .estado(estado).precioTotal(precio).build());
     }

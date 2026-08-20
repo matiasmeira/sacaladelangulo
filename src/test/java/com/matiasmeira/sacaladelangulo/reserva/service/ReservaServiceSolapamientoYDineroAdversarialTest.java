@@ -111,14 +111,14 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
                 .diaSemana(DayOfWeek.TUESDAY).horaApertura(LocalTime.of(8, 0)).horaCierre(LocalTime.of(23, 0))
                 .establecimiento(establecimiento).build()));
 
-        cancha = Cancha.builder().id(100L).nombre("Cancha A").deportes(java.util.Set.of(Deporte.FUTBOL))
-                .capacidad(10).precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO)
+        cancha = Cancha.builder().id(100L).nombre("Cancha A").deportes(java.util.Set.of(Deporte.FUTBOL_5))
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO)
                 .duracionesPermitidas(new ArrayList<>(List.of(60))).permiteInicioMediaHora(true)
                 .establecimiento(establecimiento).isActive(true).tarifas(new ArrayList<>()).canchasFisicas(new ArrayList<>())
                 .build();
 
-        canchaDestino = Cancha.builder().id(101L).nombre("Cancha B").deportes(java.util.Set.of(Deporte.FUTBOL))
-                .capacidad(10).precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO)
+        canchaDestino = Cancha.builder().id(101L).nombre("Cancha B").deportes(java.util.Set.of(Deporte.FUTBOL_5))
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO)
                 .duracionesPermitidas(new ArrayList<>(List.of(60))).permiteInicioMediaHora(true)
                 .establecimiento(establecimiento).isActive(true).tarifas(new ArrayList<>()).canchasFisicas(new ArrayList<>())
                 .build();
@@ -161,7 +161,7 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(nuevaInicio), eq(nuevaFin), any()))
                 .thenReturn(List.of(reservaExistente(cancha, existenteInicio, existenteFin)));
 
-        ReservaRequest request = new ReservaRequest(cancha.getId(), nuevaInicio, nuevaFin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), nuevaInicio, nuevaFin, Deporte.FUTBOL_5);
 
         assertThrows(IllegalArgumentException.class, () -> reservaService.crearReserva(request, jugador.getEmail()));
     }
@@ -174,7 +174,7 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
 
         Reserva reservaAMover = Reserva.builder().id(1L).cancha(cancha).jugador(jugador)
                 .fechaHoraInicio(inicio).fechaHoraFin(fin).estado(EstadoReserva.CONFIRMADA)
-                .deporteSeleccionado(Deporte.FUTBOL).precioTotal(BigDecimal.valueOf(1000)).senaPagada(BigDecimal.ZERO).build();
+                .deporteSeleccionado(Deporte.FUTBOL_5).precioTotal(BigDecimal.valueOf(1000)).senaPagada(BigDecimal.ZERO).build();
         when(reservaRepository.findByIdConEstablecimientoYDueno(1L)).thenReturn(Optional.of(reservaAMover));
 
         // La cancha destino ya tiene otra reserva ocupando exactamente ese horario.
@@ -196,10 +196,10 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
         // validación (validarFechas: !inicio.isBefore(fin)), así que un solo caso alcanza
         // para cubrir ambos enunciados del checklist: no hay un camino de código separado
         // para "duración cero" que la duración cero no dispare primero.
-        ReservaRequest duracionCero = new ReservaRequest(cancha.getId(), inicio, inicio, Deporte.FUTBOL);
+        ReservaRequest duracionCero = new ReservaRequest(cancha.getId(), inicio, inicio, Deporte.FUTBOL_5);
         assertThrows(IllegalArgumentException.class, () -> reservaService.crearReserva(duracionCero, jugador.getEmail()));
 
-        ReservaRequest finAntesQueInicio = new ReservaRequest(cancha.getId(), inicio, inicio.minusMinutes(30), Deporte.FUTBOL);
+        ReservaRequest finAntesQueInicio = new ReservaRequest(cancha.getId(), inicio, inicio.minusMinutes(30), Deporte.FUTBOL_5);
         assertThrows(IllegalArgumentException.class, () -> reservaService.crearReserva(finAntesQueInicio, jugador.getEmail()));
     }
 
@@ -207,7 +207,7 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
     @DisplayName("Reserva en el pasado se rechaza")
     void crearReserva_FechaEnElPasado_Rechaza() {
         LocalDateTime inicio = LocalDateTime.now().minusDays(1);
-        ReservaRequest request = new ReservaRequest(cancha.getId(), inicio, inicio.plusHours(1), Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), inicio, inicio.plusHours(1), Deporte.FUTBOL_5);
 
         assertThrows(IllegalArgumentException.class, () -> reservaService.crearReserva(request, jugador.getEmail()));
     }
@@ -226,7 +226,7 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
         LocalDateTime fin = FECHA_BASE.atTime(11, 0);
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(inicio), eq(fin), any())).thenReturn(List.of());
 
-        ReservaRequest request = new ReservaRequest(cancha.getId(), inicio, fin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), inicio, fin, Deporte.FUTBOL_5);
         reservaService.crearReserva(request, jugador.getEmail());
 
         ArgumentCaptor<Reserva> captor = ArgumentCaptor.forClass(Reserva.class);

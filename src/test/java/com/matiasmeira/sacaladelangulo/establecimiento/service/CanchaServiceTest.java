@@ -88,7 +88,6 @@ class CanchaServiceTest {
                 .id(100L)
                 .nombre("Cancha A")
                 .establecimiento(establecimiento)
-                .capacidad(10)
                 .isActive(true)
                 .build();
     }
@@ -141,7 +140,6 @@ class CanchaServiceTest {
                 .id(200L)
                 .nombre("Cancha B")
                 .establecimiento(otroEstablecimiento)
-                .capacidad(10)
                 .isActive(true)
                 .build();
 
@@ -172,8 +170,7 @@ class CanchaServiceTest {
     private CanchaRequest requestConPreciosPorDuracion(Map<Integer, BigDecimal> preciosPorDuracion) {
         return new CanchaRequest(
                 "Cancha A",
-                Set.of(Deporte.FUTBOL),
-                10,
+                Set.of(Deporte.FUTBOL_5),
                 BigDecimal.valueOf(10000),
                 BigDecimal.ZERO,
                 java.util.List.of(60, 90, 120),
@@ -188,8 +185,7 @@ class CanchaServiceTest {
     private CanchaRequest requestConCanchasFisicasIds(java.util.List<Long> canchasFisicasIds) {
         return new CanchaRequest(
                 "Cancha Pool",
-                Set.of(Deporte.FUTBOL),
-                10,
+                Set.of(Deporte.FUTBOL_5),
                 BigDecimal.valueOf(10000),
                 BigDecimal.ZERO,
                 java.util.List.of(60, 90, 120),
@@ -249,8 +245,8 @@ class CanchaServiceTest {
     @Test
     @DisplayName("crearCancha_Exito_ConCanchasFisicasDelMismoEstablecimiento")
     void crearCancha_Exito_ConCanchasFisicasDelMismoEstablecimiento() {
-        Cancha fisicaA = Cancha.builder().id(101L).nombre("Fisica A").establecimiento(establecimiento).capacidad(5).isActive(true).build();
-        Cancha fisicaB = Cancha.builder().id(102L).nombre("Fisica B").establecimiento(establecimiento).capacidad(5).isActive(true).build();
+        Cancha fisicaA = Cancha.builder().id(101L).nombre("Fisica A").establecimiento(establecimiento).isActive(true).build();
+        Cancha fisicaB = Cancha.builder().id(102L).nombre("Fisica B").establecimiento(establecimiento).isActive(true).build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
@@ -279,7 +275,7 @@ class CanchaServiceTest {
                 .isActive(true)
                 .build();
         Cancha fisicaDeOtroEstablecimiento = Cancha.builder()
-                .id(201L).nombre("Ajena").establecimiento(otroEstablecimiento).capacidad(5).isActive(true).build();
+                .id(201L).nombre("Ajena").establecimiento(otroEstablecimiento).isActive(true).build();
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);

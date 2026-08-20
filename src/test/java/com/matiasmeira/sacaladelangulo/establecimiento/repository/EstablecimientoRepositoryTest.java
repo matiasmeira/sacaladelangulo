@@ -174,7 +174,6 @@ class EstablecimientoRepositoryTest {
         entityManager.persist(Cancha.builder()
                 .nombre("Cancha 1")
                 .deportes(java.util.Set.of(Deporte.PADEL))
-                .capacidad(4)
                 .isActive(true)
                 .precioBase(java.math.BigDecimal.valueOf(1000))
                 .montoSena(java.math.BigDecimal.valueOf(200))

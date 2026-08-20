@@ -111,8 +111,7 @@ class ReservaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTest
 
         cancha = canchaRepository.save(Cancha.builder()
                 .nombre("Cancha 1")
-                .deportes(new java.util.HashSet<>(List.of(Deporte.FUTBOL)))
-                .capacidad(10)
+                .deportes(new java.util.HashSet<>(List.of(Deporte.FUTBOL_5)))
                 .precioBase(BigDecimal.valueOf(1000))
                 .montoSena(BigDecimal.ZERO)
                 .duracionesPermitidas(new ArrayList<>(List.of(60)))
@@ -152,7 +151,7 @@ class ReservaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTest
     @Test
     @DisplayName("dobleReservaMismoSlotEnParalelo_SoloUnaGana")
     void dobleReservaMismoSlotEnParalelo_SoloUnaGana() throws Exception {
-        ReservaRequest request = new ReservaRequest(cancha.getId(), inicio, fin, Deporte.FUTBOL);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), inicio, fin, Deporte.FUTBOL_5);
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CyclicBarrier barrier = new CyclicBarrier(2);

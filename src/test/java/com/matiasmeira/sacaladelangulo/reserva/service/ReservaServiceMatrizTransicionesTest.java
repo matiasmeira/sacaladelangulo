@@ -97,7 +97,7 @@ class ReservaServiceMatrizTransicionesTest {
                 .latitud(0.0).longitud(0.0).dueno(dueno).requiereSena(false).isActive(true).build();
 
         cancha = Cancha.builder().id(100L).nombre("Cancha 1").establecimiento(establecimiento)
-                .capacidad(10).precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO).isActive(true).build();
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO).isActive(true).build();
 
         lenient().when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         lenient().when(usuarioRepository.findByEmail(empleado.getEmail())).thenReturn(Optional.of(empleado));

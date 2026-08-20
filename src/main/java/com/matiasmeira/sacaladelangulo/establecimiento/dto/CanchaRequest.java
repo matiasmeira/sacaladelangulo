@@ -25,10 +25,6 @@ public record CanchaRequest(
         @NotEmpty(message = "Debe indicar al menos un deporte")
         Set<Deporte> deportes,
 
-        @NotNull(message = "La capacidad es obligatoria")
-        @Positive(message = "La capacidad debe ser mayor a 0")
-        Integer capacidad,
-
         @NotNull(message = "El precio base es obligatorio")
         @Positive(message = "El precio base debe ser mayor a 0")
         BigDecimal precioBase,

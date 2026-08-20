@@ -107,10 +107,10 @@ public class BloqueoCanchaService {
 
     /**
      * Busca, dentro del mismo establecimiento, canchas que soporten el deporte para el
-     * que se hizo la reserva afectada y tengan la misma capacidad que la cancha bloqueada
-     * (p. ej. "Cancha 5B" para una reserva de fútbol en "Cancha 5A") que estén libres
-     * —sin reserva ni bloqueo solapado— en el horario exacto de esa reserva. Se ofrecen
-     * como alternativa de reubicación en vez de cancelar directamente
+     * que se hizo la reserva afectada (p. ej. "Cancha 5B" para una reserva de FUTBOL_5 en
+     * "Cancha 5A" — el deporte granular ya implica el mismo tamaño/modalidad) que estén
+     * libres —sin reserva ni bloqueo solapado— en el horario exacto de esa reserva. Se
+     * ofrecen como alternativa de reubicación en vez de cancelar directamente
      * (ver PUT /reservas/{id}/mover-cancha).
      */
     private List<CanchaDisponibleResponse> buscarCanchasAlternativasDisponibles(Cancha canchaBloqueada, Reserva reserva,
@@ -118,7 +118,6 @@ public class BloqueoCanchaService {
         return todasLasCanchas.stream()
                 .filter(candidata -> !candidata.getId().equals(canchaBloqueada.getId()))
                 .filter(candidata -> candidata.getDeportes().contains(reserva.getDeporteSeleccionado()))
-                .filter(candidata -> candidata.getCapacidad().equals(canchaBloqueada.getCapacidad()))
                 .filter(candidata -> estaLibreEnElHorarioDeLaReserva(candidata, reserva, bloqueosEnRango, reservasEnRango))
                 .map(candidata -> new CanchaDisponibleResponse(candidata.getId(), candidata.getNombre()))
                 .toList();

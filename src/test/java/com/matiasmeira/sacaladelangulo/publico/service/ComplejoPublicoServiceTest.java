@@ -91,7 +91,6 @@ class ComplejoPublicoServiceTest {
                 .id(id)
                 .nombre("Cancha " + id)
                 .deportes(deportes)
-                .capacidad(10)
                 .isActive(true)
                 .precioBase(BigDecimal.valueOf(10000))
                 .montoSena(montoSena)
@@ -111,7 +110,7 @@ class ComplejoPublicoServiceTest {
     @DisplayName("buscarComplejos_VariasCanchas_DerivaDeportesPrecioDesdeYSenaDesdeSinFiltroDeDeporte")
     void buscarComplejos_VariasCanchas_DerivaDeportesPrecioDesdeYSenaDesdeSinFiltroDeDeporte() {
         Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
-        Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
+        Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL_5), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
         Cancha padel = canchaConTarifa(11L, est, Set.of(Deporte.PADEL), BigDecimal.valueOf(800), BigDecimal.valueOf(3000));
 
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
@@ -126,7 +125,7 @@ class ComplejoPublicoServiceTest {
 
         assertEquals(1, resultado.getTotalElements());
         ComplejoCardResponse card = resultado.getContent().get(0);
-        assertEquals(Set.of(Deporte.FUTBOL, Deporte.PADEL), card.deportes());
+        assertEquals(Set.of(Deporte.FUTBOL_5, Deporte.PADEL), card.deportes());
         assertEquals(BigDecimal.valueOf(3000), card.precioDesde());
         assertEquals(BigDecimal.valueOf(800), card.senaDesde());
         assertNull(card.distanciaKm());
@@ -136,7 +135,7 @@ class ComplejoPublicoServiceTest {
     @DisplayName("buscarComplejos_ConFiltroDeDeporte_AcotaPrecioDesdeYSenaDesdeALasCanchasDeEseDeporte")
     void buscarComplejos_ConFiltroDeDeporte_AcotaPrecioDesdeYSenaDesdeALasCanchasDeEseDeporte() {
         Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
-        Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
+        Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL_5), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
         Cancha padel = canchaConTarifa(11L, est, Set.of(Deporte.PADEL), BigDecimal.valueOf(800), BigDecimal.valueOf(3000));
 
         when(establecimientoRepository.findActivosPorDeporte(eq(Deporte.PADEL), any(Pageable.class))).thenReturn(List.of(est));
@@ -150,7 +149,7 @@ class ComplejoPublicoServiceTest {
                 null, null, null, Deporte.PADEL, null, null, PageRequest.of(0, 20));
 
         ComplejoCardResponse card = resultado.getContent().get(0);
-        assertEquals(Set.of(Deporte.FUTBOL, Deporte.PADEL), card.deportes());
+        assertEquals(Set.of(Deporte.FUTBOL_5, Deporte.PADEL), card.deportes());
         assertEquals(BigDecimal.valueOf(3000), card.precioDesde());
         assertEquals(BigDecimal.valueOf(800), card.senaDesde());
     }
@@ -162,8 +161,7 @@ class ComplejoPublicoServiceTest {
         Cancha sinTarifas = Cancha.builder()
                 .id(10L)
                 .nombre("Cancha 10")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .isActive(true)
                 .precioBase(BigDecimal.valueOf(4000))
                 .montoSena(BigDecimal.valueOf(500))
@@ -192,8 +190,7 @@ class ComplejoPublicoServiceTest {
         Cancha cancha = Cancha.builder()
                 .id(10L)
                 .nombre("Cancha 10")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .isActive(true)
                 .precioBase(BigDecimal.valueOf(2000))
                 .montoSena(BigDecimal.valueOf(500))
@@ -359,7 +356,7 @@ class ComplejoPublicoServiceTest {
                 .horaCierre(LocalTime.of(23, 0))
                 .build()));
         Cancha cancha = Cancha.builder()
-                .id(10L).nombre("Cancha 10").deportes(Set.of(Deporte.FUTBOL)).capacidad(10).isActive(true)
+                .id(10L).nombre("Cancha 10").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(200)).establecimiento(est).build();
 
         LocalDate fecha = LocalDate.of(2026, 8, 10);
@@ -439,7 +436,7 @@ class ComplejoPublicoServiceTest {
                 .horaCierre(LocalTime.of(23, 0))
                 .build()));
         Cancha cancha = Cancha.builder()
-                .id(10L).nombre("Cancha 10").deportes(Set.of(Deporte.FUTBOL)).capacidad(10).isActive(true)
+                .id(10L).nombre("Cancha 10").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(200)).establecimiento(est).build();
         BloqueoCancha bloqueo = BloqueoCancha.builder()
                 .cancha(cancha)
@@ -499,7 +496,7 @@ class ComplejoPublicoServiceTest {
                 .horaCierre(LocalTime.of(2, 0)) // cruza medianoche
                 .build()));
         Cancha cancha = Cancha.builder()
-                .id(10L).nombre("Cancha 10").deportes(Set.of(Deporte.FUTBOL)).capacidad(10).isActive(true)
+                .id(10L).nombre("Cancha 10").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(200)).establecimiento(est).build();
 
         LocalDate fecha = LocalDate.of(2026, 8, 10); // lunes
@@ -526,7 +523,7 @@ class ComplejoPublicoServiceTest {
     @DisplayName("obtenerDetalle_VariasCanchas_DerivaDeportesPrecioDesdeYSenaDesdeYListaCanchas")
     void obtenerDetalle_VariasCanchas_DerivaDeportesPrecioDesdeYSenaDesdeYListaCanchas() {
         Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
-        Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
+        Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL_5), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
         Cancha padel = canchaConTarifa(11L, est, Set.of(Deporte.PADEL), BigDecimal.valueOf(800), BigDecimal.valueOf(3000));
 
         when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
@@ -539,7 +536,7 @@ class ComplejoPublicoServiceTest {
         com.matiasmeira.sacaladelangulo.publico.dto.ComplejoDetalleResponse detalle =
                 complejoPublicoService.obtenerDetalle("complejo-uno");
 
-        assertEquals(Set.of(Deporte.FUTBOL, Deporte.PADEL), detalle.deportes());
+        assertEquals(Set.of(Deporte.FUTBOL_5, Deporte.PADEL), detalle.deportes());
         assertEquals(BigDecimal.valueOf(3000), detalle.precioDesde());
         assertEquals(BigDecimal.valueOf(800), detalle.senaDesde());
         assertEquals(2, detalle.canchas().size());

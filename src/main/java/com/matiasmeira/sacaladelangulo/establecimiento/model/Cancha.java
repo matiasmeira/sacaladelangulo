@@ -46,9 +46,6 @@ public class Cancha {
     @Builder.Default
     private Set<Deporte> deportes = new HashSet<>();
 
-    @Column(nullable = false)
-    private Integer capacidad;
-
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;

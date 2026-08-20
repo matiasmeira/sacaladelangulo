@@ -88,8 +88,7 @@ class ReservaExclusionConstraintIntegrationTest extends AbstractPostgresIntegrat
 
         cancha = canchaRepository.save(Cancha.builder()
                 .nombre("Cancha Única")
-                .deportes(new HashSet<>(List.of(Deporte.FUTBOL)))
-                .capacidad(10)
+                .deportes(new HashSet<>(List.of(Deporte.FUTBOL_5)))
                 .precioBase(BigDecimal.valueOf(1000))
                 .montoSena(BigDecimal.ZERO)
                 .duracionesPermitidas(new ArrayList<>(List.of(60)))
@@ -107,7 +106,7 @@ class ReservaExclusionConstraintIntegrationTest extends AbstractPostgresIntegrat
                 .cancha(cancha)
                 .jugador(null)
                 .nombreClienteManual("Cliente de prueba")
-                .deporteSeleccionado(Deporte.FUTBOL)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
                 .fechaHoraInicio(desde)
                 .fechaHoraFin(hasta)
                 .estado(estado)

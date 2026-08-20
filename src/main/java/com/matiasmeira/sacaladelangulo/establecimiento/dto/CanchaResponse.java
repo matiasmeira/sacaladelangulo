@@ -16,7 +16,6 @@ public record CanchaResponse(
         Long id,
         String nombre,
         Set<Deporte> deportes,
-        Integer capacidad,
         Boolean isActive,
         Long establecimientoId,
         BigDecimal precioBase,

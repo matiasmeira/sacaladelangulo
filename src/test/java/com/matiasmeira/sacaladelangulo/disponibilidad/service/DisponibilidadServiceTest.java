@@ -88,7 +88,7 @@ class DisponibilidadServiceTest {
                 .id(1L)
                 .nombre("Cancha 1")
                 .establecimiento(establecimiento)
-                .deportes(Set.of(Deporte.FUTBOL))
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .duracionesPermitidas(List.of(60))
                 .permiteInicioMediaHora(false)
                 .isActive(true)

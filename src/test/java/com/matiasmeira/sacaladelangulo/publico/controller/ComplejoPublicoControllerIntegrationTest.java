@@ -92,8 +92,7 @@ class ComplejoPublicoControllerIntegrationTest {
 
         Cancha cancha = Cancha.builder()
                 .nombre("Cancha 1")
-                .deportes(Set.of(Deporte.FUTBOL))
-                .capacidad(10)
+                .deportes(Set.of(Deporte.FUTBOL_5))
                 .isActive(true)
                 .precioBase(BigDecimal.valueOf(5000))
                 .montoSena(BigDecimal.valueOf(1000))

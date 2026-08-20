@@ -4,6 +4,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
+import com.matiasmeira.sacaladelangulo.core.exception.LimiteEstablecimientosException;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.FeedbackDestacadoDto;
@@ -35,6 +36,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class EstablecimientoService {
 
+    private static final int LIMITE_ESTABLECIMIENTOS_ACTIVOS = 3;
+
     private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
     private final FeedbackRepository feedbackRepository;
@@ -43,6 +46,10 @@ public class EstablecimientoService {
 
     public EstablecimientoResponse crearEstablecimiento(EstablecimientoRequest request, String email) {
         Usuario dueno = buscarUsuarioPorEmail(email);
+
+        if (establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId()) >= LIMITE_ESTABLECIMIENTOS_ACTIVOS) {
+            throw new LimiteEstablecimientosException("Ya alcanzaste el máximo de 3 establecimientos activos.");
+        }
 
         boolean requiereSenaForzada = esPlanLimitado(dueno.getPlanSuscripcion());
 

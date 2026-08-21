@@ -38,5 +38,11 @@ public enum AccionAuditoria {
     EDITAR_GASTO,
     ELIMINAR_GASTO,
     CREAR_CANCHA,
-    ACTUALIZAR_CANCHA
+    ACTUALIZAR_CANCHA,
+
+    // Gestión de fotos del complejo por parte del dueño/admin (ver el spec de fotos con
+    // ImageKit): tocan la cara pública del establecimiento en el marketplace.
+    SUBIR_FOTO_ESTABLECIMIENTO,
+    ELIMINAR_FOTO_ESTABLECIMIENTO,
+    REORDENAR_FOTOS_ESTABLECIMIENTO
 }

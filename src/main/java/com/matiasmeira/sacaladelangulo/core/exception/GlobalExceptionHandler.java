@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.core.exception;
 
+import com.matiasmeira.sacaladelangulo.core.imagekit.ImageKitException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -206,6 +207,13 @@ public class GlobalExceptionHandler {
             }
         }
         return false;
+    }
+
+    @ExceptionHandler(ImageKitException.class)
+    public ResponseEntity<Map<String, String>> handleImageKitException(ImageKitException ex) {
+        log.error("Error hablando con ImageKit", ex);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(Map.of("error", "El servicio de imágenes no está disponible en este momento."));
     }
 
     @ExceptionHandler(Exception.class)

@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
@@ -213,7 +214,9 @@ public class ComplejoPublicoService {
                 .min(Comparator.naturalOrder())
                 .orElse(null);
 
-        String fotoPrincipal = establecimiento.getFotos().isEmpty() ? null : establecimiento.getFotos().get(0);
+        String fotoPrincipal = establecimiento.getFotos().isEmpty()
+                ? null
+                : establecimiento.getFotos().get(0).getUrl();
         Double distanciaKm = (lat != null && lng != null)
                 ? GeoUtils.distanciaKm(lat, lng, establecimiento.getLatitud(), establecimiento.getLongitud())
                 : null;
@@ -309,7 +312,7 @@ public class ComplejoPublicoService {
                 establecimiento.getLongitud(),
                 deportes,
                 Set.copyOf(establecimiento.getServicios()),
-                List.copyOf(establecimiento.getFotos()),
+                establecimiento.getFotos().stream().map(FotoEstablecimiento::getUrl).toList(),
                 horarios,
                 canchasPublicas,
                 precioDesde,

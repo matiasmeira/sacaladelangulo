@@ -76,17 +76,16 @@ public class Establecimiento {
     private java.util.Set<Servicio> servicios = new java.util.HashSet<>();
 
     /**
-     * URLs de fotos del complejo, en el orden en que se muestran (la primera es la
+     * Fotos del complejo, en el orden en que se muestran (la primera es la
      * "fotoPrincipal" de la card pública). @OrderColumn persiste ese orden explícitamente
      * (columna "orden"): sin ella Hibernate no garantiza qué foto es la primera al releer.
-     * Sin integración con ImageKit todavía: se cargan a mano / seed.
+     * Se gestionan vía FotoEstablecimientoService (subida/borrado contra ImageKit).
      */
     @ElementCollection
     @CollectionTable(name = "establecimiento_fotos", joinColumns = @JoinColumn(name = "establecimiento_id"))
     @OrderColumn(name = "orden")
-    @Column(name = "foto_url", nullable = false)
     @lombok.Builder.Default
-    private java.util.List<String> fotos = new java.util.ArrayList<>();
+    private java.util.List<FotoEstablecimiento> fotos = new java.util.ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dueno_id", nullable = false)

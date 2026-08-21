@@ -113,6 +113,16 @@
 			<artifactId>resend-java</artifactId>
 			<version>4.4.0</version>
 		</dependency>
+		<!-- SDK oficial de ImageKit (alojamiento de las fotos de establecimiento). La línea
+		     v2 (com.github.imagekit-developer, vía JitPack) quedó obsoleta: esta es la v3,
+		     publicada en Maven Central, con una API distinta. Trae Jackson 2.18.2 y valida en
+		     runtime una versión MÍNIMA; el BOM de Spring Boot impone 2.21.2, que la supera y
+		     pasa el chequeo. kotlin-stdlib sube de 1.8.0 a 1.9.25 por el mismo BOM. -->
+		<dependency>
+			<groupId>io.imagekit</groupId>
+			<artifactId>image-kit-java</artifactId>
+			<version>3.5.0</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-thymeleaf</artifactId>

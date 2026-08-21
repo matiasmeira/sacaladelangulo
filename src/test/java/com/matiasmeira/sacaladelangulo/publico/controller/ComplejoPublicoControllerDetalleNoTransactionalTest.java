@@ -4,6 +4,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Servicio;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -80,7 +81,10 @@ class ComplejoPublicoControllerDetalleNoTransactionalTest {
                 .isActive(true)
                 .dueno(dueno)
                 .servicios(Set.of(Servicio.PARRILLA, Servicio.WIFI))
-                .fotos(List.of("https://cdn.example.com/foto1.jpg"))
+                .fotos(new java.util.ArrayList<>(List.of(FotoEstablecimiento.builder()
+                        .url("https://cdn.example.com/foto1.jpg")
+                        .fileId("file_seed_1")
+                        .build())))
                 .build());
 
         mockMvc.perform(get("/api/v1/publico/complejos/complejo-detalle-no-tx"))

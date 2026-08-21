@@ -304,21 +304,36 @@ archivo entero en memoria en un filtro de security, que es peor negocio.
 - **Compensar el huérfano con reintentos o una cola.** Un log a ERROR con el `fileId`
   alcanza para el volumen de esta app.
 
-## Riesgos y verificaciones pendientes
+## Riesgos
 
-1. **¿`builder().privateKey("").build()` explota al arrancar?** Si el builder valida
-   no-blank, el default vacío de dev reventaría el contexto de **toda** la suite de tests.
-   **Primer paso de la Fase 0**: comprobarlo empíricamente. Si explota, el `ImageKitClient`
-   pasa a construirse perezosamente en el primer uso de `ImageKitService`.
-2. **¿El `IdempotencyFilter` realmente rompe el multipart?** El mecanismo se dedujo leyendo
-   el filtro y la cadena de security; **no se ejecutó**. **Primer paso de la Fase 5**:
-   escribir un test que suba un archivo CON `Idempotency-Key` y ver si el archivo llega
-   vacío, ANTES de tocar el filtro. Si no se rompe, el cambio (b) no va.
-3. **La V18 no la ejercita `./mvnw test`** (Flyway apagado, H2 con `create-drop`). Su
+### Resueltos empíricamente antes de planificar
+
+1. **`builder().privateKey("").build()` NO explota.** Probado contra el jar real: con `""`
+   y con `"   "` el cliente se construye sin problema; sólo **omitir** el setter lanza
+   `IllegalStateException: privateKey is required, but was not set`. El default vacío de
+   `application.properties` es seguro y no hace falta construcción perezosa — la única
+   condición es llamar SIEMPRE a `.privateKey(...)`, aunque el valor sea vacío.
+2. **Jackson NO colisiona.** El SDK trae Jackson 2.18.2 y expone un
+   `checkJacksonVersionCompatibility`; el BOM de Spring Boot 3.5.14 impone **2.21.2**. El
+   chequeo es de versión **mínima** (falla con "incompatible major version", "minor version
+   too low" o "patch version too low" y lanza `IllegalStateException`). Se invocó por
+   reflexión con 2.21.2 en el classpath: **pasa**. No hay que desactivar el chequeo ni
+   pinnear Jackson.
+3. **`kotlin-stdlib` sube de 1.8.0 a 1.9.25.** El SDK declara 1.8.0 pero el BOM de Spring
+   Boot gestiona `kotlin.version=1.9.25` y su `dependencyManagement` gana. Es un upgrade
+   dentro del mismo major, compatible hacia atrás. `okhttp` (4.12.0) no lo gestiona el BOM,
+   así que no hay conflicto posible.
+
+### Abiertos
+
+4. **¿El `IdempotencyFilter` realmente rompe el multipart?** El mecanismo se dedujo leyendo
+   el filtro y la cadena de security; **no se ejecutó** — no se puede probar fuera de la
+   app. **Primer paso de la Fase 5**: escribir un test que suba un archivo CON
+   `Idempotency-Key` y ver si el archivo llega vacío, ANTES de tocar el filtro. Si no se
+   rompe, el cambio (b) no va.
+5. **La V18 no la ejercita `./mvnw test`** (Flyway apagado, H2 con `create-drop`). Su
    correctitud se verifica por inspección. El índice único parcial es sintaxis Postgres y
    no correría en H2 de todos modos.
-4. **`kotlin-stdlib` y `okhttp` entran como transitivas del SDK.** Verificar con
-   `./mvnw dependency:tree` que no colisionen con nada que ya gestione el BOM de Spring Boot.
 
 ## Testing
 

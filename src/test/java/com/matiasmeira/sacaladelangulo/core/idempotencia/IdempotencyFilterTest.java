@@ -1,6 +1,7 @@
 package com.matiasmeira.sacaladelangulo.core.idempotencia;
 
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,10 +17,13 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
@@ -283,5 +287,44 @@ class IdempotencyFilterTest {
         verify(solicitudIdempotenteRepository).delete(any(SolicitudIdempotente.class));
         verify(solicitudIdempotenteRepository, never()).save(any());
         assertEquals(500, response.getStatus());
+    }
+
+    /**
+     * En multipart el filtro no puede drenar el input stream: Tomcat parsea las partes
+     * desde ese mismo stream recién después de la cadena de filtros, y
+     * CachedBodyHttpServletRequest sólo overridea getInputStream(), no getParts(), así que
+     * el controller recibiría el archivo vacío. Este test maneja el filtro directo y no por
+     * MockMvc a propósito: MockMultipartFile registra las partes aparte, en el mapa de
+     * MockMultipartHttpServletRequest, y nunca serializa un cuerpo multipart, así que por
+     * MockMvc un filtro que vacía la subida y uno que no la tocan dan el mismo verde.
+     */
+    @Test
+    @DisplayName("doFilter_MultipartEnRutaProtegida_NoConsumeElCuerpoYPasaElRequestOriginal")
+    void doFilter_MultipartEnRutaProtegida_NoConsumeElCuerpoYPasaElRequestOriginal() throws Exception {
+        byte[] cuerpo = ("------x\r\n"
+                + "Content-Disposition: form-data; name=\"archivo\"; filename=\"foto.jpg\"\r\n"
+                + "Content-Type: image/jpeg\r\n"
+                + "\r\n"
+                + "bytes-de-la-foto\r\n"
+                + "------x--\r\n").getBytes(StandardCharsets.UTF_8);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/establecimientos/7/fotos");
+        request.addHeader("Idempotency-Key", "clave-foto");
+        request.setContentType("multipart/form-data; boundary=----x");
+        request.setContent(cuerpo);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        when(solicitudIdempotenteRepository.findByClaveAndUsuarioEmail("clave-foto", "jugador@test.com"))
+                .thenReturn(Optional.empty());
+        when(solicitudIdempotenteRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        idempotencyFilter.doFilter(request, response, filterChain);
+
+        ArgumentCaptor<ServletRequest> captor = ArgumentCaptor.forClass(ServletRequest.class);
+        verify(filterChain).doFilter(captor.capture(), any());
+        assertArrayEquals(cuerpo, request.getInputStream().readAllBytes(),
+                "El filtro consumió el cuerpo multipart: al controller le llegaría el archivo vacío");
+        assertSame(request, captor.getValue(),
+                "En multipart la cadena tiene que recibir el request original, no el envoltorio:"
+                        + " getParts() de Tomcat delega al original y ahí es donde se parsea el archivo");
     }
 }

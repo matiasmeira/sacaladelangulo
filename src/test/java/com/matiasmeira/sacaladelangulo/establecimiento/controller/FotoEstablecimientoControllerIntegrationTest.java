@@ -167,4 +167,25 @@ class FotoEstablecimientoControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].fileId").value("file_b"))
                 .andExpect(jsonPath("$[1].fileId").value("file_a"));
     }
+
+    /**
+     * Mide que la subida siga funcionando cuando el cliente manda Idempotency-Key: el
+     * filtro de idempotencia corre dentro de la cadena de Spring Security, antes de que
+     * el DispatcherServlet resuelva el multipart, así que si tocara el input stream el
+     * controller recibiría el archivo vacío.
+     */
+    @Test
+    @DisplayName("POST_conIdempotencyKey_elArchivoLlegaCompleto")
+    void post_conIdempotencyKey_elArchivoLlegaCompleto() throws Exception {
+        Usuario dueno = seedDueno("dueno-fotos-idem@test.com");
+        Establecimiento establecimiento = seedEstablecimiento(dueno, "complejo-fotos-idem", List.of());
+        when(imageKitService.subir(any(), anyString(), anyString()))
+                .thenReturn(new FotoSubida("https://ik.imagekit.io/demo/idem.jpg", "file_idem"));
+
+        mockMvc.perform(multipart("/api/v1/establecimientos/" + establecimiento.getId() + "/fotos")
+                        .file(new MockMultipartFile("archivo", "foto.jpg", "image/jpeg", jpeg()))
+                        .header("Authorization", "Bearer " + tokenDe(dueno))
+                        .header("Idempotency-Key", "clave-de-prueba-1"))
+                .andExpect(status().isCreated());
+    }
 }

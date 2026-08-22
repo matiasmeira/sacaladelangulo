@@ -216,6 +216,19 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", "El servicio de imágenes no está disponible en este momento."));
     }
 
+    /**
+     * El contenedor corta la request antes de que llegue al controller cuando supera
+     * spring.servlet.multipart.max-file-size. Sin este handler saldría un 500. El límite
+     * real del negocio (5MB) lo aplica ValidadorFoto con un mensaje propio; esto es sólo
+     * la red de abajo.
+     */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, String>> handleMaxUploadSizeExceeded(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "El archivo es demasiado grande. El máximo es 5 MB."));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleUnexpectedException(Exception ex) {
         log.error("Error no controlado procesando la petición", ex);

@@ -12,7 +12,6 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,32 +68,9 @@ public class FotoEstablecimientoService {
     private final ValidadorFoto validadorFoto;
     private final RegistroAuditoriaService registroAuditoriaService;
 
-    /** {@code null} sólo con el constructor histórico de abajo; ver su javadoc. */
     private final TransactionTemplate transactionTemplateLectura;
     private final TransactionTemplate transactionTemplateEscritura;
 
-    /**
-     * Constructor histórico, sin {@link PlatformTransactionManager}. Lo sigue usando
-     * {@code FotoEstablecimientoServiceTest}, que arma el servicio a mano con {@code new}
-     * (Mockito puro, fuera del contenedor de Spring) — así probó este servicio desde el
-     * principio, sin depender de un contexto de Spring para tests que no ejercitan
-     * transacciones reales. Sin un {@link PlatformTransactionManager} no hay forma de armar
-     * un {@link TransactionTemplate} que funcione de verdad, así que con este constructor
-     * las tres fases de {@code subir()}/{@code borrar()} corren en línea, sin ninguna
-     * transacción propia: no hace falta, porque Mockito no tiene ninguna conexión real que
-     * retener. Spring nunca usa este constructor — con dos constructores en la clase, hace
-     * falta marcar uno con {@code @Autowired} para que no sea ambiguo.
-     */
-    public FotoEstablecimientoService(EstablecimientoRepository establecimientoRepository,
-                                       AutorizacionEmpleadoService autorizacionEmpleadoService,
-                                       ImageKitService imageKitService,
-                                       ValidadorFoto validadorFoto,
-                                       RegistroAuditoriaService registroAuditoriaService) {
-        this(establecimientoRepository, autorizacionEmpleadoService, imageKitService, validadorFoto,
-                registroAuditoriaService, null);
-    }
-
-    @Autowired
     public FotoEstablecimientoService(EstablecimientoRepository establecimientoRepository,
                                        AutorizacionEmpleadoService autorizacionEmpleadoService,
                                        ImageKitService imageKitService,
@@ -106,15 +82,10 @@ public class FotoEstablecimientoService {
         this.imageKitService = imageKitService;
         this.validadorFoto = validadorFoto;
         this.registroAuditoriaService = registroAuditoriaService;
-        if (transactionManager == null) {
-            this.transactionTemplateLectura = null;
-            this.transactionTemplateEscritura = null;
-        } else {
-            TransactionTemplate lectura = new TransactionTemplate(transactionManager);
-            lectura.setReadOnly(true);
-            this.transactionTemplateLectura = lectura;
-            this.transactionTemplateEscritura = new TransactionTemplate(transactionManager);
-        }
+        TransactionTemplate lectura = new TransactionTemplate(transactionManager);
+        lectura.setReadOnly(true);
+        this.transactionTemplateLectura = lectura;
+        this.transactionTemplateEscritura = new TransactionTemplate(transactionManager);
     }
 
     @Transactional(readOnly = true)
@@ -329,12 +300,6 @@ public class FotoEstablecimientoService {
     }
 
     private <T> T ejecutar(TransactionTemplate plantilla, TransactionCallback<T> fase) {
-        if (plantilla == null) {
-            // Sólo puede pasar con el constructor histórico (ver su javadoc): no hay
-            // PlatformTransactionManager real, así que la fase corre directo, sin abrir
-            // ninguna transacción.
-            return fase.doInTransaction(null);
-        }
         return plantilla.execute(fase);
     }
 

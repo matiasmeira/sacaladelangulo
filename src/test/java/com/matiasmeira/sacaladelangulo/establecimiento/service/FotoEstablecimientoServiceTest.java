@@ -21,6 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +56,8 @@ class FotoEstablecimientoServiceTest {
     private ImageKitService imageKitService;
     @Mock
     private RegistroAuditoriaService registroAuditoriaService;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private FotoEstablecimientoService servicio;
     private Establecimiento establecimiento;
@@ -61,12 +65,19 @@ class FotoEstablecimientoServiceTest {
 
     @BeforeEach
     void setUp() {
+        // El TransactionTemplate necesita un PlatformTransactionManager real (aunque sea
+        // mockeado) para ejecutar de verdad los callbacks de las tres fases, tal como hace
+        // Spring en producción; SimpleTransactionStatus está pensado justo para esto (ver su
+        // javadoc: "as part of a mock PlatformTransactionManager").
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+
         servicio = new FotoEstablecimientoService(
                 establecimientoRepository,
                 autorizacionEmpleadoService,
                 imageKitService,
                 new ValidadorFoto(),
-                registroAuditoriaService);
+                registroAuditoriaService,
+                transactionManager);
 
         dueno = Usuario.builder().id(1L).email(EMAIL_DUENO).rol(Role.OWNER).build();
         establecimiento = Establecimiento.builder()

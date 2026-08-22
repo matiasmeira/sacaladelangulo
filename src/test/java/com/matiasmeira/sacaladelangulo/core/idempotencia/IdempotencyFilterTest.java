@@ -319,6 +319,12 @@ class IdempotencyFilterTest {
 
         idempotencyFilter.doFilter(request, response, filterChain);
 
+        // Ancla explícita de que el filtro se activó en esta ruta: sin esto, vaciar
+        // PATRONES_PROTEGIDOS haría pasar el request de largo y las dos aserciones de abajo
+        // seguirían verdes, porque un request original sin leer es justo lo que produce un
+        // pass-through. El test quedaría siendo una tautología.
+        verify(solicitudIdempotenteRepository).saveAndFlush(any());
+
         ArgumentCaptor<ServletRequest> captor = ArgumentCaptor.forClass(ServletRequest.class);
         verify(filterChain).doFilter(captor.capture(), any());
         assertArrayEquals(cuerpo, request.getInputStream().readAllBytes(),
@@ -326,5 +332,48 @@ class IdempotencyFilterTest {
         assertSame(request, captor.getValue(),
                 "En multipart la cadena tiene que recibir el request original, no el envoltorio:"
                         + " getParts() de Tomcat delega al original y ahí es donde se parsea el archivo");
+    }
+
+    /**
+     * La contracara del test de arriba: cuando el filtro responde de cache y NO llama a la
+     * cadena, el cuerpo multipart sí tiene que quedar drenado. Si se devuelve la respuesta
+     * dejando sin leer el cuerpo, Tomcat se traga hasta maxSwallowSize (2 MB por defecto) y
+     * corta la conexión, así que reintentar una foto de más de 2 MB — el caso para el que
+     * existe Idempotency-Key — daría connection reset en vez de la respuesta cacheada.
+     */
+    @Test
+    @DisplayName("doFilter_MultipartRepetidoDesdeCache_DrenaElCuerpoYNoLlamaALaCadena")
+    void doFilter_MultipartRepetidoDesdeCache_DrenaElCuerpoYNoLlamaALaCadena() throws Exception {
+        byte[] cuerpo = ("------x\r\n"
+                + "Content-Disposition: form-data; name=\"archivo\"; filename=\"foto.jpg\"\r\n"
+                + "Content-Type: image/jpeg\r\n"
+                + "\r\n"
+                + "bytes-de-la-foto\r\n"
+                + "------x--\r\n").getBytes(StandardCharsets.UTF_8);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/establecimientos/7/fotos");
+        request.addHeader("Idempotency-Key", "clave-foto");
+        request.setContentType("multipart/form-data; boundary=----x");
+        request.setContent(cuerpo);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        SolicitudIdempotente existente = SolicitudIdempotente.builder()
+                .clave("clave-foto")
+                .usuarioEmail("jugador@test.com")
+                .statusRespuesta(201)
+                .contentTypeRespuesta("application/json")
+                .cuerpoRespuesta("{\"fileId\":\"file_idem\"}")
+                .bodyHash(IdempotencyFilter.calcularHash(new byte[0]))
+                .build();
+        when(solicitudIdempotenteRepository.findByClaveAndUsuarioEmail("clave-foto", "jugador@test.com"))
+                .thenReturn(Optional.of(existente));
+
+        idempotencyFilter.doFilter(request, response, filterChain);
+
+        verifyNoInteractions(filterChain);
+        assertEquals(201, response.getStatus());
+        assertEquals("{\"fileId\":\"file_idem\"}", response.getContentAsString());
+        assertEquals(0, request.getInputStream().readAllBytes().length,
+                "El cuerpo multipart quedó sin drenar en el replay: Tomcat cortaría la conexión"
+                        + " en vez de devolver la respuesta cacheada");
     }
 }

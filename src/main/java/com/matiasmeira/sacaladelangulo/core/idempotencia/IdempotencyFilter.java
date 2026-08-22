@@ -13,6 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.server.PathContainer;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 import org.springframework.web.util.pattern.PathPattern;
@@ -22,6 +23,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -122,8 +124,9 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         // Tomcat, así que drenar el stream acá le deja el archivo vacío al controller.
         // El precio es perder la detección de "misma clave con otro payload" (el 422) para
         // multipart: la idempotencia en sí, que es no repetir el efecto, sigue intacta.
-        boolean esMultipart = request.getContentType() != null
-                && request.getContentType().toLowerCase().startsWith("multipart/");
+        // Ojo: en las ramas que responden sin llamar a la cadena hay que drenarlo a mano,
+        // ver descartarCuerpoMultipart.
+        boolean esMultipart = StringUtils.startsWithIgnoreCase(request.getContentType(), "multipart/");
         byte[] cuerpoBytes = esMultipart ? new byte[0] : request.getInputStream().readAllBytes();
         HttpServletRequest requestConCuerpoCacheado = esMultipart
                 ? request
@@ -139,9 +142,11 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         if (existente.isPresent()) {
             if (!hashCuerpo.equals(existente.get().getBodyHash())) {
                 log.warn("Idempotency-Key reutilizada con un payload distinto. Clave: {}", clave);
+                descartarCuerpoMultipart(request, esMultipart);
                 responderClaveReutilizadaConOtroPayload(response);
                 return;
             }
+            descartarCuerpoMultipart(request, esMultipart);
             atenderSolicitudExistente(existente.get(), response);
             return;
         }
@@ -158,6 +163,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             solicitudIdempotenteRepository.saveAndFlush(solicitud);
         } catch (DataIntegrityViolationException ex) {
             log.debug("Carrera de idempotencia perdida para la clave: {}", clave);
+            descartarCuerpoMultipart(request, esMultipart);
             responderConflicto(response);
             return;
         }
@@ -181,6 +187,28 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         }
         PathContainer path = PathContainer.parsePath(uri);
         return PATRONES_COMPILADOS.stream().anyMatch(patron -> patron.matches(path));
+    }
+
+    /**
+     * Descarta el cuerpo de una request multipart que se responde SIN pasar por la cadena
+     * (replay cacheado, 409 de carrera perdida o de solicitud en curso, 422 de payload
+     * distinto). Drenar es seguro exactamente ahí porque la cadena nunca se llama: no hay
+     * controller aguas abajo que necesite las partes. En la rama que sí llama a la cadena
+     * NO se puede hacer: Tomcat parsea las partes desde este mismo stream después de los
+     * filtros, y el archivo le llegaría vacío al controller.
+     * <p>
+     * Sin esto, Tomcat se traga como mucho maxSwallowSize (2 MB por defecto) del cuerpo que
+     * quedó sin leer y después corta la conexión de golpe. Una foto de más de 2 MB (el
+     * máximo son 5 MB, ver ValidadorFoto.TAMANIO_MAXIMO_BYTES) reintentada con la misma
+     * clave — el caso exacto para el que existe Idempotency-Key — recibiría un connection
+     * reset en vez de la respuesta cacheada. La idempotencia no se rompe; el reintento sí.
+     */
+    private void descartarCuerpoMultipart(HttpServletRequest request, boolean esMultipart) throws IOException {
+        if (!esMultipart) {
+            // El camino no-multipart ya leyó el cuerpo entero más arriba para hashearlo.
+            return;
+        }
+        request.getInputStream().transferTo(OutputStream.nullOutputStream());
     }
 
     private String obtenerUsuarioAutenticado() {

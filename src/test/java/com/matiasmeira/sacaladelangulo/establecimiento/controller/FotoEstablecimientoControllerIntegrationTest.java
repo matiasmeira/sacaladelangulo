@@ -169,10 +169,15 @@ class FotoEstablecimientoControllerIntegrationTest {
     }
 
     /**
-     * Mide que la subida siga funcionando cuando el cliente manda Idempotency-Key: el
-     * filtro de idempotencia corre dentro de la cadena de Spring Security, antes de que
-     * el DispatcherServlet resuelva el multipart, así que si tocara el input stream el
-     * controller recibiría el archivo vacío.
+     * Mide una sola cosa: que mandar Idempotency-Key no deje la ruta inalcanzable ni cambie
+     * el 201 de la subida. Nada más que eso.
+     * <p>
+     * NO demuestra que el filtro deje intacto el archivo: MockMvc registra las partes con
+     * addFile(), en el mapa de MockMultipartHttpServletRequest, y nunca serializa un cuerpo
+     * multipart, así que acá el input stream ya viene vacío y este test da verde tanto si el
+     * filtro respeta el cuerpo como si lo vacía. Esa garantía la cubre
+     * IdempotencyFilterTest.doFilter_MultipartEnRutaProtegida_NoConsumeElCuerpoYPasaElRequestOriginal,
+     * que maneja el filtro directo; no borrar ese test creyendo que este lo reemplaza.
      */
     @Test
     @DisplayName("POST_conIdempotencyKey_elArchivoLlegaCompleto")

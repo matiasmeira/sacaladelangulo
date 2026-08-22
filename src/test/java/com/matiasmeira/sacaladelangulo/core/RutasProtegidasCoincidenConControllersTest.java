@@ -47,6 +47,12 @@ class RutasProtegidasCoincidenConControllersTest {
     }
 
     @Test
+    @DisplayName("patronesDeIdempotencyFilter_MapeanAUnPostMappingReal")
+    void patronesDeIdempotencyFilter_MapeanAUnPostMappingReal() {
+        IdempotencyFilter.PATRONES_PROTEGIDOS.forEach(this::assertRutaTienePostMapping);
+    }
+
+    @Test
     @DisplayName("rutasDeRateLimitFilter_MapeanAUnPostMappingReal")
     void rutasDeRateLimitFilter_MapeanAUnPostMappingReal() {
         RateLimitFilter.LIMITES_POR_RUTA.keySet().forEach(this::assertRutaTienePostMapping);

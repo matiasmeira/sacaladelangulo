@@ -10,10 +10,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.server.PathContainer;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingResponseWrapper;
+import org.springframework.web.util.pattern.PathPattern;
+import org.springframework.web.util.pattern.PathPatternParser;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -24,6 +27,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -54,6 +58,24 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             "/api/v1/reservas/semanal",
             "/api/v1/buffet/ventas"
     );
+    /**
+     * Rutas protegidas que llevan un id adentro, y por eso NO se pueden matchear por
+     * igualdad de string como RUTAS_PROTEGIDAS. Se guardan como patrón y se matchean con
+     * PathPattern. Separado y no fusionado con el set de arriba a propósito: el matcheo
+     * exacto de las 4 rutas de reserva/venta es más barato y ya está probado, y no se
+     * cambia su comportamiento por agregar esto.
+     * <p>
+     * Público por el mismo motivo que RUTAS_PROTEGIDAS: lo verifica
+     * RutasProtegidasCoincidenConControllersTest.
+     */
+    public static final Set<String> PATRONES_PROTEGIDOS = Set.of(
+            "/api/v1/establecimientos/{id}/fotos"
+    );
+
+    private static final PathPatternParser PARSER = new PathPatternParser();
+    private static final List<PathPattern> PATRONES_COMPILADOS = PATRONES_PROTEGIDOS.stream()
+            .map(PARSER::parse)
+            .toList();
     /**
      * Ventana corta para distinguir "en curso" de "abandonada" (el proceso murió entre
      * guardar la solicitud y completarla — ver M21 en la auditoría), independiente de la
@@ -95,8 +117,17 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return;
         }
 
-        byte[] cuerpoBytes = request.getInputStream().readAllBytes();
-        HttpServletRequest requestConCuerpoCacheado = new CachedBodyHttpServletRequest(request, cuerpoBytes);
+        // En multipart NO se toca el input stream. CachedBodyHttpServletRequest sólo
+        // overridea getInputStream()/getReader(); getParts() delega al request original de
+        // Tomcat, así que drenar el stream acá le deja el archivo vacío al controller.
+        // El precio es perder la detección de "misma clave con otro payload" (el 422) para
+        // multipart: la idempotencia en sí, que es no repetir el efecto, sigue intacta.
+        boolean esMultipart = request.getContentType() != null
+                && request.getContentType().toLowerCase().startsWith("multipart/");
+        byte[] cuerpoBytes = esMultipart ? new byte[0] : request.getInputStream().readAllBytes();
+        HttpServletRequest requestConCuerpoCacheado = esMultipart
+                ? request
+                : new CachedBodyHttpServletRequest(request, cuerpoBytes);
         String hashCuerpo = calcularHash(cuerpoBytes);
 
         var existente = solicitudIdempotenteRepository.findByClaveAndUsuarioEmail(clave, usuarioEmail);
@@ -141,7 +172,15 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     }
 
     private boolean aplicaAEstaRuta(HttpServletRequest request) {
-        return "POST".equalsIgnoreCase(request.getMethod()) && RUTAS_PROTEGIDAS.contains(request.getRequestURI());
+        if (!"POST".equalsIgnoreCase(request.getMethod())) {
+            return false;
+        }
+        String uri = request.getRequestURI();
+        if (RUTAS_PROTEGIDAS.contains(uri)) {
+            return true;
+        }
+        PathContainer path = PathContainer.parsePath(uri);
+        return PATRONES_COMPILADOS.stream().anyMatch(patron -> patron.matches(path));
     }
 
     private String obtenerUsuarioAutenticado() {

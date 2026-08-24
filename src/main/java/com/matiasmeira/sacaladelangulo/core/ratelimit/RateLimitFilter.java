@@ -72,7 +72,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             TokenBucket bucket = rateLimiterService.getOrCreateBucket(clave, MAIL_CAPACITY, MAIL_VENTANA_MILLIS);
             if (!bucket.tryConsume()) {
                 log.warn("Mail rate limit excedido para clave={}", clave);
-                throw new RateLimitExceededException("Demasiadas solicitudes de envío de email. Intentá nuevamente más tarde.");
+                responder429(response, "Demasiadas solicitudes de envío de email. Intentá nuevamente más tarde.");
+                return;
             }
             filterChain.doFilter(request, response);
             return;
@@ -88,10 +89,26 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String ip = request.getRemoteAddr();
         String clave = "ip:" + path + ":" + ip;
         if (!rateLimiterService.tryConsume(clave, limite.capacidad(), limite.ventanaMillis())) {
-            throw new RateLimitExceededException("Demasiados intentos desde esta IP. Intente nuevamente en unos minutos.");
+            responder429(response, "Demasiados intentos desde esta IP. Intente nuevamente en unos minutos.");
+            return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Escribe la respuesta de rechazo directamente sobre el response, en vez de lanzar
+     * (ver medición en .superpowers/sdd/ratelimit-429-medicion.md): este filtro corre
+     * dentro de la cadena de Spring Security, ANTES del DispatcherServlet, así que una
+     * excepción acá no pasa por GlobalExceptionHandler (que es un @RestControllerAdvice,
+     * atado al despacho del controller) ni por ExceptionTranslationFilter (que sólo
+     * traduce AuthenticationException/AccessDeniedException). Sale cruda hacia el
+     * contenedor, que la convierte en un 500 genérico en vez del 429 esperado.
+     */
+    private void responder429(HttpServletResponse response, String mensaje) throws IOException {
+        response.setStatus(429);
+        response.setContentType("application/json");
+        response.getWriter().write("{\"error\":\"" + mensaje + "\"}");
     }
 
     private record Limite(int capacidad, long ventanaMillis) {

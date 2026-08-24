@@ -20,6 +20,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("RateLimitFilter - Tests de límite por IP en endpoints de autenticación")
@@ -73,11 +75,8 @@ class RateLimitFilterTest {
 
         when(rateLimiterService.tryConsume(anyString(), anyInt(), anyLong())).thenReturn(false);
 
-        rateLimitFilter.doFilter(request, response, filterChain);
-
+        assertThrows(RateLimitExceededException.class, () -> rateLimitFilter.doFilter(request, response, filterChain));
         verify(filterChain, never()).doFilter(request, response);
-        assertEquals(429, response.getStatus());
-        assertTrue(response.getContentAsString().contains("Demasiados intentos"));
     }
 
     @Test

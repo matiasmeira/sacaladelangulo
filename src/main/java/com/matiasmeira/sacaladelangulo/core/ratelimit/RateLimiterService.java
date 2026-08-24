@@ -38,6 +38,14 @@ public class RateLimiterService {
     }
 
     /**
+     * Obtiene (o crea) un balde con parámetros personalizados. Útil cuando
+     * ciertas rutas necesitan una política más restrictiva (ej. endpoints de mails).
+     */
+    public TokenBucket getOrCreateBucket(String clave, int capacidad, long ventanaMillis) {
+        return baldesPorClave.computeIfAbsent(clave, k -> new TokenBucket(capacidad, ventanaMillis));
+    }
+
+    /**
      * Limpia baldes que no recibieron actividad reciente para no acumular memoria
      * indefinidamente (ej. IPs o usuarios que ya no vuelven a intentar).
      */

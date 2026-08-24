@@ -45,12 +45,12 @@ import java.util.UUID;
 public class RegistroVerificacionService {
 
     /**
-     * Límite de solicitudes de link de verificación por email, para no permitir spamear
-     * la casilla de un tercero. La ventana coincide con la expiración del token: alcanza
-     * con volver a pedirlo una vez vencido.
+     * Límite de solicitudes de link de verificación por email. Ajustado a 1 por minuto
+     * para proteger la cuota del proveedor de envío y evitar DoS por abuso de este
+     * endpoint que envía el código de verificación al email.
      */
-    private static final int INICIAR_INTENTOS_MAXIMOS = 3;
-    private static final long INICIAR_VENTANA_MILLIS = Duration.ofMinutes(15).toMillis();
+    private static final int INICIAR_INTENTOS_MAXIMOS = 1;
+    private static final long INICIAR_VENTANA_MILLIS = Duration.ofMinutes(1).toMillis();
     private static final long TOKEN_EXPIRACION_MINUTOS = 15;
 
     /**

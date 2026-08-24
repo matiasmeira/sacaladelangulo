@@ -5,6 +5,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -27,6 +31,7 @@ import java.util.Map;
  * request efectivamente viene de ese proxy conocido.
  */
 @RequiredArgsConstructor
+@Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
 
     /**
@@ -43,22 +48,47 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimiterService rateLimiterService;
 
+    // Política específica para endpoints de mails (mucho más restrictiva)
+    private static final int MAIL_CAPACITY = 5; // tokens máximos
+    private static final long MAIL_VENTANA_MILLIS = Duration.ofMinutes(1).toMillis(); // ventana de refill
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        Limite limite = LIMITES_POR_RUTA.get(request.getRequestURI());
+        String path = request.getRequestURI();
+
+        // 1) Política especial para endpoints de mails
+        boolean isMailEndpoint = path.startsWith("/api/v1/mails") || path.startsWith("/api/v1/admin/mails");
+        if (isMailEndpoint) {
+            String ip = request.getRemoteAddr();
+            // priorizar identidad autenticada para granularidad por usuario; caer a IP si no hay auth
+            String userId = null;
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof UserDetails) {
+                userId = ((UserDetails) auth.getPrincipal()).getUsername();
+            }
+
+            String clave = (userId != null) ? "mail:user:" + userId : "mail:ip:" + ip;
+            TokenBucket bucket = rateLimiterService.getOrCreateBucket(clave, MAIL_CAPACITY, MAIL_VENTANA_MILLIS);
+            if (!bucket.tryConsume()) {
+                log.warn("Mail rate limit excedido para clave={}", clave);
+                throw new RateLimitExceededException("Demasiadas solicitudes de envío de email. Intentá nuevamente más tarde.");
+            }
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // 2) Comportamiento existente para rutas listadas en LIMITES_POR_RUTA
+        Limite limite = LIMITES_POR_RUTA.get(path);
         if (limite == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
         String ip = request.getRemoteAddr();
-        String clave = "ip:" + request.getRequestURI() + ":" + ip;
+        String clave = "ip:" + path + ":" + ip;
         if (!rateLimiterService.tryConsume(clave, limite.capacidad(), limite.ventanaMillis())) {
-            response.setStatus(429);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\":\"Demasiados intentos desde esta IP. Intente nuevamente en unos minutos.\"}");
-            return;
+            throw new RateLimitExceededException("Demasiados intentos desde esta IP. Intente nuevamente en unos minutos.");
         }
 
         filterChain.doFilter(request, response);

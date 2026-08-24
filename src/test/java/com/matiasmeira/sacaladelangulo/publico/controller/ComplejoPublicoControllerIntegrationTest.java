@@ -13,6 +13,8 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaReposito
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -109,6 +111,147 @@ class ComplejoPublicoControllerIntegrationTest {
         canchaRepository.save(cancha);
 
         return establecimiento;
+    }
+
+    /**
+     * Complejo dedicado a un único deporte, con horario de atención los lunes
+     * cubriendo toda la franja de búsqueda de los tests parametrizados de
+     * abajo -- a diferencia de seedComplejoActivo (fijo en FUTBOL_5), este
+     * recibe el deporte a probar para que el mismo test corra sobre los 29
+     * valores de Deporte, incluidos los agregados después de la versión
+     * original de 6 valores genéricos (ver V17__eliminar_capacidad_cancha).
+     */
+    private Establecimiento seedComplejoConDeporte(Deporte deporte) {
+        Usuario dueno = usuarioRepository.save(Usuario.builder()
+                .email("dueno-" + deporte.name().toLowerCase() + "@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento establecimiento = Establecimiento.builder()
+                .nombre("Complejo " + deporte.name())
+                .direccion("Calle " + deporte.name())
+                .slug("complejo-" + deporte.name().toLowerCase().replace('_', '-'))
+                .latitud(-34.6037)
+                .longitud(-58.3816)
+                .requiereSena(false)
+                .isActive(true)
+                .dueno(dueno)
+                .build();
+        establecimiento.setHorariosAtencion(new ArrayList<>(List.of(HorarioAtencion.builder()
+                .diaSemana(DayOfWeek.MONDAY)
+                .horaApertura(LocalTime.of(9, 0))
+                .horaCierre(LocalTime.of(23, 0))
+                .establecimiento(establecimiento)
+                .build())));
+        establecimiento = establecimientoRepository.save(establecimiento);
+
+        Cancha cancha = Cancha.builder()
+                .nombre("Cancha " + deporte.name())
+                .deportes(Set.of(deporte))
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(5000))
+                .montoSena(BigDecimal.valueOf(1000))
+                .duracionesPermitidas(List.of(60))
+                .establecimiento(establecimiento)
+                .build();
+        canchaRepository.save(cancha);
+
+        return establecimiento;
+    }
+
+    @ParameterizedTest(name = "deporte={0}")
+    @EnumSource(Deporte.class)
+    @DisplayName("GET /publico/complejos?deporte=X trae el complejo para CADA valor del enum Deporte, con fecha/hora (como manda siempre el front público)")
+    void buscarComplejos_PorCadaDeporteDelEnumConFechaYHora_TraeElComplejoConCanchaDeEseDeporte(Deporte deporte) throws Exception {
+        Establecimiento establecimiento = seedComplejoConDeporte(deporte);
+
+        // 2026-08-10 es lunes: coincide con el único HorarioAtencion cargado en seedComplejoConDeporte.
+        mockMvc.perform(get("/api/v1/publico/complejos")
+                        .param("deporte", deporte.name())
+                        .param("fecha", "2026-08-10")
+                        .param("hora", "10:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].slug").value(establecimiento.getSlug()));
+    }
+
+    @Test
+    @DisplayName("GET /publico/complejos?deporte=X con un valor que no es del enum responde 400 explícito, no una lista vacía")
+    void buscarComplejos_DeporteInvalido_Devuelve400EnVezDeListaVacia() throws Exception {
+        mockMvc.perform(get("/api/v1/publico/complejos").param("deporte", "no-es-un-deporte"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Parámetro 'deporte' inválido"));
+    }
+
+    /**
+     * Reproduce el bug reportado: un complejo recién creado desde el panel del
+     * dueño (ModalCrearEstablecimiento manda horariosAtencion: [] a propósito,
+     * "lo cargás después desde Configuración") tiene una cancha activa de PADEL
+     * pero cero filas en horarios_atencion. ComplejoPublicoService.
+     * estaAbiertoEnVentana no encuentra HorarioAtencion para NINGÚN día de la
+     * semana y devuelve false vía .orElse(false): el complejo queda excluido de
+     * toda búsqueda con fecha/hora, aunque sea PADEL y esté activo. Sin
+     * fecha/hora (el front nunca lo hace, pero /buscar lo permite) el filtro de
+     * disponibilidad no corre y el complejo sí aparece -- confirma que la
+     * exclusión es específica de la ventana pedida, no de que el alta haya
+     * salido mal.
+     */
+    @Test
+    @DisplayName("GET /publico/complejos?fecha&hora excluye un complejo activo con cancha de PADEL activa que no tiene NINGÚN horario de atención cargado")
+    void buscarComplejos_ComplejoSinHorariosCargados_QuedaExcluidoSoloEnLaBusquedaConFechaYHora() throws Exception {
+        Usuario dueno = usuarioRepository.save(Usuario.builder()
+                .email("dueno-sin-horarios@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        // Sin setHorariosAtencion: nace con la lista vacía por defecto, igual que
+        // un alta real desde el panel (ver ModalCrearEstablecimiento en el front).
+        Establecimiento establecimiento = Establecimiento.builder()
+                .nombre("Complejo Sin Horarios")
+                .direccion("Calle Sin Horarios 1")
+                .slug("complejo-sin-horarios")
+                .latitud(-34.6037)
+                .longitud(-58.3816)
+                .requiereSena(false)
+                .isActive(true)
+                .dueno(dueno)
+                .build();
+        establecimiento = establecimientoRepository.save(establecimiento);
+
+        Cancha cancha = Cancha.builder()
+                .nombre("Cancha Padel")
+                .deportes(Set.of(Deporte.PADEL))
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(5000))
+                .montoSena(BigDecimal.valueOf(1000))
+                .duracionesPermitidas(List.of(60))
+                .establecimiento(establecimiento)
+                .build();
+        canchaRepository.save(cancha);
+
+        mockMvc.perform(get("/api/v1/publico/complejos")
+                        .param("deporte", "PADEL")
+                        .param("fecha", "2026-08-10")
+                        .param("hora", "10:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        mockMvc.perform(get("/api/v1/publico/complejos").param("deporte", "PADEL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].slug").value("complejo-sin-horarios"));
     }
 
     @Test

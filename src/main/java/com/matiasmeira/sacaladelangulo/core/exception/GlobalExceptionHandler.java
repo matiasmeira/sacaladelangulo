@@ -114,6 +114,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(TelefonoNoVerificadoException.class)
+    public ResponseEntity<Map<String, String>> handleTelefonoNoVerificadoException(TelefonoNoVerificadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
     @ExceptionHandler(ReservaExpiradaException.class)
     public ResponseEntity<Map<String, String>> handleReservaExpiradaException(ReservaExpiradaException ex) {
         return ResponseEntity.status(HttpStatus.GONE)

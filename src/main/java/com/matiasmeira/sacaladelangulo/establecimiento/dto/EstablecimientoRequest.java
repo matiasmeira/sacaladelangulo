@@ -30,6 +30,9 @@ public record EstablecimientoRequest(
         @NotNull(message = "Debe especificar si requiere seña")
         Boolean requiereSena,
 
+        @NotNull(message = "Debe especificar si requiere teléfono verificado")
+        Boolean requiereTelefonoVerificado,
+
         @Valid
         java.util.List<HorarioAtencionDto> horariosAtencion,
 

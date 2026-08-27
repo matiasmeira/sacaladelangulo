@@ -76,6 +76,7 @@ class EstablecimientoServiceTest {
                 -34.6,
                 -58.4,
                 false,
+                false,
                 List.of(
                         new HorarioAtencionDto(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(23, 0)),
                         new HorarioAtencionDto(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(23, 0))
@@ -94,6 +95,81 @@ class EstablecimientoServiceTest {
     }
 
     @Test
+    @DisplayName("crearEstablecimiento_Exito_PersisteRequiereTelefonoVerificado")
+    void crearEstablecimiento_Exito_PersisteRequiereTelefonoVerificado() {
+        Usuario dueno = Usuario.builder()
+                .id(1L)
+                .email("dueno@test.com")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .build();
+
+        EstablecimientoRequest request = new EstablecimientoRequest(
+                "Complejo Test",
+                "Calle Falsa 123",
+                -34.6,
+                -58.4,
+                false,
+                true,
+                List.of(),
+                null
+        );
+
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(0L);
+        when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        EstablecimientoResponse response = assertDoesNotThrow(
+                () -> establecimientoService.crearEstablecimiento(request, dueno.getEmail()));
+
+        assertEquals(true, response.requiereTelefonoVerificado());
+    }
+
+    @Test
+    @DisplayName("actualizarEstablecimiento_Exito_ActualizaRequiereTelefonoVerificado")
+    void actualizarEstablecimiento_Exito_ActualizaRequiereTelefonoVerificado() {
+        Usuario dueno = Usuario.builder()
+                .id(1L)
+                .email("dueno@test.com")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .build();
+
+        Establecimiento existente = Establecimiento.builder()
+                .id(11L)
+                .nombre("Nombre")
+                .direccion("Direccion")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .requiereTelefonoVerificado(false)
+                .isActive(true)
+                .dueno(dueno)
+                .horariosAtencion(new ArrayList<>())
+                .build();
+
+        EstablecimientoRequest request = new EstablecimientoRequest(
+                "Nombre",
+                "Direccion",
+                -34.6,
+                -58.4,
+                false,
+                true,
+                List.of(),
+                null
+        );
+
+        when(establecimientoRepository.findById(11L)).thenReturn(Optional.of(existente));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(existente, dueno.getEmail())).thenReturn(dueno);
+        when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        EstablecimientoResponse response = assertDoesNotThrow(
+                () -> establecimientoService.actualizarEstablecimiento(11L, request, dueno.getEmail()));
+
+        assertEquals(true, response.requiereTelefonoVerificado());
+    }
+
+    @Test
     @DisplayName("crearEstablecimiento_Exito_ConDosEstablecimientosActivosPreexistentes")
     void crearEstablecimiento_Exito_ConDosEstablecimientosActivosPreexistentes() {
         Usuario dueno = Usuario.builder()
@@ -108,6 +184,7 @@ class EstablecimientoServiceTest {
                 "Calle Falsa 123",
                 -34.6,
                 -58.4,
+                false,
                 false,
                 List.of(),
                 null
@@ -136,6 +213,7 @@ class EstablecimientoServiceTest {
                 "Calle Falsa 123",
                 -34.6,
                 -58.4,
+                false,
                 false,
                 List.of(),
                 null
@@ -166,6 +244,7 @@ class EstablecimientoServiceTest {
                 "Calle Falsa 123",
                 -34.6,
                 -58.4,
+                false,
                 false,
                 List.of(
                         new HorarioAtencionDto(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(13, 0)),
@@ -199,6 +278,7 @@ class EstablecimientoServiceTest {
                 "Calle Falsa 123",
                 -34.6,
                 -58.4,
+                false,
                 false,
                 List.of(new HorarioAtencionDto(DayOfWeek.WEDNESDAY, LocalTime.of(9, 0), LocalTime.of(9, 0))),
                 null
@@ -248,6 +328,7 @@ class EstablecimientoServiceTest {
                 -34.6,
                 -58.4,
                 true,
+                false,
                 List.of(new HorarioAtencionDto(DayOfWeek.FRIDAY, LocalTime.of(10, 0), LocalTime.of(22, 0))),
                 null
         );

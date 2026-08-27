@@ -76,6 +76,7 @@ class EstablecimientoControllerServiciosIntegrationTest {
                 -34.6,
                 -58.4,
                 false,
+                false,
                 null,
                 Set.of(Servicio.PARRILLA, Servicio.WIFI)
         );
@@ -105,7 +106,8 @@ class EstablecimientoControllerServiciosIntegrationTest {
                   "direccion": "Calle Falsa 123",
                   "latitud": -34.6,
                   "longitud": -58.4,
-                  "requiereSena": false
+                  "requiereSena": false,
+                  "requiereTelefonoVerificado": false
                 }
                 """;
 
@@ -129,6 +131,7 @@ class EstablecimientoControllerServiciosIntegrationTest {
                 "Calle Falsa 123",
                 -34.6,
                 -58.4,
+                false,
                 false,
                 null,
                 Set.of()

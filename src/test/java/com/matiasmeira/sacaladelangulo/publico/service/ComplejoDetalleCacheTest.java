@@ -330,6 +330,63 @@ class ComplejoDetalleCacheTest {
                 .satisfies(destacado -> assertThat(destacado.comentario()).isEqualTo("Buena atencion"));
     }
 
+    @Test
+    @DisplayName("editarUnaCalificacion_InvalidaLaFicha_YElPromedioNuevoApareceEnLaProximaLectura")
+    void editarUnaCalificacion_InvalidaLaFicha_YElPromedioNuevoApareceEnLaProximaLectura() {
+        String slug = "cache-feedback-editar";
+        String emailDueno = "dueno-feedback-editar@cache-test.com";
+        String emailJugador = "jugador-feedback-editar@cache-test.com";
+        Establecimiento establecimiento = seedComplejo(slug, "Complejo Feedback", emailDueno);
+        Reserva reserva = seedReservaFinalizada(establecimiento, emailDueno, emailJugador);
+        Long feedbackId = feedbackService
+                .crearFeedback(reserva.getId(), new FeedbackRequest(5, "Muy buena"), emailJugador).id();
+
+        assertThat(complejoPublicoService.obtenerDetalle(slug).promedioCalificacion()).isEqualTo(5.0);
+
+        feedbackService.editarFeedback(feedbackId, new FeedbackRequest(1, "Me arrepenti"), emailJugador);
+
+        assertThat(complejoPublicoService.obtenerDetalle(slug).promedioCalificacion()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("eliminarUnaCalificacion_InvalidaLaFicha_YLaFichaVuelveASinCalificaciones")
+    void eliminarUnaCalificacion_InvalidaLaFicha_YLaFichaVuelveASinCalificaciones() {
+        String slug = "cache-feedback-eliminar";
+        String emailDueno = "dueno-feedback-eliminar@cache-test.com";
+        String emailJugador = "jugador-feedback-eliminar@cache-test.com";
+        Establecimiento establecimiento = seedComplejo(slug, "Complejo Feedback", emailDueno);
+        Reserva reserva = seedReservaFinalizada(establecimiento, emailDueno, emailJugador);
+        Long feedbackId = feedbackService
+                .crearFeedback(reserva.getId(), new FeedbackRequest(5, "Muy buena"), emailJugador).id();
+
+        assertThat(complejoPublicoService.obtenerDetalle(slug).cantidadCalificaciones()).isEqualTo(1L);
+
+        feedbackService.eliminarFeedback(feedbackId, emailJugador);
+
+        ComplejoDetalleResponse despues = complejoPublicoService.obtenerDetalle(slug);
+        assertThat(despues.cantidadCalificaciones()).isZero();
+        assertThat(despues.promedioCalificacion()).isNull();
+    }
+
+    @Test
+    @DisplayName("quitarElComentarioDestacado_InvalidaLaFicha_YDesapareceDeLaProximaLectura")
+    void quitarElComentarioDestacado_InvalidaLaFicha_YDesapareceDeLaProximaLectura() {
+        String slug = "cache-feedback-desdestacar";
+        String emailDueno = "dueno-feedback-desdestacar@cache-test.com";
+        String emailJugador = "jugador-feedback-desdestacar@cache-test.com";
+        Establecimiento establecimiento = seedComplejo(slug, "Complejo Feedback", emailDueno);
+        Reserva reserva = seedReservaFinalizada(establecimiento, emailDueno, emailJugador);
+        Long feedbackId = feedbackService
+                .crearFeedback(reserva.getId(), new FeedbackRequest(4, "Buena atencion"), emailJugador).id();
+        feedbackService.fijarComentario(feedbackId, emailDueno);
+
+        assertThat(complejoPublicoService.obtenerDetalle(slug).comentarioDestacado()).isNotNull();
+
+        feedbackService.quitarComentarioDestacado(feedbackId, emailDueno);
+
+        assertThat(complejoPublicoService.obtenerDetalle(slug).comentarioDestacado()).isNull();
+    }
+
     private Reserva seedReservaFinalizada(Establecimiento establecimiento, String emailDueno, String emailJugador) {
         Long canchaId = canchaService
                 .crearCancha(establecimiento.getId(), canchaRequest("Cancha Feedback", "10000"), emailDueno).id();

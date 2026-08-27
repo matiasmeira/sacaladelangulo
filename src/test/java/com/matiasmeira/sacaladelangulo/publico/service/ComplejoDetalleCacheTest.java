@@ -360,15 +360,10 @@ class ComplejoDetalleCacheTest {
     }
 
     /**
-     * Las colecciones van mutables a propósito, porque CanchaService#actualizarCancha se las
-     * asigna tal cual a la entidad y en el merge Hibernate hace clear()+addAll() sobre esa
-     * misma instancia: cualquier colección inmutable ahí adentro hace que el update explote
-     * con UnsupportedOperationException.
-     *
-     * <p>Por eso también se pasan duraciones explícitas en vez de dejar el campo en null: con
-     * null, actualizarCancha cae en su constante DURACIONES_POR_DEFECTO (un List.of(...)
-     * estático) y rompe. Ese bug es previo a la caché y se arregla aparte; acá sólo se lo
-     * esquiva para que estos tests midan invalidación y no otra cosa.
+     * El set de deportes va mutable a propósito: CanchaService#actualizarCancha se lo asigna
+     * tal cual a la entidad y en el merge Hibernate hace clear()+addAll() sobre esa misma
+     * instancia, así que un Set.of(...) inmutable haría explotar el update. Por la API real
+     * nunca llega inmutable (Jackson deserializa en un LinkedHashSet).
      */
     private CanchaRequest canchaRequest(String nombre, String precioBase) {
         return new CanchaRequest(nombre, new HashSet<>(Set.of(Deporte.FUTBOL_5)), new BigDecimal(precioBase),

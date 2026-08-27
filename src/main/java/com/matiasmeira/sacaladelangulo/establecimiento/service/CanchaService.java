@@ -52,9 +52,7 @@ public class CanchaService {
 
         BigDecimal montoSena = validarMontoSena(request.montoSena(), usuarioAutenticado.getPlanSuscripcion());
         Integer canchasNecesarias = calcularCanchasNecesarias(request.canchasFisicasIds(), request.cantidadCanchasNecesarias());
-        List<Integer> duracionesPermitidas = request.duracionesPermitidas() == null || request.duracionesPermitidas().isEmpty()
-                ? DURACIONES_POR_DEFECTO
-                : request.duracionesPermitidas();
+        List<Integer> duracionesPermitidas = resolverDuraciones(request.duracionesPermitidas());
 
         validarPreciosPorDuracion(request.preciosPorDuracion(), request.tarifas(), duracionesPermitidas);
 
@@ -115,9 +113,7 @@ public class CanchaService {
         }
 
         BigDecimal montoSena = validarMontoSena(request.montoSena(), usuarioAutenticado.getPlanSuscripcion());
-        List<Integer> duracionesPermitidas = request.duracionesPermitidas() == null || request.duracionesPermitidas().isEmpty()
-                ? DURACIONES_POR_DEFECTO
-                : request.duracionesPermitidas();
+        List<Integer> duracionesPermitidas = resolverDuraciones(request.duracionesPermitidas());
 
         validarPreciosPorDuracion(request.preciosPorDuracion(), request.tarifas(), duracionesPermitidas);
 
@@ -173,6 +169,21 @@ public class CanchaService {
      * Los planes limitados (TRIAL/FREE) exigen una seña mínima obligatoria; el resto de
      * los planes permite no cobrar seña (nunca un monto negativo).
      */
+    /**
+     * Devuelve siempre una lista nueva y mutable, nunca DURACIONES_POR_DEFECTO ni la lista
+     * del request. Cancha.duracionesPermitidas es una {@code @ElementCollection}: durante el
+     * merge, Hibernate hace clear()+addAll() sobre la instancia que se le haya asignado a la
+     * entidad. Devolver la constante directamente rompía actualizarCancha con
+     * UnsupportedOperationException cada vez que el request no traía duraciones (el campo es
+     * opcional en CanchaRequest), y aunque la constante fuese mutable el efecto sería peor:
+     * Hibernate pasaría a pisar una lista estática compartida por todas las canchas.
+     */
+    private static List<Integer> resolverDuraciones(List<Integer> pedidas) {
+        return (pedidas == null || pedidas.isEmpty())
+                ? new ArrayList<>(DURACIONES_POR_DEFECTO)
+                : new ArrayList<>(pedidas);
+    }
+
     private BigDecimal validarMontoSena(BigDecimal montoSena, PlanSuscripcion plan) {
         boolean planLimitado = plan == PlanSuscripcion.TRIAL || plan == PlanSuscripcion.FREE;
         if (planLimitado) {

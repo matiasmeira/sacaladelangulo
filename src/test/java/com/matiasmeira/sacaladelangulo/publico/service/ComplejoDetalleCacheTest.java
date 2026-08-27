@@ -35,7 +35,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -416,15 +415,9 @@ class ComplejoDetalleCacheTest {
                 .build());
     }
 
-    /**
-     * El set de deportes va mutable a propósito: CanchaService#actualizarCancha se lo asigna
-     * tal cual a la entidad y en el merge Hibernate hace clear()+addAll() sobre esa misma
-     * instancia, así que un Set.of(...) inmutable haría explotar el update. Por la API real
-     * nunca llega inmutable (Jackson deserializa en un LinkedHashSet).
-     */
     private CanchaRequest canchaRequest(String nombre, String precioBase) {
-        return new CanchaRequest(nombre, new HashSet<>(Set.of(Deporte.FUTBOL_5)), new BigDecimal(precioBase),
-                null, new ArrayList<>(List.of(60, 90)), null, true, null, null, null);
+        return new CanchaRequest(nombre, Set.of(Deporte.FUTBOL_5), new BigDecimal(precioBase),
+                null, List.of(60, 90), null, true, null, null, null);
     }
 
     private Establecimiento seedComplejoConFotos(String slug, String email) {

@@ -25,17 +25,16 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * duracionesPermitidas es opcional en CanchaRequest (no tiene @NotNull), así que
- * PUT /api/v1/establecimientos/{id}/canchas/{canchaId} puede llegar sin ese campo y
- * actualizarCancha cae en su constante DURACIONES_POR_DEFECTO.
+ * actualizarCancha le asigna a la entidad varias colecciones que salen del request o de
+ * constantes del servicio. Cancha.duracionesPermitidas y Cancha.deportes son
+ * {@code @ElementCollection}: durante el merge, Hibernate hace clear()+addAll() sobre la
+ * instancia exacta que se le haya asignado. Cualquier colección inmutable que llegue ahí
+ * termina en UnsupportedOperationException, y cualquier colección compartida (una constante
+ * estática, o la lista que sigue en manos del caller) queda expuesta a que Hibernate la pise.
  *
- * <p>Esa constante se le asigna a la entidad, y Cancha.duracionesPermitidas es una
- * {@code @ElementCollection}: durante el merge Hibernate hace clear()+addAll() sobre la
- * instancia que le pasaron. Con un List.of(...) inmutable eso terminaba en
- * UnsupportedOperationException (un 500 en un caso de uso corriente); con una lista mutable
- * pero estática, Hibernate estaría mutando una constante compartida por todas las canchas
- * del proceso. Por eso el segundo test: no alcanza con que la lista sea mutable, tiene que
- * ser una copia por cancha.
+ * <p>Los dos síntomas se cubren acá porque son el mismo defecto: asignar una colección ajena
+ * en vez de una copia propia. Las demás colecciones que toca el método ya venían protegidas
+ * (resolverCanchasFisicas, mapearTarifas y normalizarPrecios devuelven instancias nuevas).
  *
  * <p>Necesita el contexto real de JPA y NO puede ser {@code @Transactional}: el fallo ocurre
  * en el merge de Hibernate, que un CanchaRepository mockeado (como en CanchaServiceTest)
@@ -43,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb-cancha-duraciones;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.url=jdbc:h2:mem:testdb-cancha-colecciones;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
@@ -53,8 +52,8 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.config.import=",
         "spring.flyway.enabled=false"
 })
-@DisplayName("CanchaService.actualizarCancha - request sin duracionesPermitidas")
-class CanchaServiceActualizarSinDuracionesTest {
+@DisplayName("CanchaService.actualizarCancha - colecciones que Hibernate muta en el merge")
+class CanchaServiceActualizarColeccionesTest {
 
     private static final List<Integer> DURACIONES_POR_DEFECTO_ESPERADAS = List.of(60, 90, 120);
 
@@ -102,6 +101,27 @@ class CanchaServiceActualizarSinDuracionesTest {
     }
 
     /**
+     * Set.of(...) es lo que produce cualquier caller que no sea Jackson (otro servicio, un
+     * job, un test): el servicio no puede depender de que la deserialización le entregue
+     * siempre una colección mutable.
+     */
+    @Test
+    @DisplayName("conDeportesInmutablesEnElRequest_ActualizaSinRomperEnElMerge")
+    void conDeportesInmutablesEnElRequest_ActualizaSinRomperEnElMerge() {
+        String email = "dueno-deportes@cancha-test.com";
+        Establecimiento establecimiento = seedComplejo("complejo-deportes", email);
+        Long canchaId = canchaService
+                .crearCancha(establecimiento.getId(), request("Cancha 1", List.of(60)), email).id();
+
+        CanchaResponse actualizada = canchaService.actualizarCancha(establecimiento.getId(), canchaId,
+                new CanchaRequest("Cancha 1", Set.of(Deporte.PADEL), new BigDecimal("10000"),
+                        null, new ArrayList<>(List.of(60)), null, true, null, null, null),
+                email);
+
+        assertThat(actualizada.deportes()).containsExactly(Deporte.PADEL);
+    }
+
+    /**
      * Se relee por el servicio y no por CanchaRepository: duracionesPermitidas es una
      * colección LAZY y este test no es transaccional, así que tocar la entidad directamente
      * desde acá tira LazyInitializationException. obtenerCanchasPorEstablecimiento la mapea
@@ -122,7 +142,7 @@ class CanchaServiceActualizarSinDuracionesTest {
         Usuario dueno = usuarioRepository.save(Usuario.builder()
                 .email(email)
                 .password("hash")
-                .nombre("Dueno Duraciones Test")
+                .nombre("Dueno Colecciones Test")
                 .rol(Role.OWNER)
                 .isActive(true)
                 .emailVerified(true)
@@ -130,7 +150,7 @@ class CanchaServiceActualizarSinDuracionesTest {
                 .build());
 
         return establecimientoRepository.save(Establecimiento.builder()
-                .nombre("Complejo Duraciones")
+                .nombre("Complejo Colecciones")
                 .direccion("Calle Falsa 123")
                 .slug(slug)
                 .latitud(-34.6)

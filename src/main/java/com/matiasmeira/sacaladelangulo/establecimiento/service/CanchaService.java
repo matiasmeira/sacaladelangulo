@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.TarifaDto;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,7 +60,7 @@ public class CanchaService {
 
         Cancha cancha = Cancha.builder()
                 .nombre(request.nombre())
-                .deportes(request.deportes())
+                .deportes(copiaDeportes(request.deportes()))
                 .precioBase(request.precioBase())
                 .montoSena(montoSena)
                 .duracionesPermitidas(duracionesPermitidas)
@@ -118,7 +120,7 @@ public class CanchaService {
         validarPreciosPorDuracion(request.preciosPorDuracion(), request.tarifas(), duracionesPermitidas);
 
         cancha.setNombre(request.nombre());
-        cancha.setDeportes(request.deportes());
+        cancha.setDeportes(copiaDeportes(request.deportes()));
         cancha.setPrecioBase(request.precioBase());
         cancha.setMontoSena(montoSena);
         cancha.setDuracionesPermitidas(duracionesPermitidas);
@@ -182,6 +184,17 @@ public class CanchaService {
         return (pedidas == null || pedidas.isEmpty())
                 ? new ArrayList<>(DURACIONES_POR_DEFECTO)
                 : new ArrayList<>(pedidas);
+    }
+
+    /**
+     * Mismo motivo que resolverDuraciones: Cancha.deportes también es
+     * {@code @ElementCollection}, así que la entidad tiene que quedarse con una copia propia
+     * y no con la colección del caller. No contempla null a propósito — deportes es
+     * {@code @NotEmpty} en CanchaRequest, y devolver un set vacío ante un null taparía esa
+     * violación en vez de dejarla fallar.
+     */
+    private static Set<Deporte> copiaDeportes(Set<Deporte> deportes) {
+        return new HashSet<>(deportes);
     }
 
     private BigDecimal validarMontoSena(BigDecimal montoSena, PlanSuscripcion plan) {

@@ -25,6 +25,7 @@ import com.matiasmeira.sacaladelangulo.publico.dto.ComplejoCardResponse;
 import com.matiasmeira.sacaladelangulo.publico.dto.ComplejoDetalleResponse;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -267,6 +268,7 @@ public class ComplejoPublicoService {
      * está inactivo (findBySlugAndIsActiveTrue ya filtra eso, así que ambos casos llegan
      * acá como Optional vacío).
      */
+    @Cacheable(cacheNames = ComplejoDetalleCache.CACHE_FICHA, key = "#slug")
     public ComplejoDetalleResponse obtenerDetalle(String slug) {
         Establecimiento establecimiento = establecimientoRepository.findBySlugAndIsActiveTrue(slug)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
@@ -274,7 +276,13 @@ public class ComplejoPublicoService {
         List<Cancha> canchas = canchaRepository
                 .findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(establecimiento.getId()));
 
-        Set<Deporte> deportes = canchas.stream().flatMap(c -> c.getDeportes().stream()).collect(Collectors.toSet());
+        // Set.copyOf y no Collectors.toSet(): esta respuesta se cachea y la MISMA instancia se
+        // le devuelve a todos los visitantes mientras viva la entrada, así que un HashSet
+        // mutable acá permitiría que un consumidor corrompa la ficha para todos los demás.
+        // El resto de las colecciones de este DTO ya se arman inmutables.
+        Set<Deporte> deportes = canchas.stream()
+                .flatMap(c -> c.getDeportes().stream())
+                .collect(Collectors.collectingAndThen(Collectors.toSet(), Set::copyOf));
         BigDecimal precioDesde = canchas.stream()
                 .map(this::precioMinimoDeCancha)
                 .min(Comparator.naturalOrder())

@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.FotoEstablecimientoRe
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -67,6 +68,7 @@ public class FotoEstablecimientoService {
     private final ImageKitService imageKitService;
     private final ValidadorFoto validadorFoto;
     private final RegistroAuditoriaService registroAuditoriaService;
+    private final ComplejoDetalleCache complejoDetalleCache;
 
     private final TransactionTemplate transactionTemplateLectura;
     private final TransactionTemplate transactionTemplateEscritura;
@@ -76,12 +78,14 @@ public class FotoEstablecimientoService {
                                        ImageKitService imageKitService,
                                        ValidadorFoto validadorFoto,
                                        RegistroAuditoriaService registroAuditoriaService,
+                                       ComplejoDetalleCache complejoDetalleCache,
                                        PlatformTransactionManager transactionManager) {
         this.establecimientoRepository = establecimientoRepository;
         this.autorizacionEmpleadoService = autorizacionEmpleadoService;
         this.imageKitService = imageKitService;
         this.validadorFoto = validadorFoto;
         this.registroAuditoriaService = registroAuditoriaService;
+        this.complejoDetalleCache = complejoDetalleCache;
         TransactionTemplate lectura = new TransactionTemplate(transactionManager);
         lectura.setReadOnly(true);
         this.transactionTemplateLectura = lectura;
@@ -140,6 +144,10 @@ public class FotoEstablecimientoService {
             auditar(autorizacion.actor(), establecimiento, AccionAuditoria.SUBIR_FOTO_ESTABLECIMIENTO,
                     "fileId=" + subida.fileId());
 
+            // Dentro de la fase 3 a propósito: la invalidación se engancha al commit de ESTA
+            // transacción, así que si el bloque falla y hace rollback no se desaloja nada.
+            complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
+
             return new FotoEstablecimientoResponse(subida.url(), subida.fileId());
         });
     }
@@ -177,6 +185,7 @@ public class FotoEstablecimientoService {
             establecimientoRepository.save(establecimiento);
 
             auditar(autorizacion.actor(), establecimiento, AccionAuditoria.ELIMINAR_FOTO_ESTABLECIMIENTO, "fileId=" + fileId);
+            complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
             return null;
         });
     }
@@ -226,6 +235,9 @@ public class FotoEstablecimientoService {
 
         auditar(actor, establecimiento, AccionAuditoria.REORDENAR_FOTOS_ESTABLECIMIENTO,
                 "principal=" + fileIds.get(0) + ", total=" + fileIds.size());
+
+        // El orden importa: la ficha pública usa fotos.get(0) como foto principal.
+        complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
 
         return mapear(actuales);
     }

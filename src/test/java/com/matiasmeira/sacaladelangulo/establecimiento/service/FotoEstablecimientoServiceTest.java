@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.FotoEstablecimientoRe
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,8 @@ class FotoEstablecimientoServiceTest {
     @Mock
     private RegistroAuditoriaService registroAuditoriaService;
     @Mock
+    private ComplejoDetalleCache complejoDetalleCache;
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     private FotoEstablecimientoService servicio;
@@ -77,6 +80,7 @@ class FotoEstablecimientoServiceTest {
                 imageKitService,
                 new ValidadorFoto(),
                 registroAuditoriaService,
+                complejoDetalleCache,
                 transactionManager);
 
         dueno = Usuario.builder().id(1L).email(EMAIL_DUENO).rol(Role.OWNER).build();

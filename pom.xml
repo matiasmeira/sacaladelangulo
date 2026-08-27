@@ -44,6 +44,23 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
+		<!-- Sentry: captura de excepciones no controladas y de los log.error/log.warn (ver
+		     sentry.logging.* en application.properties) hacia Sentry.io. sentry-spring-boot-starter-jakarta
+		     es la variante para Spring Boot 3 (namespace jakarta.*); sentry-spring-boot-starter a secas es
+		     para Spring Boot 2 (javax.*) y no aplica acá. -->
+		<dependency>
+			<groupId>io.sentry</groupId>
+			<artifactId>sentry-spring-boot-starter-jakarta</artifactId>
+			<version>8.54.0</version>
+		</dependency>
+		<!-- Con esto en el classpath, el starter de arriba auto-configura un SentryAppender sobre el
+		     logger root (ver sentry.logging.* en application.properties) sin tocar la config de Logback. -->
+		<dependency>
+			<groupId>io.sentry</groupId>
+			<artifactId>sentry-logback</artifactId>
+			<version>8.54.0</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>

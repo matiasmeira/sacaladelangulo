@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @ConditionalOnProperty(prefix = "resend", name = "enabled", havingValue = "false", matchIfMissing = true)
-public class LogEmailService implements EmailService {
+public class LogEmailService implements EmailTransport {
 
     @Override
     public void enviar(String destinatario, String asunto, String htmlBody) {

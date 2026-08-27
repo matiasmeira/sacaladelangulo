@@ -2,6 +2,10 @@
 
 Backend de una plataforma de reserva de canchas deportivas: marketplace de establecimientos y canchas, reservas, disponibilidad, buffet, caja/cierre de caja, gastos, empleados y reportes.
 
+## Idioma
+
+Responder siempre en español, sin importar el idioma en que esté escrito el prompt del usuario.
+
 ## Stack
 
 - **Java 21** + **Spring Boot 3.5.14**, Maven (usar el wrapper: `./mvnw`)

@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.feedback.dto.FeedbackRequest;
 import com.matiasmeira.sacaladelangulo.feedback.dto.FeedbackResponse;
 import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
+import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -39,6 +40,7 @@ public class FeedbackService {
     private final EstablecimientoRepository establecimientoRepository;
     private final FeedbackMapper feedbackMapper;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final ComplejoDetalleCache complejoDetalleCache;
 
     /**
      * Crea la calificación de una reserva. Solo puede calificarla el jugador que la
@@ -84,6 +86,10 @@ public class FeedbackService {
         }
         log.info("Feedback creado con éxito. ID: {}, Reserva: {}", feedbackGuardado.getId(), reservaId);
 
+        // La ficha pública publica promedio, cantidad de calificaciones y comentario
+        // destacado, así que cualquier alta/baja/edición de feedback la desactualiza.
+        invalidarFichaDe(reserva);
+
         return feedbackMapper.mapToResponse(feedbackGuardado);
     }
 
@@ -110,6 +116,8 @@ public class FeedbackService {
         Feedback feedbackActualizado = feedbackRepository.save(feedback);
         log.info("Feedback editado con éxito. ID: {}", feedbackId);
 
+        invalidarFichaDe(feedback.getReserva());
+
         return feedbackMapper.mapToResponse(feedbackActualizado);
     }
 
@@ -130,6 +138,8 @@ public class FeedbackService {
 
         feedbackRepository.delete(feedback);
         log.info("Feedback eliminado con éxito. ID: {}", feedbackId);
+
+        invalidarFichaDe(feedback.getReserva());
     }
 
     /**
@@ -167,6 +177,8 @@ public class FeedbackService {
         Feedback feedbackActualizado = feedbackRepository.save(feedback);
         log.info("Comentario fijado con éxito. Feedback: {}, Establecimiento: {}", feedbackId, establecimiento.getId());
 
+        complejoDetalleCache.invalidarPorEstablecimientoId(establecimiento.getId());
+
         return feedbackMapper.mapToResponse(feedbackActualizado);
     }
 
@@ -184,7 +196,20 @@ public class FeedbackService {
         Feedback feedbackActualizado = feedbackRepository.save(feedback);
         log.info("Comentario destacado removido con éxito. Feedback: {}", feedbackId);
 
+        complejoDetalleCache.invalidarPorEstablecimientoId(establecimiento.getId());
+
         return feedbackMapper.mapToResponse(feedbackActualizado);
+    }
+
+    /**
+     * El establecimiento de un feedback se alcanza por reserva -> cancha -> establecimiento.
+     * Ambas relaciones son LAZY, así que esto sólo es válido con la sesión abierta: se llama
+     * siempre dentro del método transaccional, nunca desde el callback de after-commit (el
+     * slug ya quedó resuelto para entonces).
+     */
+    private void invalidarFichaDe(Reserva reserva) {
+        complejoDetalleCache.invalidarPorEstablecimientoId(
+                reserva.getCancha().getEstablecimiento().getId());
     }
 
     private void validarEsElJugador(Reserva reserva, Usuario usuarioAutenticado) {

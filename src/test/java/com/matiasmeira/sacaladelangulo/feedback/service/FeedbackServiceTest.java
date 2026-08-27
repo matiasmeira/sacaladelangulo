@@ -16,6 +16,7 @@ import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,6 +59,9 @@ class FeedbackServiceTest {
 
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
+
+    @Mock
+    private ComplejoDetalleCache complejoDetalleCache;
 
     @InjectMocks
     private FeedbackService feedbackService;

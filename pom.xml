@@ -61,6 +61,15 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 
+		<!-- Backend de cache para las anotaciones de Spring Cache. La version la fija
+		     spring-boot-dependencies, no se pone a mano. Con caffeine en el classpath,
+		     Spring Boot autoconfigura CaffeineCacheManager y spring.cache.caffeine.spec
+		     pasa a tener efecto. -->
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>

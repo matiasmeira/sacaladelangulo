@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
+import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,9 @@ class EstablecimientoServiceTest {
 
     @Mock
     private SlugGenerator slugGenerator;
+
+    @Mock
+    private ComplejoDetalleCache complejoDetalleCache;
 
     @InjectMocks
     private EstablecimientoService establecimientoService;

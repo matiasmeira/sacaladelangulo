@@ -14,6 +14,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +42,7 @@ public class CanchaService {
     private final EstablecimientoRepository establecimientoRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final RegistroAuditoriaService registroAuditoriaService;
+    private final ComplejoDetalleCache complejoDetalleCache;
 
     public CanchaResponse crearCancha(Long establecimientoId, CanchaRequest request, String email) {
         validarSolapamientoTarifas(request.tarifas());
@@ -77,6 +79,10 @@ public class CanchaService {
         registroAuditoriaService.registrarSobreEstablecimiento(usuarioAutenticado, establecimiento,
                 AccionAuditoria.CREAR_CANCHA, canchaGuardada.getId(),
                 "Cancha creada: " + canchaGuardada.getNombre() + ", precio base " + canchaGuardada.getPrecioBase());
+
+        // La ficha pública lista las canchas activas y calcula precioDesde/senaDesde a
+        // partir de ellas, así que un alta la deja desactualizada.
+        complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
 
         return mapToResponse(canchaGuardada);
     }
@@ -136,6 +142,8 @@ public class CanchaService {
                 AccionAuditoria.ACTUALIZAR_CANCHA, canchaGuardada.getId(),
                 "Cancha actualizada: " + canchaGuardada.getNombre() + ", precio base " + canchaGuardada.getPrecioBase());
 
+        complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
+
         return mapToResponse(canchaGuardada);
     }
 
@@ -157,6 +165,7 @@ public class CanchaService {
 
         cancha.setIsActive(false);
         canchaRepository.save(cancha);
+        complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
     }
 
 

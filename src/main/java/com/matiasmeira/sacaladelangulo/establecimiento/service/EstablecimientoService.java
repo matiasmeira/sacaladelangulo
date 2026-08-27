@@ -15,6 +15,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.Establecimient
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
+import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,7 @@ public class EstablecimientoService {
     private final FeedbackRepository feedbackRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final SlugGenerator slugGenerator;
+    private final ComplejoDetalleCache complejoDetalleCache;
 
     public EstablecimientoResponse crearEstablecimiento(EstablecimientoRequest request, String email) {
         Usuario dueno = buscarUsuarioPorEmail(email);
@@ -59,6 +61,7 @@ public class EstablecimientoService {
                 .latitud(request.latitud())
                 .longitud(request.longitud())
                 .requiereSena(requiereSenaForzada || request.requiereSena())
+                .requiereTelefonoVerificado(request.requiereTelefonoVerificado())
                 .isActive(true)
                 .slug(slugGenerator.generarSlugUnico(request.nombre()))
                 .dueno(dueno)
@@ -91,6 +94,7 @@ public class EstablecimientoService {
         establecimiento.setLatitud(request.latitud());
         establecimiento.setLongitud(request.longitud());
         establecimiento.setRequiereSena(esPlanLimitado(usuarioAutenticado.getPlanSuscripcion()) || request.requiereSena());
+        establecimiento.setRequiereTelefonoVerificado(request.requiereTelefonoVerificado());
 
         if (request.servicios() != null) {
             establecimiento.getServicios().clear();
@@ -104,6 +108,7 @@ public class EstablecimientoService {
         establecimiento.getHorariosAtencion().addAll(mapearHorarios(request.horariosAtencion(), establecimiento));
 
         Establecimiento establecimientoActualizado = establecimientoRepository.save(establecimiento);
+        complejoDetalleCache.invalidarPorEstablecimientoId(establecimiento.getId());
         return mapToResponse(establecimientoActualizado);
     }
 
@@ -210,6 +215,7 @@ public class EstablecimientoService {
                 establecimiento.getLatitud(),
                 establecimiento.getLongitud(),
                 establecimiento.getRequiereSena(),
+                establecimiento.getRequiereTelefonoVerificado(),
                 establecimiento.getIsActive(),
                 establecimiento.getDueno().getId(),
                 establecimiento.getHorariosAtencion() == null ? List.of() : establecimiento.getHorariosAtencion().stream()

@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,9 @@ class CanchaServiceTest {
 
     @Mock
     private RegistroAuditoriaService registroAuditoriaService;
+
+    @Mock
+    private ComplejoDetalleCache complejoDetalleCache;
 
     @InjectMocks
     private CanchaService canchaService;

@@ -148,7 +148,15 @@ class ReservaServiceMatrizTransicionesTest {
         }
     }
 
-    private static final Set<EstadoReserva> CANCELAR_INVALIDOS = EnumSet.of(EstadoReserva.FINALIZADA);
+    /**
+     * AUSENTE se sumó acá al cerrarse el hueco que este mismo test documentaba como
+     * tolerado: cancelar un no-show lo convertía en CANCELADA y borraba el registro de
+     * que el jugador no se presentó (y, como el jugador es actor autorizado de
+     * cancelarReserva, era él quien podía borrarlo). La salida de AUSENTE es
+     * revertirAusencia, restringida a dueño/admin.
+     */
+    private static final Set<EstadoReserva> CANCELAR_INVALIDOS =
+            EnumSet.of(EstadoReserva.FINALIZADA, EstadoReserva.AUSENTE);
 
     @ParameterizedTest(name = "cancelar desde {0}")
     @EnumSource(EstadoReserva.class)
@@ -159,16 +167,21 @@ class ReservaServiceMatrizTransicionesTest {
         if (CANCELAR_INVALIDOS.contains(estadoInicial)) {
             assertThrows(IllegalArgumentException.class, () -> reservaService.cancelarReserva(RESERVA_ID, dueno.getEmail()));
         } else {
-            // Nota: AUSENTE -> CANCELADA hoy "pasa" (no está bloqueado explícitamente). Es un
-            // hueco de coherencia documentado en REVISION_FUNCIONAL.md (una ausencia y una
-            // cancelación son conceptos distintos), no un throw esperado, así que este caso
-            // puntual queda dentro de la rama "no debería tirar" a propósito.
+            // CANCELADA y CANCELADA_PRERESERVA no lanzan, pero tampoco reescriben: las dos
+            // salen por el retorno idempotente, cada una conservando su propio estado (ver
+            // cancelarReserva_YaCanceladaPrereserva_ConservaElEstadoDeVencimiento). Que no
+            // tiren es lo que esta matriz verifica; que no se pisen, el test puntual.
             assertDoesNotThrow(() -> reservaService.cancelarReserva(RESERVA_ID, dueno.getEmail()));
         }
     }
 
+    /**
+     * AUSENTE se sumó al cerrarse la mitad que le faltaba al fix de CANCELADA_PRERESERVA:
+     * finalizar un no-show cobraba el saldo y movía la caja por un turno que nadie jugó.
+     */
     private static final Set<EstadoReserva> FINALIZAR_INVALIDOS = EnumSet.of(
-            EstadoReserva.PENDIENTE_SENA, EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
+            EstadoReserva.PENDIENTE_SENA, EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA,
+            EstadoReserva.AUSENTE);
 
     @ParameterizedTest(name = "finalizar desde {0}")
     @EnumSource(EstadoReserva.class)

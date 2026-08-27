@@ -665,8 +665,23 @@ public class ReservaService {
                 throw new IllegalArgumentException("No se puede cancelar una reserva ya finalizada");
             }
 
-            if (reserva.getEstado() == EstadoReserva.CANCELADA) {
-                log.info("Reserva ya se encuentra cancelada. ID: {}", reservaId);
+            // AUSENTE es terminal (ver EstadoReserva): sin este chequeo caía al setEstado de
+            // abajo y pasaba a CANCELADA, borrando el registro del no-show. Y como el jugador
+            // es actor autorizado de este método, era el propio ausente quien podía borrarlo.
+            // La única salida legítima de AUSENTE es revertirAusencia, restringida a dueño/admin.
+            if (reserva.getEstado() == EstadoReserva.AUSENTE) {
+                throw new IllegalArgumentException(
+                        "No se puede cancelar un turno marcado como ausente. El dueño del complejo puede "
+                                + "deshacer la ausencia y recién entonces cancelarlo.");
+            }
+
+            // Los dos estados terminales de cancelación entran acá, no sólo CANCELADA:
+            // una reserva ya liberada por vencimiento del hold (CANCELADA_PRERESERVA) caía
+            // al setEstado de abajo y se sobreescribía como CANCELADA, borrando la
+            // distinción entre "nadie confirmó a tiempo" y "alguien canceló", que
+            // EstadoReserva documenta como deliberada y de la que dependen los reportes.
+            if (ESTADOS_CANCELADOS.contains(reserva.getEstado())) {
+                log.info("Reserva ya se encuentra cancelada. ID: {}, Estado: {}", reservaId, reserva.getEstado());
                 return reservaMapper.mapToResponse(reserva);
             }
 
@@ -722,6 +737,18 @@ public class ReservaService {
                 // (ver C2 y A3 en la auditoría): una reserva tiene que pasar por CONFIRMADA
                 // antes de poder finalizarse.
                 throw new IllegalArgumentException("No se puede finalizar una reserva que todavía no fue confirmada");
+            }
+
+            // Contracara del chequeo de CANCELADA_PRERESERVA de arriba, que quedó incompleto:
+            // finalizar un no-show cobraba precioTotal - senaPagada y generaba movimiento de
+            // caja por un turno que nadie jugó, contra lo que documenta marcarAusente ("no
+            // hubo cobro ni servicio prestado"). Si en algún momento se quiere cobrar una
+            // penalidad por ausencia, no puede salir por acá: el monto sería el del servicio
+            // completo, no el de una multa.
+            if (reserva.getEstado() == EstadoReserva.AUSENTE) {
+                throw new IllegalArgumentException(
+                        "No se puede finalizar un turno marcado como ausente. El dueño del complejo puede "
+                                + "deshacer la ausencia si el jugador sí se presentó.");
             }
 
             reserva.setEstado(EstadoReserva.FINALIZADA);

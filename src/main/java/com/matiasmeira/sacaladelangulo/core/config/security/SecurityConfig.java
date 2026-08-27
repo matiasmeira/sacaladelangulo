@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.core.idempotencia.IdempotencyFilter;
 import com.matiasmeira.sacaladelangulo.core.idempotencia.SolicitudIdempotenteRepository;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitFilter;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
+import com.matiasmeira.sacaladelangulo.core.trazabilidad.TraceIdFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -102,6 +103,10 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "Cache-Control", "Idempotency-Key"));
+        // Sin esto el navegador recibe X-Trace-Id pero no deja que el JS lo lea (por CORS,
+        // solo los headers "simples" son visibles salvo que se los exponga). Es lo que
+        // permite que una pantalla de error muestre el código para reportar (ver TraceIdFilter).
+        configuration.setExposedHeaders(java.util.List.of(TraceIdFilter.TRACE_ID_HEADER, "Idempotency-Replayed"));
         configuration.setAllowCredentials(true);
 
         org.springframework.web.cors.UrlBasedCorsConfigurationSource source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();

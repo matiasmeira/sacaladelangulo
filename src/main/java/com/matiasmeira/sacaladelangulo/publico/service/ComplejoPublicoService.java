@@ -18,11 +18,13 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborable
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.GeoUtils;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.HorarioAtencionCalculator;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.PoolCanchaCalculator;
 import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.publico.dto.CanchaPublicaDto;
 import com.matiasmeira.sacaladelangulo.publico.dto.ComplejoCardResponse;
 import com.matiasmeira.sacaladelangulo.publico.dto.ComplejoDetalleResponse;
+import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
@@ -40,7 +42,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -120,27 +121,38 @@ public class ComplejoPublicoService {
         List<Long> establecimientoIds = candidatos.stream().map(Establecimiento::getId).toList();
         establecimientoRepository.precargarHorarios(establecimientoIds);
 
-        List<Cancha> canchas = canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(establecimientoIds);
-        if (deporte != null) {
-            canchas = canchas.stream().filter(c -> c.getDeportes().contains(deporte)).toList();
-        }
+        // PoolCanchaCalculator necesita TODAS las canchas activas del establecimiento, no
+        // solo las del deporte pedido: una cancha compuesta comparte pool con sus canchas
+        // físicas aunque el filtro de deporte las descarte (mismo criterio que
+        // DisponibilidadService.estaLibre, que tampoco filtra por deporte).
+        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(establecimientoIds);
+        Map<Long, List<Cancha>> todasPorEstablecimiento = todasLasCanchas.stream()
+                .collect(Collectors.groupingBy(c -> c.getEstablecimiento().getId()));
 
-        Map<Long, List<Cancha>> canchasPorEstablecimiento = canchas.stream()
+        List<Cancha> canchasRelevantes = deporte == null
+                ? todasLasCanchas
+                : todasLasCanchas.stream().filter(c -> c.getDeportes().contains(deporte)).toList();
+        Map<Long, List<Cancha>> relevantesPorEstablecimiento = canchasRelevantes.stream()
                 .collect(Collectors.groupingBy(c -> c.getEstablecimiento().getId()));
 
         LocalDateTime inicioReserva = LocalDateTime.of(fecha, hora);
         LocalDateTime finReserva = inicioReserva.plusMinutes(VENTANA_DISPONIBILIDAD_MINUTOS);
 
-        List<Long> canchaIds = canchas.stream().map(Cancha::getId).toList();
-        Set<Long> canchasNoDisponibles = canchaIds.isEmpty()
-                ? new HashSet<>()
-                : new HashSet<>(reservaRepository.findCanchaIdsConSolapamiento(canchaIds, inicioReserva, finReserva));
-        // A diferencia de la query de reservas (que filtra por canchaId y no tiene sentido
-        // disparar si no hay ninguna cancha activa), esta filtra por establecimientoId: se
-        // consulta siempre, igual que precargarHorarios y diaNoLaborableRepository más abajo.
-        bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(establecimientoIds, inicioReserva, finReserva).stream()
+        // A diferencia de la vieja findCanchaIdsConSolapamiento (que devolvía solo IDs y no
+        // tenía forma de razonar sobre pools), acá hace falta la Reserva completa -- cancha y
+        // canchasNecesarias -- para correr PoolCanchaCalculator.hayDisponibilidad por cancha,
+        // igual que DisponibilidadService.estaLibre.
+        List<Reserva> reservas = establecimientoIds.isEmpty()
+                ? List.of()
+                : reservaRepository.findSuperpuestasEnEstablecimientos(establecimientoIds, inicioReserva, finReserva, LocalDateTime.now());
+        Map<Long, List<Reserva>> reservasPorEstablecimiento = reservas.stream()
+                .collect(Collectors.groupingBy(r -> r.getCancha().getEstablecimiento().getId()));
+
+        // Filtra por establecimientoId: se consulta siempre, igual que precargarHorarios y
+        // diaNoLaborableRepository más abajo.
+        Set<Long> canchasBloqueadas = bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(establecimientoIds, inicioReserva, finReserva).stream()
                 .map(b -> b.getCancha().getId())
-                .forEach(canchasNoDisponibles::add);
+                .collect(Collectors.toSet());
 
         Set<Long> establecimientosNoLaborables = diaNoLaborableRepository
                 .findByEstablecimientoIdInAndFecha(establecimientoIds, fecha).stream()
@@ -150,9 +162,32 @@ public class ComplejoPublicoService {
         return candidatos.stream()
                 .filter(est -> !establecimientosNoLaborables.contains(est.getId()))
                 .filter(est -> estaAbiertoEnVentana(est, fecha, inicioReserva, finReserva))
-                .filter(est -> canchasPorEstablecimiento.getOrDefault(est.getId(), List.of()).stream()
-                        .anyMatch(c -> !canchasNoDisponibles.contains(c.getId())))
+                .filter(est -> relevantesPorEstablecimiento.getOrDefault(est.getId(), List.of()).stream()
+                        .anyMatch(c -> estaLibreParaFiltro(c, canchasBloqueadas,
+                                reservasPorEstablecimiento.getOrDefault(est.getId(), List.of()),
+                                todasPorEstablecimiento.getOrDefault(est.getId(), List.of()))))
                 .toList();
+    }
+
+    /**
+     * ¿"cancha" está libre en la ventana ya resuelta por el caller? Mismo criterio que
+     * DisponibilidadService.estaLibre: bloqueo directo, reserva directa sobre la cancha
+     * exacta y, si nada de eso la descarta, PoolCanchaCalculator para las canchas
+     * compuestas/físicas que comparten un pool con ella.
+     */
+    private boolean estaLibreParaFiltro(Cancha cancha, Set<Long> canchasBloqueadas, List<Reserva> reservasDelEstablecimiento,
+            List<Cancha> todasLasCanchasDelEstablecimiento) {
+        if (canchasBloqueadas.contains(cancha.getId())) {
+            return false;
+        }
+
+        boolean canchaExactaOcupada = reservasDelEstablecimiento.stream()
+                .anyMatch(r -> r.getCancha().getId().equals(cancha.getId()));
+        if (canchaExactaOcupada) {
+            return false;
+        }
+
+        return PoolCanchaCalculator.hayDisponibilidad(cancha, reservasDelEstablecimiento, todasLasCanchasDelEstablecimiento);
     }
 
     /**

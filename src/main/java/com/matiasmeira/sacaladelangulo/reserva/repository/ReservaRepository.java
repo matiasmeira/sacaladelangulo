@@ -142,18 +142,23 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     );
 
     /**
-     * IDs de canchas (dentro de la lista dada) que ya tienen alguna reserva solapada
-     * con el período indicado. Se usa para resolver disponibilidad en lote y evitar
-     * ejecutar una consulta de conteo por cada cancha (N+1).
+     * Igual que findSuperpuestas pero para varios establecimientos a la vez: usado por
+     * ComplejoPublicoService.filtrarPorDisponibilidad para resolver disponibilidad en lote
+     * sin una consulta por establecimiento candidato. A diferencia de la vieja
+     * findCanchaIdsConSolapamiento (que devolvía solo IDs), acá hace falta la Reserva
+     * completa -- cancha y canchasNecesarias -- para poder correr PoolCanchaCalculator y
+     * evaluar pools de canchas físicas/lógicas igual que DisponibilidadService.estaLibre.
      */
-    @Query("SELECT DISTINCT r.cancha.id FROM Reserva r " +
-           "WHERE r.cancha.id IN :canchaIds " +
+    @Query("SELECT r FROM Reserva r JOIN FETCH r.cancha c " +
+           "WHERE c.establecimiento.id IN :estIds " +
            "AND r.estado NOT IN ('CANCELADA', 'CANCELADA_PRERESERVA') " +
+           "AND (r.estado != 'PENDIENTE_SENA' OR r.expiraEn IS NULL OR r.expiraEn > :ahora) " +
            "AND r.fechaHoraInicio < :fin AND r.fechaHoraFin > :inicio")
-    List<Long> findCanchaIdsConSolapamiento(
-            @Param("canchaIds") List<Long> canchaIds,
+    List<Reserva> findSuperpuestasEnEstablecimientos(
+            @Param("estIds") List<Long> estIds,
             @Param("inicio") LocalDateTime inicio,
-            @Param("fin") LocalDateTime fin
+            @Param("fin") LocalDateTime fin,
+            @Param("ahora") LocalDateTime ahora
     );
 
     /**

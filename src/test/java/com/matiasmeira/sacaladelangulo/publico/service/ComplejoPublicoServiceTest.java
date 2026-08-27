@@ -365,7 +365,6 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
-        when(reservaRepository.findCanchaIdsConSolapamiento(eq(List.of(10L)), any(), any())).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of(cancha));
@@ -451,7 +450,6 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
-        when(reservaRepository.findCanchaIdsConSolapamiento(eq(List.of(10L)), any(), any())).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of(bloqueo));
         when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
 
@@ -505,7 +503,6 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
-        when(reservaRepository.findCanchaIdsConSolapamiento(eq(List.of(10L)), any(), any())).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of(cancha));
@@ -517,6 +514,108 @@ class ComplejoPublicoServiceTest {
                 null, null, null, null, fecha, hora, PageRequest.of(0, 20));
 
         assertEquals(1, resultado.getTotalElements());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_ConFechaYHora_ExcluyeComplejoConPoolDeCanchasFisicasAgotado")
+    void buscarComplejos_ConFechaYHora_ExcluyeComplejoConPoolDeCanchasFisicasAgotado() {
+        // Cancha compuesta ("Cancha F7") que necesita 2 de sus 2 canchas físicas del pool.
+        // Ambas físicas ya están reservadas directamente -- el pool está agotado -- pero
+        // ninguna reserva apunta a la cancha compuesta en sí. El viejo filtro (que solo
+        // miraba reservas directas sobre el id exacto de cada cancha) dejaba pasar al
+        // establecimiento igual, porque la compuesta nunca aparecía como "ocupada" -- pese
+        // a que, igual que en DisponibilidadService, no queda una sola cancha reservable.
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", false);
+        est.setHorariosAtencion(List.of(HorarioAtencion.builder()
+                .diaSemana(DayOfWeek.MONDAY)
+                .horaApertura(LocalTime.of(9, 0))
+                .horaCierre(LocalTime.of(23, 0))
+                .build()));
+
+        Cancha fisicaUno = Cancha.builder()
+                .id(10L).nombre("Cancha F5 1").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(300))
+                .establecimiento(est).canchasFisicas(List.of()).build();
+        Cancha fisicaDos = Cancha.builder()
+                .id(11L).nombre("Cancha F5 2").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(300))
+                .establecimiento(est).canchasFisicas(List.of()).build();
+        Cancha compuesta = Cancha.builder()
+                .id(12L).nombre("Cancha F7").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
+                .precioBase(BigDecimal.valueOf(2000)).montoSena(BigDecimal.valueOf(700))
+                .establecimiento(est).canchasFisicas(List.of(fisicaUno, fisicaDos)).canchasNecesarias(2).build();
+
+        LocalDate fecha = LocalDate.of(2026, 8, 10);
+        LocalTime hora = LocalTime.of(10, 0);
+        LocalDateTime inicioReserva = fecha.atTime(hora);
+
+        Reserva reservaFisicaUno = Reserva.builder().id(100L).cancha(fisicaUno)
+                .fechaHoraInicio(inicioReserva).fechaHoraFin(inicioReserva.plusHours(1)).build();
+        Reserva reservaFisicaDos = Reserva.builder().id(101L).cancha(fisicaDos)
+                .fechaHoraInicio(inicioReserva).fechaHoraFin(inicioReserva.plusHours(1)).build();
+
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
+        when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
+        when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L)))
+                .thenReturn(List.of(fisicaUno, fisicaDos, compuesta));
+        when(reservaRepository.findSuperpuestasEnEstablecimientos(eq(List.of(1L)), any(), any(), any()))
+                .thenReturn(List.of(reservaFisicaUno, reservaFisicaDos));
+        when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, fecha, hora, PageRequest.of(0, 20));
+
+        assertEquals(0, resultado.getTotalElements());
+    }
+
+    @Test
+    @DisplayName("buscarComplejos_ConFechaYHora_ExcluyeCanchaFisicaConsumidaPorReservaDeCanchaCompuesta")
+    void buscarComplejos_ConFechaYHora_ExcluyeCanchaFisicaConsumidaPorReservaDeCanchaCompuesta() {
+        // A la inversa del caso anterior: la reserva es directamente sobre la cancha
+        // compuesta (consume sus 2 canchas físicas del pool), y ninguna física tiene una
+        // reserva directa sobre sí misma. El viejo filtro las mostraba disponibles igual,
+        // porque solo miraba coincidencia exacta de cancha.id.
+        Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", false);
+        est.setHorariosAtencion(List.of(HorarioAtencion.builder()
+                .diaSemana(DayOfWeek.MONDAY)
+                .horaApertura(LocalTime.of(9, 0))
+                .horaCierre(LocalTime.of(23, 0))
+                .build()));
+
+        Cancha fisicaUno = Cancha.builder()
+                .id(10L).nombre("Cancha F5 1").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(300))
+                .establecimiento(est).canchasFisicas(List.of()).build();
+        Cancha fisicaDos = Cancha.builder()
+                .id(11L).nombre("Cancha F5 2").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(300))
+                .establecimiento(est).canchasFisicas(List.of()).build();
+        Cancha compuesta = Cancha.builder()
+                .id(12L).nombre("Cancha F7").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
+                .precioBase(BigDecimal.valueOf(2000)).montoSena(BigDecimal.valueOf(700))
+                .establecimiento(est).canchasFisicas(List.of(fisicaUno, fisicaDos)).canchasNecesarias(2).build();
+
+        LocalDate fecha = LocalDate.of(2026, 8, 10);
+        LocalTime hora = LocalTime.of(10, 0);
+        LocalDateTime inicioReserva = fecha.atTime(hora);
+
+        Reserva reservaCompuesta = Reserva.builder().id(102L).cancha(compuesta)
+                .fechaHoraInicio(inicioReserva).fechaHoraFin(inicioReserva.plusHours(1)).build();
+
+        when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
+        when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
+        when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L)))
+                .thenReturn(List.of(fisicaUno, fisicaDos, compuesta));
+        when(reservaRepository.findSuperpuestasEnEstablecimientos(eq(List.of(1L)), any(), any(), any()))
+                .thenReturn(List.of(reservaCompuesta));
+        when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
+
+        Page<ComplejoCardResponse> resultado = complejoPublicoService.buscarComplejos(
+                null, null, null, null, fecha, hora, PageRequest.of(0, 20));
+
+        assertEquals(0, resultado.getTotalElements());
     }
 
     @Test

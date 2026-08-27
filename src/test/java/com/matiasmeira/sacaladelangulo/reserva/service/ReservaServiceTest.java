@@ -58,6 +58,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -1372,6 +1373,43 @@ class ReservaServiceTest {
         verify(turnoCajaService, never()).registrarMovimientoSiCorresponde(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
+    /**
+     * El corazón de I-3: lo que importa no es sólo que finalizarReserva lance, sino que
+     * NO se cobre. Antes del guard, un no-show pasaba a FINALIZADA y disparaba un
+     * movimiento de caja por precioTotal - senaPagada (acá, $1000) sobre un turno que
+     * nadie jugó.
+     */
+    @Test
+    @DisplayName("finalizarReserva_Ausente_NoCobraNiMueveLaCaja")
+    void finalizarReserva_Ausente_NoCobraNiMueveLaCaja() {
+        // Arrange: saldo pendiente > 0, para que si el cobro se ejecutara fuera visible
+        Reserva reservaAusente = Reserva.builder()
+                .id(65L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.AUSENTE)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaAusente.getId()))
+                .thenReturn(Optional.of(reservaAusente));
+
+        // Act
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reservaService.finalizarReserva(reservaAusente.getId(), MetodoPago.EFECTIVO, dueno.getEmail()));
+
+        // Assert: sigue ausente, sin persistir, sin método de pago y -- lo que importa --
+        // sin un solo peso registrado en la caja.
+        assertTrue(ex.getMessage().contains("ausente"));
+        assertEquals(EstadoReserva.AUSENTE, reservaAusente.getEstado());
+        assertEquals(null, reservaAusente.getMetodoPago());
+        verify(reservaRepository, never()).save(any());
+        verify(turnoCajaService, never()).registrarMovimientoSiCorresponde(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
     @Test
     @DisplayName("finalizarReserva_Fallo_ReservaCancelada")
     void finalizarReserva_Fallo_ReservaCancelada() {
@@ -1501,6 +1539,112 @@ class ReservaServiceTest {
         verify(eventPublisher).publishEvent(captor.capture());
         assertEquals(reservaConfirmada.getId(), captor.getValue().reservaId());
         assertEquals(empleado.getId(), captor.getValue().actorId());
+    }
+
+    /**
+     * El caso que motiva el chequeo de AUSENTE: el jugador es actor autorizado de
+     * cancelarReserva, así que sin la validación podía cancelar su propio no-show y
+     * borrar el registro de que no se presentó.
+     */
+    @Test
+    @DisplayName("cancelarReserva_AusenteYEsElJugador_LanzaExcepcionYNoBorraLaAusencia")
+    void cancelarReserva_AusenteYEsElJugador_LanzaExcepcionYNoBorraLaAusencia() {
+        // Arrange: turno pasado marcado como ausente. fechaCreacion = ahora lo deja dentro
+        // del período de gracia de validarPlazoDeCancelacion (que para el jugador corre
+        // ANTES que el chequeo de estado), así que lo que corta la operación es el estado
+        // AUSENTE y no el plazo -- que es justamente lo que este test tiene que probar.
+        Reserva reservaAusente = Reserva.builder()
+                .id(63L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaCreacion(LocalDateTime.now())
+                .fechaHoraInicio(LocalDateTime.now().minusHours(2))
+                .fechaHoraFin(LocalDateTime.now().minusHours(1))
+                .estado(EstadoReserva.AUSENTE)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaAusente.getId()))
+                .thenReturn(Optional.of(reservaAusente));
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+
+        // Act
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reservaService.cancelarReserva(reservaAusente.getId(), jugador.getEmail()));
+
+        // Assert: la ausencia sigue en pie y no se persistió ni notificó nada.
+        assertTrue(ex.getMessage().contains("ausente"));
+        assertEquals(EstadoReserva.AUSENTE, reservaAusente.getEstado());
+        verify(reservaRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    /**
+     * Ni siquiera el dueño puede saltarse el paso de revertirAusencia: la salida de
+     * AUSENTE es una sola, para que quede asentado que la ausencia se deshizo.
+     */
+    @Test
+    @DisplayName("cancelarReserva_AusenteYEsElDueno_TambienLanzaExcepcion")
+    void cancelarReserva_AusenteYEsElDueno_TambienLanzaExcepcion() {
+        // Arrange
+        Reserva reservaAusente = Reserva.builder()
+                .id(64L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.now().minusHours(2))
+                .fechaHoraFin(LocalDateTime.now().minusHours(1))
+                .estado(EstadoReserva.AUSENTE)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaAusente.getId()))
+                .thenReturn(Optional.of(reservaAusente));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        // Act + Assert
+        assertThrows(IllegalArgumentException.class,
+                () -> reservaService.cancelarReserva(reservaAusente.getId(), dueno.getEmail()));
+        assertEquals(EstadoReserva.AUSENTE, reservaAusente.getEstado());
+        verify(reservaRepository, never()).save(any());
+    }
+
+    /**
+     * I-2: cancelar una reserva ya liberada por vencimiento del hold NO debe reescribirla
+     * como CANCELADA. Los dos estados existen para que los reportes puedan separar un
+     * abandono (nadie confirmó a tiempo) de una cancelación explícita; colapsarlos hace
+     * que toda prereserva vencida que alguien toque desde la UI se contabilice como
+     * cancelación del usuario.
+     */
+    @Test
+    @DisplayName("cancelarReserva_YaCanceladaPrereserva_ConservaElEstadoDeVencimiento")
+    void cancelarReserva_YaCanceladaPrereserva_ConservaElEstadoDeVencimiento() {
+        // Arrange
+        Reserva prereservaVencida = Reserva.builder()
+                .id(66L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.CANCELADA_PRERESERVA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(prereservaVencida.getId()))
+                .thenReturn(Optional.of(prereservaVencida));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(
+                () -> reservaService.cancelarReserva(prereservaVencida.getId(), dueno.getEmail()));
+
+        // Assert: sigue siendo CANCELADA_PRERESERVA, y al ser un no-op no persiste ni notifica.
+        assertEquals("CANCELADA_PRERESERVA", response.estado());
+        assertEquals(EstadoReserva.CANCELADA_PRERESERVA, prereservaVencida.getEstado());
+        verify(reservaRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

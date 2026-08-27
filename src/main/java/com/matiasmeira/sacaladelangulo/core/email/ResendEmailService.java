@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @ConditionalOnProperty(prefix = "resend", name = "enabled", havingValue = "true")
-public class ResendEmailService implements EmailService {
+public class ResendEmailService implements EmailTransport {
 
     private final Resend resendClient;
     private final String remitente;

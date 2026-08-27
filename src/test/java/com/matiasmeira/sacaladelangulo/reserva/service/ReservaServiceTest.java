@@ -8,6 +8,7 @@ import com.matiasmeira.sacaladelangulo.cierrecaja.model.OrigenMovimientoCaja;
 import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
 import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.JugadorBloqueadoException;
+import com.matiasmeira.sacaladelangulo.core.exception.TelefonoNoVerificadoException;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
@@ -274,6 +275,63 @@ class ReservaServiceTest {
         );
         assert exception.getMessage().contains("permitido");
         verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crearReserva_Fallo_TelefonoNoVerificado")
+    void crearReserva_Fallo_TelefonoNoVerificado() {
+        // Arrange
+        establecimiento.setRequiereTelefonoVerificado(true);
+        jugador.setTelefonoVerificado(false);
+        LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
+        LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+
+        // Act & Assert
+        TelefonoNoVerificadoException exception = assertThrows(
+                TelefonoNoVerificadoException.class,
+                () -> reservaService.crearReserva(request, jugador.getEmail())
+        );
+        assert exception.getMessage().contains("teléfono");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crearReserva_Exito_TelefonoVerificadoCuandoEsRequerido")
+    void crearReserva_Exito_TelefonoVerificadoCuandoEsRequerido() {
+        // Arrange
+        establecimiento.setRequiereTelefonoVerificado(true);
+        jugador.setTelefonoVerificado(true);
+        LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
+        LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
+
+        Reserva reservaGuardada = Reserva.builder()
+                .id(6L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(fechaInicio)
+                .fechaHoraFin(fechaFin)
+                .estado(EstadoReserva.PENDIENTE_SENA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
+
+        // Act
+        ReservaResponse response = assertDoesNotThrow(() -> reservaService.crearReserva(request, jugador.getEmail()));
+
+        // Assert
+        assert response != null;
+        verify(reservaRepository).save(any(Reserva.class));
     }
 
     @Test

@@ -12,6 +12,7 @@ public record EstablecimientoResponse(
         Double latitud,
         Double longitud,
         Boolean requiereSena,
+        Boolean requiereTelefonoVerificado,
         Boolean isActive,
         Long duenoId,
         java.util.List<HorarioAtencionDto> horariosAtencion,

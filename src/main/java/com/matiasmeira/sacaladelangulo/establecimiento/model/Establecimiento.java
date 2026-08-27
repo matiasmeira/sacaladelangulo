@@ -39,6 +39,10 @@ public class Establecimiento {
     @Column(name = "requiere_sena", nullable = false)
     private Boolean requiereSena;
 
+    @Column(name = "requiere_telefono_verificado", nullable = false)
+    @lombok.Builder.Default
+    private Boolean requiereTelefonoVerificado = false;
+
     @Column(name = "is_active", nullable = false)
     @lombok.Builder.Default
     private Boolean isActive = true;

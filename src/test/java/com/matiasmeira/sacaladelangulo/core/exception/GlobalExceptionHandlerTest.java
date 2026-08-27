@@ -108,6 +108,18 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("handleTelefonoNoVerificadoException_Devuelve403ConElMensaje")
+    void handleTelefonoNoVerificadoException_Devuelve403ConElMensaje() {
+        TelefonoNoVerificadoException ex =
+                new TelefonoNoVerificadoException("Este establecimiento requiere que verifiques tu teléfono antes de reservar");
+
+        ResponseEntity<Map<String, String>> response = handler.handleTelefonoNoVerificadoException(ex);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals("Este establecimiento requiere que verifiques tu teléfono antes de reservar", response.getBody().get("error"));
+    }
+
+    @Test
     @DisplayName("handleEstablecimientosActivosException_Devuelve400ConElMensaje")
     void handleEstablecimientosActivosException_Devuelve400ConElMensaje() {
         EstablecimientosActivosException ex =

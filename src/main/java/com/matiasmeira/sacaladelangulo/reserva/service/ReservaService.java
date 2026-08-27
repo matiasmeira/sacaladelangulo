@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.exception.JugadorBloqueadoException;
 import com.matiasmeira.sacaladelangulo.core.exception.ReservaExpiradaException;
+import com.matiasmeira.sacaladelangulo.core.exception.TelefonoNoVerificadoException;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
@@ -122,6 +123,12 @@ public class ReservaService {
         if (bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(cancha.getEstablecimiento().getId(), jugador.getId())) {
             log.warn("Jugador bloqueado intentó reservar. Jugador: {}, Establecimiento: {}", jugador.getId(), cancha.getEstablecimiento().getId());
             throw new JugadorBloqueadoException("No tenés permitido realizar reservas en este establecimiento");
+        }
+
+        if (Boolean.TRUE.equals(cancha.getEstablecimiento().getRequiereTelefonoVerificado())
+                && !Boolean.TRUE.equals(jugador.getTelefonoVerificado())) {
+            log.warn("Jugador sin teléfono verificado intentó reservar. Jugador: {}, Establecimiento: {}", jugador.getId(), cancha.getEstablecimiento().getId());
+            throw new TelefonoNoVerificadoException("Este establecimiento requiere que verifiques tu teléfono antes de reservar");
         }
 
         validarDeporteSoportado(request.deporteSeleccionado(), cancha);

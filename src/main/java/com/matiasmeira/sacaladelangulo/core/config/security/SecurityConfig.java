@@ -86,6 +86,21 @@ public class SecurityConfig {
                         // Sin autenticación a propósito: el link de "darme de baja" de un email de
                         // marketing lo identifica el token opaco del body, no una sesión (ver Fase 6).
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/mails/baja").permitAll()
+                        // Health check de la plataforma (Railway/Render/Fly): sondea por HTTP sin
+                        // credenciales, así que bajo anyRequest().authenticated() recibía 401 y la
+                        // instancia figuraba caída aunque estuviera sana (ver READINESS.md y el
+                        // comentario de application-prod.properties).
+                        //
+                        // Abrirlo no filtra nada: la exposición ya está limitada a "health"
+                        // (management.endpoints.web.exposure.include) y a un status sin desglose
+                        // (show-details=never), así que la respuesta es {"status":"UP"} y nada más.
+                        // El resto de /actuator/** sigue cayendo en anyRequest().authenticated().
+                        //
+                        // Se listan las dos rutas a propósito: "/actuator/health/**" cubre los
+                        // grupos de probes (liveness/readiness, que prod habilita), y
+                        // "/actuator/health" el endpoint raíz, sin depender de si el matcher
+                        // vigente hace que "/**" case con cero segmentos.
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

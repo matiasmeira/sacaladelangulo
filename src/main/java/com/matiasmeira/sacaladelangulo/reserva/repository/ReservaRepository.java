@@ -188,6 +188,17 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
            "WHERE r.id = :id")
     java.util.Optional<Reserva> findByIdConEstablecimientoYDueno(@Param("id") Long id);
 
+    /**
+     * Cuenta las reservas futuras que todavía pueden verse afectadas por un cambio de
+     * política de cancelación (CONFIRMADA o PENDIENTE_SENA, con fechaHoraInicio posterior
+     * a "ahora"). Usado por PoliticaCancelacionService para informarle al dueño el impacto
+     * de un cambio antes de persistirlo. No incluye CANCELADA/CANCELADA_PRERESERVA/
+     * FINALIZADA/AUSENTE ni reservas ya jugadas.
+     */
+    @Query("SELECT COUNT(r) FROM Reserva r WHERE r.cancha.establecimiento.id = :estId " +
+           "AND r.estado IN ('CONFIRMADA', 'PENDIENTE_SENA') AND r.fechaHoraInicio > :ahora")
+    long countReservasFuturasActivas(@Param("estId") Long estId, @Param("ahora") LocalDateTime ahora);
+
     // ===== Reportes agregados (panel del dueño) =====
     // Solo cuentan reservas FINALIZADA: es el único estado que representa dinero/turno
     // efectivamente cerrado (decisión de negocio explícita, ver spec de reportes).

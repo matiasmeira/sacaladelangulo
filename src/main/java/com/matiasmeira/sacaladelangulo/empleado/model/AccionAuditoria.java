@@ -40,6 +40,10 @@ public enum AccionAuditoria {
     CREAR_CANCHA,
     ACTUALIZAR_CANCHA,
 
+    // Configuración de la política de cancelación del establecimiento: acción exclusiva
+    // del dueño/admin, mismo patrón que CREAR_CANCHA/ACTUALIZAR_CANCHA de arriba.
+    ACTUALIZAR_POLITICA_CANCELACION,
+
     // Gestión de fotos del complejo por parte del dueño/admin (ver el spec de fotos con
     // ImageKit): tocan la cara pública del establecimiento en el marketplace.
     SUBIR_FOTO_ESTABLECIMIENTO,

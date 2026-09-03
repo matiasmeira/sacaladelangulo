@@ -112,6 +112,29 @@ class ExpiracionPruebaServiceTest {
         verify(degradacionPlanService, times(1)).degradarPorVencimiento(3L);
     }
 
+    @Test
+    @DisplayName("degradarPruebasVencidas_UsuarioFallaPersistentemente_NoLoopeaInfinitamente")
+    void degradarPruebasVencidas_UsuarioFallaPersistentemente_NoLoopeaInfinitamente() {
+        ReflectionTestUtils.setField(service, "tamanioLote", 100);
+
+        Usuario u1 = usuarioDePrueba(1L);
+        Page<Usuario> pagina = new PageImpl<>(List.of(u1), Pageable.ofSize(100), 1);
+
+        // El mismo usuario nunca sale de TRIAL porque su degradación siempre falla, así
+        // que sin la protección de idsIntentados el repository volvería a traerlo en
+        // cada vuelta del while: un solo stub (sin encadenar Page.empty()) simula esa
+        // página que nunca se achica.
+        when(usuarioRepository.findByPlanSuscripcionAndFechaFinPruebaBeforeAndDeletedAtIsNull(
+                eq(PlanSuscripcion.TRIAL), any(), any(Pageable.class)))
+                .thenReturn(pagina);
+        doThrow(new RuntimeException("fallo simulado persistente"))
+                .when(degradacionPlanService).degradarPorVencimiento(1L);
+
+        service.degradarPruebasVencidas();
+
+        verify(degradacionPlanService, times(1)).degradarPorVencimiento(1L);
+    }
+
     private Usuario usuarioDePrueba(Long id) {
         Usuario usuario = Usuario.builder()
                 .email("usuario" + id + "@test.com")

@@ -13,6 +13,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Degrada automáticamente a FREE a los usuarios que quedaron en TRIAL después de que venció
@@ -48,9 +50,20 @@ public class ExpiracionPruebaService {
         int totalDegradados = 0;
         int totalFallidos = 0;
 
+        // Un usuario cuya degradación falla sigue matcheando el filtro TRIAL+vencido, así que
+        // sin este control la página 0 lo trae de nuevo en cada vuelta del while y el loop
+        // nunca termina, colgando para siempre el scheduler único de la app. idsIntentados
+        // asegura que cada usuario se reintente como máximo una vez por corrida.
+        Set<Long> idsIntentados = new HashSet<>();
+
         Page<Usuario> pagina = buscarVencidos(pageable);
         while (!pagina.isEmpty()) {
+            boolean huboProgreso = false;
             for (Usuario usuario : pagina.getContent()) {
+                if (!idsIntentados.add(usuario.getId())) {
+                    continue;
+                }
+                huboProgreso = true;
                 try {
                     degradacionPlanService.degradarPorVencimiento(usuario.getId());
                     totalDegradados++;
@@ -58,6 +71,11 @@ public class ExpiracionPruebaService {
                     totalFallidos++;
                     log.error("No se pudo degradar al usuario {} de TRIAL a FREE", usuario.getId(), ex);
                 }
+            }
+            if (!huboProgreso) {
+                log.warn("Quedan usuarios sin degradar tras fallar en esta corrida; se reintentan en la próxima. Pendientes: {}",
+                        pagina.getNumberOfElements());
+                break;
             }
             pagina = buscarVencidos(pageable);
         }

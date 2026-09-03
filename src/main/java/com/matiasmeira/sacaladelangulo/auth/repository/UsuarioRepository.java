@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.auth.repository;
 
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import org.springframework.data.domain.Page;
@@ -54,6 +55,16 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba3EnviadoFalseAndDeletedAtIsNull(LocalDateTime desde, LocalDateTime hasta);
 
     List<Usuario> findByFechaFinPruebaBetweenAndAvisoFinPrueba1EnviadoFalseAndDeletedAtIsNull(LocalDateTime desde, LocalDateTime hasta);
+
+    /**
+     * Usuarios OWNER en TRIAL cuya prueba gratuita ya venció (ver ExpiracionPruebaService,
+     * degradación automática a FREE). AndDeletedAtIsNull por el mismo motivo que los finders
+     * de aviso de arriba: no tocar una cuenta ya eliminada. Paginado porque, a diferencia del
+     * rango acotado a un día calendario de los finders de aviso, acá no hay tope natural al
+     * volumen (todo TRIAL vencido hasta la fecha, sin importar desde cuándo).
+     */
+    Page<Usuario> findByPlanSuscripcionAndFechaFinPruebaBeforeAndDeletedAtIsNull(
+            PlanSuscripcion planSuscripcion, LocalDateTime ahora, Pageable pageable);
 
     /**
      * Usado para resolver el token del link de "darme de baja" de un email de marketing

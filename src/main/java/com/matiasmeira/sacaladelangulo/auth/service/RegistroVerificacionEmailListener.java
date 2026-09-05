@@ -22,7 +22,7 @@ import java.util.Map;
 public class RegistroVerificacionEmailListener {
 
     private static final String ASUNTO_VERIFICACION = "Verificá tu cuenta";
-    private static final String ASUNTO_BIENVENIDA = "¡Bienvenido a Saque!";
+    private static final String ASUNTO_BIENVENIDA = "¡Bienvenido a Canchear!";
 
     private final EmailService emailService;
     private final EmailRenderer emailRenderer;

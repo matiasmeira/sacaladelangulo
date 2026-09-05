@@ -113,7 +113,7 @@ public class EstablecimientoService {
     }
 
     private boolean esPlanLimitado(PlanSuscripcion plan) {
-        return plan == PlanSuscripcion.TRIAL || plan == PlanSuscripcion.FREE;
+        return plan == PlanSuscripcion.FREE;
     }
 
     private List<HorarioAtencion> mapearHorarios(List<HorarioAtencionDto> horarios, Establecimiento establecimiento) {

@@ -168,8 +168,8 @@ public class CanchaService {
 
 
     /**
-     * Los planes limitados (TRIAL/FREE) exigen una seña mínima obligatoria; el resto de
-     * los planes permite no cobrar seña (nunca un monto negativo).
+     * El plan FREE exige una seña mínima obligatoria; el resto de los planes (incluido
+     * TRIAL) permite no cobrar seña (nunca un monto negativo).
      */
     /**
      * Devuelve siempre una lista nueva y mutable, nunca DURACIONES_POR_DEFECTO ni la lista
@@ -198,7 +198,7 @@ public class CanchaService {
     }
 
     private BigDecimal validarMontoSena(BigDecimal montoSena, PlanSuscripcion plan) {
-        boolean planLimitado = plan == PlanSuscripcion.TRIAL || plan == PlanSuscripcion.FREE;
+        boolean planLimitado = plan == PlanSuscripcion.FREE;
         if (planLimitado) {
             if (montoSena == null || montoSena.compareTo(SENA_MINIMA_PLAN_LIMITADO) < 0) {
                 throw new IllegalArgumentException("El plan actual requiere configurar una seña obligatoria de mínimo $" + SENA_MINIMA_PLAN_LIMITADO);

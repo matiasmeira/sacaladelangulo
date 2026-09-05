@@ -109,6 +109,21 @@ class RegistroVerificacionServiceTest {
     }
 
     @Test
+    @DisplayName("iniciarRegistro_ConFrontendUrlConSlashFinal_NoDuplicaElSlashEnElLink")
+    void iniciarRegistro_ConFrontendUrlConSlashFinal_NoDuplicaElSlashEnElLink() {
+        ReflectionTestUtils.setField(registroVerificacionService, "frontendUrl", "http://localhost:3000/");
+        IniciarRegistroRequest request = new IniciarRegistroRequest("nuevo@test.com");
+        when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
+
+        registroVerificacionService.iniciarRegistro(request);
+
+        ArgumentCaptor<VerificacionEmailSolicitadaEvent> eventoCaptor = ArgumentCaptor.forClass(VerificacionEmailSolicitadaEvent.class);
+        verify(eventPublisher).publishEvent(eventoCaptor.capture());
+        assertTrue(eventoCaptor.getValue().linkVerificacion().startsWith("http://localhost:3000/verificar?token="),
+                "Un app.frontend-url con \"/\" final no debe producir \"//\" en el link");
+    }
+
+    @Test
     @DisplayName("iniciarRegistro_Fallo_EmailYaRegistrado")
     void iniciarRegistro_Fallo_EmailYaRegistrado() {
         IniciarRegistroRequest request = new IniciarRegistroRequest("existente@test.com");

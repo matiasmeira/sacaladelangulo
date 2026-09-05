@@ -4,6 +4,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.email.EmailRenderer;
 import com.matiasmeira.sacaladelangulo.core.email.EmailService;
+import com.matiasmeira.sacaladelangulo.core.util.UrlUtils;
 import com.matiasmeira.sacaladelangulo.mails.dto.EnviarOfertaRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +44,7 @@ public class OfertaMarketingBatchSender {
 
         while (!pagina.isEmpty()) {
             for (Usuario usuario : pagina.getContent()) {
-                String unsubscribeLink = frontendUrl + "/baja-mails?token=" + usuario.getUnsubscribeToken();
+                String unsubscribeLink = UrlUtils.quitarSlashFinal(frontendUrl) + "/baja-mails?token=" + usuario.getUnsubscribeToken();
                 String html = emailRenderer.render("oferta", Map.of(
                         "cuerpoHtml", request.cuerpoHtml(),
                         "unsubscribeLink", unsubscribeLink

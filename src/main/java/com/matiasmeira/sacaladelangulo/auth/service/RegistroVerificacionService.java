@@ -16,6 +16,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.TokenInvalidoException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import com.matiasmeira.sacaladelangulo.core.security.TokenHasher;
+import com.matiasmeira.sacaladelangulo.core.util.UrlUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -113,7 +114,7 @@ public class RegistroVerificacionService {
                 .build();
         tokenVerificacionEmailRepository.save(tokenVerificacion);
 
-        String linkVerificacion = frontendUrl + "/verificar?token=" + token;
+        String linkVerificacion = UrlUtils.quitarSlashFinal(frontendUrl) + "/verificar?token=" + token;
         eventPublisher.publishEvent(new VerificacionEmailSolicitadaEvent(email, linkVerificacion, codigo));
         log.info("Token de verificación de registro generado para {}", email);
     }

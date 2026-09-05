@@ -102,6 +102,22 @@ class RecuperacionPasswordServiceTest {
     }
 
     @Test
+    @DisplayName("solicitarRecuperacion_ConFrontendUrlConSlashFinal_NoDuplicaElSlashEnElLink")
+    void solicitarRecuperacion_ConFrontendUrlConSlashFinal_NoDuplicaElSlashEnElLink() {
+        ReflectionTestUtils.setField(recuperacionPasswordService, "frontendUrl", "http://localhost:3000/");
+        SolicitarRecuperacionPasswordRequest request = new SolicitarRecuperacionPasswordRequest("existente@test.com");
+        Usuario usuario = Usuario.builder().id(1L).email("existente@test.com").build();
+        when(usuarioRepository.findByEmail("existente@test.com")).thenReturn(Optional.of(usuario));
+
+        recuperacionPasswordService.solicitarRecuperacion(request);
+
+        ArgumentCaptor<RecuperacionPasswordSolicitadaEvent> eventoCaptor = ArgumentCaptor.forClass(RecuperacionPasswordSolicitadaEvent.class);
+        verify(eventPublisher).publishEvent(eventoCaptor.capture());
+        assertTrue(eventoCaptor.getValue().linkRecuperacion().startsWith("http://localhost:3000/restablecer?token="),
+                "Un app.frontend-url con \"/\" final no debe producir \"//\" en el link");
+    }
+
+    @Test
     @DisplayName("solicitarRecuperacion_EmailInexistente_NoHaceNadaYNoLanzaExcepcion")
     void solicitarRecuperacion_EmailInexistente_NoHaceNadaYNoLanzaExcepcion() {
         SolicitarRecuperacionPasswordRequest request = new SolicitarRecuperacionPasswordRequest("inexistente@test.com");

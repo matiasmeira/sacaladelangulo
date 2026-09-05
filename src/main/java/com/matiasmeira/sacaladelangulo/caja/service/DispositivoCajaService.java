@@ -14,6 +14,7 @@ import com.matiasmeira.sacaladelangulo.caja.repository.DispositivoCajaRepository
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
+import com.matiasmeira.sacaladelangulo.core.util.UrlUtils;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
@@ -112,7 +113,7 @@ public class DispositivoCajaService {
         codigoEmparejamientoCajaRepository.save(codigo);
         log.info("Código de emparejamiento de caja generado. Establecimiento: {}", establecimientoId);
 
-        String urlEmparejamiento = frontendUrl + "/caja/emparejar?codigo=" + codigoCrudo;
+        String urlEmparejamiento = UrlUtils.quitarSlashFinal(frontendUrl) + "/caja/emparejar?codigo=" + codigoCrudo;
         return new EmparejarResponse(codigoCrudo, expiraEn, urlEmparejamiento);
     }
 

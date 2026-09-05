@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.TokenInvalidoException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimitExceededException;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import com.matiasmeira.sacaladelangulo.core.security.TokenHasher;
+import com.matiasmeira.sacaladelangulo.core.util.UrlUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -104,7 +105,7 @@ public class RecuperacionPasswordService {
                 .build();
         tokenRecuperacionPasswordRepository.save(tokenRecuperacion);
 
-        String linkRecuperacion = frontendUrl + "/restablecer?token=" + token;
+        String linkRecuperacion = UrlUtils.quitarSlashFinal(frontendUrl) + "/restablecer?token=" + token;
         eventPublisher.publishEvent(new RecuperacionPasswordSolicitadaEvent(email, linkRecuperacion, codigo));
         log.info("Token de recuperación de contraseña generado para {}", email);
     }

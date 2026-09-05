@@ -6,6 +6,7 @@ import com.matiasmeira.sacaladelangulo.caja.dto.ActivarLocalRequest;
 import com.matiasmeira.sacaladelangulo.caja.dto.ActivarLocalResponse;
 import com.matiasmeira.sacaladelangulo.caja.dto.ConsumirCodigoResponse;
 import com.matiasmeira.sacaladelangulo.caja.dto.DispositivoCajaResponse;
+import com.matiasmeira.sacaladelangulo.caja.dto.EmparejarRequest;
 import com.matiasmeira.sacaladelangulo.caja.model.CodigoEmparejamientoCaja;
 import com.matiasmeira.sacaladelangulo.caja.model.DispositivoCaja;
 import com.matiasmeira.sacaladelangulo.caja.repository.CodigoEmparejamientoCajaRepository;
@@ -36,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -97,6 +99,21 @@ class DispositivoCajaServiceTest {
                 .requiereSena(true)
                 .isActive(true)
                 .build();
+    }
+
+    @Test
+    @DisplayName("emparejar_ConFrontendUrlConSlashFinal_NoDuplicaElSlashEnLaUrl")
+    void emparejar_ConFrontendUrlConSlashFinal_NoDuplicaElSlashEnLaUrl() {
+        ReflectionTestUtils.setField(dispositivoCajaService, "frontendUrl", "http://localhost:3000/");
+        when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(codigoEmparejamientoCajaRepository.save(any(CodigoEmparejamientoCaja.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = dispositivoCajaService.emparejar(10L, dueno.getEmail(), new EmparejarRequest("Mostrador"));
+
+        assertTrue(response.urlEmparejamiento().startsWith("http://localhost:3000/caja/emparejar?codigo="),
+                "Un app.frontend-url con \"/\" final no debe producir \"//\" en la URL de emparejamiento");
     }
 
     @Test

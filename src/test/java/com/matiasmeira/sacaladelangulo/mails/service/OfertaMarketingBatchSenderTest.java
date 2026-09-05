@@ -84,6 +84,27 @@ class OfertaMarketingBatchSenderTest {
     }
 
     @Test
+    @DisplayName("enviarEnLotes_ConFrontendUrlConSlashFinal_NoDuplicaElSlashEnElLinkDeBaja")
+    void enviarEnLotes_ConFrontendUrlConSlashFinal_NoDuplicaElSlashEnElLinkDeBaja() {
+        ReflectionTestUtils.setField(batchSender, "frontendUrl", "http://localhost:3000/");
+
+        Usuario usuario = usuarioDePrueba(1L, "uno@test.com", "token-1");
+        Page<Usuario> primeraPagina = new PageImpl<>(List.of(usuario), Pageable.ofSize(50), 1);
+        Page<Usuario> paginaVacia = new PageImpl<>(List.of(), Pageable.ofSize(50).withPage(1), 1);
+
+        when(usuarioRepository.findByAceptaMarketingTrue(any(Pageable.class)))
+                .thenReturn(primeraPagina)
+                .thenReturn(paginaVacia);
+        when(emailRenderer.render(eq("oferta"), anyMap())).thenReturn("<html>oferta</html>");
+
+        batchSender.enviarEnLotes(new EnviarOfertaRequest("Oferta especial", "<p>Cuerpo</p>"));
+
+        ArgumentCaptor<Map<String, Object>> modeloCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailRenderer).render(eq("oferta"), modeloCaptor.capture());
+        assertEquals("http://localhost:3000/baja-mails?token=token-1", modeloCaptor.getValue().get("unsubscribeLink"));
+    }
+
+    @Test
     @DisplayName("enviarEnLotes_SinUsuariosConOptIn_NoEnviaNingunEmail")
     void enviarEnLotes_SinUsuariosConOptIn_NoEnviaNingunEmail() {
         ReflectionTestUtils.setField(batchSender, "frontendUrl", FRONTEND_URL);

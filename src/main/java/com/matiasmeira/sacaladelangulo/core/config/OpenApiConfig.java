@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @OpenAPIDefinition(
         info = @Info(
-                title = "API Sacala del Ángulo",
+                title = "API Canchear",
                 version = "1.0",
                 description = "Documentación interactiva de la API para el sistema de reservas de canchas."
         ),

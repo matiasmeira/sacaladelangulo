@@ -60,6 +60,6 @@ class RegistroVerificacionEmailListenerTest {
         verify(emailRenderer).render(eq("bienvenida"), modeloCaptor.capture());
         assertEquals("Juan", modeloCaptor.getValue().get("nombre"));
 
-        verify(emailService).enviar(eq("nuevo@test.com"), eq("¡Bienvenido a Saque!"), eq("<html>bienvenida</html>"));
+        verify(emailService).enviar(eq("nuevo@test.com"), eq("¡Bienvenido a Canchear!"), eq("<html>bienvenida</html>"));
     }
 }

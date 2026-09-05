@@ -32,7 +32,7 @@ class ResendEmailServiceTest {
 
     @BeforeEach
     void setUp() {
-        resendEmailService = new ResendEmailService(resendClient, "SacaLaDelAngulo <onboarding@resend.dev>");
+        resendEmailService = new ResendEmailService(resendClient, "Canchear <onboarding@resend.dev>");
     }
 
     @Test

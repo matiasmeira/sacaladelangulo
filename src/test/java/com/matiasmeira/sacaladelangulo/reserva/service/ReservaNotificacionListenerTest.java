@@ -18,14 +18,20 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.mockito.ArgumentCaptor;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -463,6 +469,150 @@ class ReservaNotificacionListenerTest {
         when(reservaRepository.findByIdConEstablecimientoYDueno(54L)).thenReturn(Optional.of(reserva));
 
         listener.enviarNotificacionesCancelacion(new ReservaCanceladaEvent(54L, 2L));
+
+        verify(emailService, never()).enviar(any(), any(), any());
+        verify(emailRenderer, never()).render(any(), anyMap());
+    }
+
+    /**
+     * Las 3 ocurrencias de un turno fijo de los martes 20:00 (08, 15 y 22 de enero de 2030).
+     * Comparten cancha, deporte, horario y precio por construcción (ver
+     * ReservaService.crearReservaSemanal): lo único que varía es la fecha.
+     */
+    private List<Reserva> ocurrenciasDeTurnoFijo(Usuario jugador, String nombreClienteManual) {
+        return List.of(
+                ocurrencia(60L, jugador, nombreClienteManual, LocalDateTime.of(2030, 1, 8, 20, 0)),
+                ocurrencia(61L, jugador, nombreClienteManual, LocalDateTime.of(2030, 1, 15, 20, 0)),
+                ocurrencia(62L, jugador, nombreClienteManual, LocalDateTime.of(2030, 1, 22, 20, 0)));
+    }
+
+    private Reserva ocurrencia(Long id, Usuario jugador, String nombreClienteManual, LocalDateTime inicio) {
+        return Reserva.builder()
+                .id(id)
+                .jugador(jugador)
+                .nombreClienteManual(nombreClienteManual)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
+                .fechaHoraInicio(inicio)
+                .fechaHoraFin(inicio.plusHours(1))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesTurnoFijo_ConJugador_EnviaUnSoloMailAlJugadorYOtroAlDueno")
+    void enviarNotificacionesTurnoFijo_ConJugador_EnviaUnSoloMailAlJugadorYOtroAlDueno() {
+        Usuario jugador = Usuario.builder()
+                .id(1L)
+                .email("jugador@test.com")
+                .nombre("Juan")
+                .rol(Role.PLAYER)
+                .build();
+        List<Long> ids = List.of(60L, 61L, 62L);
+
+        when(reservaRepository.findAllByIdInConEstablecimientoYDueno(ids))
+                .thenReturn(ocurrenciasDeTurnoFijo(jugador, null));
+        when(emailRenderer.render(eq("turno-fijo-confirmado"), anyMap())).thenReturn("<html>jugador</html>");
+        when(emailRenderer.render(eq("turno-fijo-nuevo-dueno"), anyMap())).thenReturn("<html>dueno</html>");
+
+        listener.enviarNotificacionesTurnoFijo(new TurnoFijoCreadoEvent(ids));
+
+        // El punto de todo el cambio: 3 ocurrencias -> 2 emails, no 6.
+        verify(emailService, times(1))
+                .enviar(eq("jugador@test.com"), eq("Tu turno fijo quedó confirmado"), eq("<html>jugador</html>"));
+        verify(emailService, times(1))
+                .enviar(eq("dueno@test.com"), eq("Nuevo turno fijo en tu establecimiento"), eq("<html>dueno</html>"));
+        verify(emailService, times(2)).enviar(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesTurnoFijo_ConJugador_ElModeloLlevaTodasLasFechasYElTotalDelPeriodo")
+    @SuppressWarnings("unchecked")
+    void enviarNotificacionesTurnoFijo_ConJugador_ElModeloLlevaTodasLasFechasYElTotalDelPeriodo() {
+        Usuario jugador = Usuario.builder()
+                .id(1L)
+                .email("jugador@test.com")
+                .nombre("Juan")
+                .rol(Role.PLAYER)
+                .build();
+        List<Long> ids = List.of(60L, 61L, 62L);
+
+        when(reservaRepository.findAllByIdInConEstablecimientoYDueno(ids))
+                .thenReturn(ocurrenciasDeTurnoFijo(jugador, null));
+        when(emailRenderer.render(eq("turno-fijo-confirmado"), anyMap())).thenReturn("<html>jugador</html>");
+        when(emailRenderer.render(eq("turno-fijo-nuevo-dueno"), anyMap())).thenReturn("<html>dueno</html>");
+
+        listener.enviarNotificacionesTurnoFijo(new TurnoFijoCreadoEvent(ids));
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(emailRenderer).render(eq("turno-fijo-confirmado"), captor.capture());
+        Map<String, Object> modelo = captor.getValue();
+
+        // Un solo mail sirve para todo el turno fijo sólo si lista las N fechas.
+        assertEquals(List.of("08/01/2030", "15/01/2030", "22/01/2030"), modelo.get("fechas"));
+        assertEquals(3, modelo.get("cantidadTurnos"));
+        assertEquals("20:00", modelo.get("horaInicio"));
+        assertEquals("21:00", modelo.get("horaFin"));
+        assertEquals(BigDecimal.valueOf(1500), modelo.get("precioPorTurno"));
+        assertEquals(BigDecimal.valueOf(4500), modelo.get("precioTotalTurnoFijo"));
+        assertEquals("Cancha A", modelo.get("canchaNombre"));
+        assertEquals("Establecimiento Test", modelo.get("establecimientoNombre"));
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesTurnoFijo_SinJugador_EnviaSoloMailAlDuenoConElNombreDelClienteManual")
+    @SuppressWarnings("unchecked")
+    void enviarNotificacionesTurnoFijo_SinJugador_EnviaSoloMailAlDuenoConElNombreDelClienteManual() {
+        List<Long> ids = List.of(60L, 61L, 62L);
+
+        when(reservaRepository.findAllByIdInConEstablecimientoYDueno(ids))
+                .thenReturn(ocurrenciasDeTurnoFijo(null, "Cliente Fijo"));
+        when(emailRenderer.render(eq("turno-fijo-nuevo-dueno"), anyMap())).thenReturn("<html>dueno</html>");
+
+        listener.enviarNotificacionesTurnoFijo(new TurnoFijoCreadoEvent(ids));
+
+        verify(emailRenderer, never()).render(eq("turno-fijo-confirmado"), anyMap());
+        verify(emailService, times(1))
+                .enviar(eq("dueno@test.com"), eq("Nuevo turno fijo en tu establecimiento"), eq("<html>dueno</html>"));
+        verify(emailService, times(1)).enviar(any(), any(), any());
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(emailRenderer).render(eq("turno-fijo-nuevo-dueno"), captor.capture());
+        assertEquals("Cliente Fijo", captor.getValue().get("nombreCliente"));
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesTurnoFijo_JugadorEliminado_NoEnviaMailAlJugadorPeroSiAlDueno")
+    void enviarNotificacionesTurnoFijo_JugadorEliminado_NoEnviaMailAlJugadorPeroSiAlDueno() {
+        Usuario jugadorEliminado = Usuario.builder()
+                .id(1L)
+                .email("deleted+1@saque.deleted")
+                .nombre("Usuario eliminado")
+                .rol(Role.PLAYER)
+                .deletedAt(LocalDateTime.now())
+                .build();
+        List<Long> ids = List.of(60L, 61L, 62L);
+
+        when(reservaRepository.findAllByIdInConEstablecimientoYDueno(ids))
+                .thenReturn(ocurrenciasDeTurnoFijo(jugadorEliminado, null));
+        when(emailRenderer.render(eq("turno-fijo-nuevo-dueno"), anyMap())).thenReturn("<html>dueno</html>");
+
+        listener.enviarNotificacionesTurnoFijo(new TurnoFijoCreadoEvent(ids));
+
+        verify(emailService, never()).enviar(eq("deleted+1@saque.deleted"), any(), any());
+        verify(emailRenderer, never()).render(eq("turno-fijo-confirmado"), anyMap());
+        verify(emailService).enviar(eq("dueno@test.com"), eq("Nuevo turno fijo en tu establecimiento"), eq("<html>dueno</html>"));
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesTurnoFijo_ReservasNoEncontradas_NoEnviaNingunMailNiLanzaExcepcion")
+    void enviarNotificacionesTurnoFijo_ReservasNoEncontradas_NoEnviaNingunMailNiLanzaExcepcion() {
+        List<Long> ids = List.of(998L, 999L);
+        when(reservaRepository.findAllByIdInConEstablecimientoYDueno(ids)).thenReturn(List.of());
+
+        listener.enviarNotificacionesTurnoFijo(new TurnoFijoCreadoEvent(ids));
 
         verify(emailService, never()).enviar(any(), any(), any());
         verify(emailRenderer, never()).render(any(), anyMap());

@@ -189,6 +189,25 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     java.util.Optional<Reserva> findByIdConEstablecimientoYDueno(@Param("id") Long id);
 
     /**
+     * Variante en lote de {@link #findByIdConEstablecimientoYDueno}, para el aviso único de
+     * un turno fijo semanal (ver TurnoFijoCreadoEvent): trae las N ocurrencias con el mismo
+     * grafo de asociaciones en UNA consulta, en vez de una por ocurrencia.
+     *
+     * <p>ORDER BY fechaHoraInicio y no por id: el email lista las fechas y tienen que salir
+     * en orden cronológico. Hoy id y fecha coinciden en orden porque saveAll persiste las
+     * ocurrencias ya ordenadas, pero eso es un detalle de implementación de
+     * ReservaService.crearReservaSemanal, no algo de lo que el email deba depender.
+     */
+    @Query("SELECT r FROM Reserva r " +
+           "LEFT JOIN FETCH r.jugador " +
+           "JOIN FETCH r.cancha c " +
+           "JOIN FETCH c.establecimiento e " +
+           "JOIN FETCH e.dueno " +
+           "WHERE r.id IN :ids " +
+           "ORDER BY r.fechaHoraInicio ASC")
+    List<Reserva> findAllByIdInConEstablecimientoYDueno(@Param("ids") List<Long> ids);
+
+    /**
      * Cuenta las reservas futuras que todavía pueden verse afectadas por un cambio de
      * política de cancelación (CONFIRMADA o PENDIENTE_SENA, con fechaHoraInicio posterior
      * a "ahora"). Usado por PoliticaCancelacionService para informarle al dueño el impacto

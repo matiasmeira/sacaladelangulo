@@ -782,8 +782,79 @@ class ReservaServiceTest {
         // El bloqueo de jugadores solo aplica al autoservicio (crearReserva): el dueño puede
         // cargarle igual un turno fijo semanal a un jugador que él mismo haya bloqueado.
         verify(bloqueoJugadorRepository, never()).existsByEstablecimientoIdAndJugadorId(any(), any());
-        // Una reserva CONFIRMADA por ocurrencia generada -> un evento por ocurrencia.
-        verify(eventPublisher, times(3)).publishEvent(any(ReservaConfirmadaEvent.class));
+    }
+
+    @Test
+    @DisplayName("crearReservaSemanal_Exito_PublicaUnSoloEventoConsolidadoConTodosLosIds")
+    void crearReservaSemanal_Exito_PublicaUnSoloEventoConsolidadoConTodosLosIds() {
+        // Arrange: martes 08, 15 y 22 de enero de 2030 (3 ocurrencias)
+        ReservaSemanalRequest request = new ReservaSemanalRequest(
+                cancha.getId(), LocalDate.of(2030, 1, 8), LocalDate.of(2030, 1, 22), DayOfWeek.TUESDAY,
+                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.FUTBOL_5, null, "Cliente Fijo", "1122334455");
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> {
+            List<Reserva> reservas = invocation.getArgument(0);
+            long id = 500L;
+            for (Reserva reserva : reservas) {
+                reserva.setId(id++);
+            }
+            return reservas;
+        });
+
+        // Act
+        reservaService.crearReservaSemanal(request, dueno.getEmail());
+
+        // Assert: un turno fijo es UN aviso, no uno por ocurrencia. Con un evento por
+        // ocurrencia, un turno fijo anual encola 52 tareas @Async contra un pool con cola
+        // de 50 y manda 104 emails (ver B-07 en la auditoría).
+        verify(eventPublisher).publishEvent(new TurnoFijoCreadoEvent(List.of(500L, 501L, 502L)));
+        verify(eventPublisher, never()).publishEvent(any(ReservaConfirmadaEvent.class));
+    }
+
+    @Test
+    @DisplayName("crearReservaSemanal_Fallo_PeriodoQuePasaDelFinDeAnio")
+    void crearReservaSemanal_Fallo_PeriodoQuePasaDelFinDeAnio() {
+        // Un turno fijo se carga por año calendario: sin tope, "todos los lunes hasta 2040"
+        // arma ~700 reservas en una sola transacción, con la cancha bloqueada mientras corre.
+        ReservaSemanalRequest request = new ReservaSemanalRequest(
+                cancha.getId(), LocalDate.of(2030, 11, 5), LocalDate.of(2031, 2, 4), DayOfWeek.TUESDAY,
+                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.FUTBOL_5, null, "Cliente Fijo", "1122334455");
+
+        IllegalArgumentException excepcion = assertThrows(IllegalArgumentException.class,
+                () -> reservaService.crearReservaSemanal(request, dueno.getEmail()));
+
+        assertTrue(excepcion.getMessage().contains("31/12/2030"),
+                "el mensaje tiene que decir hasta qué fecha se puede cargar: " + excepcion.getMessage());
+        verify(reservaRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("crearReservaSemanal_Exito_PeriodoQueTerminaJustoElUltimoDiaDelAnio")
+    void crearReservaSemanal_Exito_PeriodoQueTerminaJustoElUltimoDiaDelAnio() {
+        // Borde inclusivo: el 31/12 tiene que entrar.
+        ReservaSemanalRequest request = new ReservaSemanalRequest(
+                cancha.getId(), LocalDate.of(2030, 12, 3), LocalDate.of(2030, 12, 31), DayOfWeek.TUESDAY,
+                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.FUTBOL_5, null, "Cliente Fijo", "1122334455");
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<ReservaResponse> responses = assertDoesNotThrow(
+                () -> reservaService.crearReservaSemanal(request, dueno.getEmail()));
+
+        // Martes 03, 10, 17, 24 y 31 de diciembre de 2030.
+        assertEquals(5, responses.size());
     }
 
     @Test

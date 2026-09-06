@@ -144,13 +144,13 @@ public class AuthService {
             throw new RateLimitExceededException("Demasiados intentos de inicio de sesión. Intente nuevamente en unos minutos.");
         }
 
-        Usuario empleado = usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(
+        // AndIsActiveTrue en la consulta y no como chequeo posterior: el alta sólo garantiza
+        // unicidad de nombre entre los ACTIVOS, así que un empleado dado de baja y otro
+        // vigente pueden compartir nombre. Un finder sin ese filtro devuelve 2 filas para un
+        // Optional y revienta el login (ver AuthServiceEmpleadoHomonimoTest).
+        Usuario empleado = usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(
                         establecimientoIdDispositivo, nombre, Role.EMPLOYEE)
                 .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
-
-        if (!Boolean.TRUE.equals(empleado.getIsActive())) {
-            throw new BadCredentialsException("Credenciales inválidas");
-        }
 
         Authentication resultado;
         try {

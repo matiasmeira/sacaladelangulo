@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.List;
 import java.util.Optional;
@@ -89,7 +90,7 @@ class EmpleadoServiceTest {
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
         when(passwordEncoder.encode("7392")).thenReturn("hash-7392");
-        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
+        when(usuarioRepository.saveAndFlush(any(Usuario.class))).thenAnswer(invocation -> {
             Usuario empleado = invocation.getArgument(0);
             empleado.setId(50L);
             return empleado;
@@ -103,9 +104,35 @@ class EmpleadoServiceTest {
         assertEquals("Juan", response.nombre());
         assertEquals(Set.of(PermisoEmpleado.CANCELAR_RESERVA), response.permisos());
         assertEquals(establecimiento.getId(), response.establecimientoId());
-        verify(usuarioRepository).save(argThatEmpleadoTieneRolYPin());
+        verify(usuarioRepository).saveAndFlush(argThatEmpleadoTieneRolYPin());
         verify(registroAuditoriaService).registrarAdministrativa(
                 eq(dueno), any(Usuario.class), eq(AccionAuditoria.CREAR_EMPLEADO), any());
+    }
+
+    @Test
+    @DisplayName("crearEmpleado_CarreraConOtraAltaDelMismoNombre_DevuelveElMismoErrorDeNegocioQueElGuard")
+    void crearEmpleado_CarreraConOtraAltaDelMismoNombre_DevuelveElMismoErrorDeNegocioQueElGuard() {
+        // Arrange: dos altas simultáneas del mismo nombre. El existsBy... de esta pasa
+        // porque la otra todavía no commiteó (check-then-act, no es atómico), y es el
+        // índice único parcial de V23 el que la frena en la base. Sin traducir esa
+        // violación, el dueño ve un 409 genérico de conflicto de integridad en vez del
+        // mensaje que ya existe para el mismo caso detectado por el guard.
+        EmpleadoRequest request = new EmpleadoRequest("Juan", "7392", Set.of(PermisoEmpleado.CANCELAR_RESERVA));
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(
+                establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
+        when(passwordEncoder.encode("7392")).thenReturn("hash-7392");
+        when(usuarioRepository.saveAndFlush(any(Usuario.class))).thenThrow(
+                new DataIntegrityViolationException("uk_empleado_activo_por_nombre_y_establecimiento"));
+
+        // Act + Assert
+        IllegalArgumentException excepcion = assertThrows(IllegalArgumentException.class,
+                () -> empleadoService.crearEmpleado(establecimiento.getId(), request, dueno.getEmail()));
+
+        assertEquals("Ya existe un empleado con ese nombre en este establecimiento", excepcion.getMessage());
+        verify(registroAuditoriaService, never()).registrarAdministrativa(any(), any(), any(), any());
     }
 
     private Usuario argThatEmpleadoTieneRolYPin() {
@@ -142,7 +169,7 @@ class EmpleadoServiceTest {
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimiento.getId(), "Juan", Role.EMPLOYEE)).thenReturn(false);
         when(passwordEncoder.encode("7392")).thenReturn("hash-7392");
-        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
+        when(usuarioRepository.saveAndFlush(any(Usuario.class))).thenAnswer(invocation -> {
             Usuario empleado = invocation.getArgument(0);
             empleado.setId(51L);
             return empleado;
@@ -150,7 +177,7 @@ class EmpleadoServiceTest {
 
         // Act & Assert
         assertDoesNotThrow(() -> empleadoService.crearEmpleado(establecimiento.getId(), request, dueno.getEmail()));
-        verify(usuarioRepository).save(any(Usuario.class));
+        verify(usuarioRepository).saveAndFlush(any(Usuario.class));
     }
 
     @Test

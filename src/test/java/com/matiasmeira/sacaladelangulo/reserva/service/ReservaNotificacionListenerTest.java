@@ -477,7 +477,7 @@ class ReservaNotificacionListenerTest {
     /**
      * Las 3 ocurrencias de un turno fijo de los martes 20:00 (08, 15 y 22 de enero de 2030).
      * Comparten cancha, deporte, horario y precio por construcción (ver
-     * ReservaService.crearReservaSemanal): lo único que varía es la fecha.
+     * TurnoFijoService.crear): lo único que varía es la fecha.
      */
     private List<Reserva> ocurrenciasDeTurnoFijo(Usuario jugador, String nombreClienteManual) {
         return List.of(

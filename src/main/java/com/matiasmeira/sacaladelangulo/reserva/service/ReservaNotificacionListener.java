@@ -81,7 +81,7 @@ public class ReservaNotificacionListener {
      * todo el período, en vez de dos por ocurrencia. Ver TurnoFijoCreadoEvent para el porqué.
      *
      * <p>Todas las ocurrencias comparten cancha, deporte, horario, cliente y precio por
-     * construcción (ReservaService.crearReservaSemanal las genera desde un único request, y
+     * construcción (TurnoFijoService.crear las genera desde un único request, y
      * el precio lo resuelve la misma tarifa porque día de la semana y hora de inicio son
      * idénticos): lo único que varía es la fecha. Por eso el modelo toma esos campos de la
      * primera ocurrencia y sólo la lista de fechas se arma recorriendo todas.

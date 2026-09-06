@@ -5,7 +5,7 @@ package com.matiasmeira.sacaladelangulo.reserva.service;
  * PENDIENTE_SENA -> CONFIRMADA en confirmarReserva, o creación directa en CONFIRMADA vía
  * crearReservaManual).
  *
- * <p>crearReservaSemanal NO usa este evento: un turno fijo publica un único
+ * <p>TurnoFijoService.crear NO usa este evento: un turno fijo publica un único
  * {@link TurnoFijoCreadoEvent} con todas sus ocurrencias, para mandar un solo aviso con la
  * lista de fechas en vez de uno por fecha. Ver ahí el detalle.
  *

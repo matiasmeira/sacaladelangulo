@@ -9,7 +9,6 @@ import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
 import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
 import com.matiasmeira.sacaladelangulo.core.exception.JugadorBloqueadoException;
 import com.matiasmeira.sacaladelangulo.core.exception.TelefonoNoVerificadoException;
-import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
@@ -26,7 +25,6 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
-import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
@@ -749,213 +747,6 @@ class ReservaServiceTest {
     }
 
     @Test
-    @DisplayName("crearReservaSemanal_Exito_GeneraUnaReservaConfirmadaPorFecha")
-    void crearReservaSemanal_Exito_GeneraUnaReservaConfirmadaPorFecha() {
-        // Arrange: martes 08, 15 y 22 de enero de 2030 (3 ocurrencias)
-        LocalDate fechaInicioPeriodo = LocalDate.of(2030, 1, 8);
-        LocalDate fechaFinPeriodo = LocalDate.of(2030, 1, 22);
-        LocalTime horaInicio = LocalTime.of(20, 0);
-        LocalTime horaFin = LocalTime.of(21, 0);
-
-        ReservaSemanalRequest request = new ReservaSemanalRequest(
-                cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
-                horaInicio, horaFin, Deporte.FUTBOL_5, null, "Cliente Fijo", "1122334455");
-
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
-        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
-        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
-        when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        // Act
-        List<ReservaResponse> responses = assertDoesNotThrow(
-                () -> reservaService.crearReservaSemanal(request, dueno.getEmail()));
-
-        // Assert
-        assert responses.size() == 3;
-        assert responses.stream().allMatch(r -> r.estado().equals("CONFIRMADA"));
-        assert responses.stream().allMatch(r -> r.jugadorId() == null);
-        assert responses.stream().allMatch(r -> r.nombreClienteManual().equals("Cliente Fijo"));
-        verify(reservaRepository).saveAll(argThat(list -> ((List<?>) list).size() == 3));
-        // El bloqueo de jugadores solo aplica al autoservicio (crearReserva): el dueño puede
-        // cargarle igual un turno fijo semanal a un jugador que él mismo haya bloqueado.
-        verify(bloqueoJugadorRepository, never()).existsByEstablecimientoIdAndJugadorId(any(), any());
-    }
-
-    @Test
-    @DisplayName("crearReservaSemanal_Exito_PublicaUnSoloEventoConsolidadoConTodosLosIds")
-    void crearReservaSemanal_Exito_PublicaUnSoloEventoConsolidadoConTodosLosIds() {
-        // Arrange: martes 08, 15 y 22 de enero de 2030 (3 ocurrencias)
-        ReservaSemanalRequest request = new ReservaSemanalRequest(
-                cancha.getId(), LocalDate.of(2030, 1, 8), LocalDate.of(2030, 1, 22), DayOfWeek.TUESDAY,
-                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.FUTBOL_5, null, "Cliente Fijo", "1122334455");
-
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
-        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
-        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
-        when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> {
-            List<Reserva> reservas = invocation.getArgument(0);
-            long id = 500L;
-            for (Reserva reserva : reservas) {
-                reserva.setId(id++);
-            }
-            return reservas;
-        });
-
-        // Act
-        reservaService.crearReservaSemanal(request, dueno.getEmail());
-
-        // Assert: un turno fijo es UN aviso, no uno por ocurrencia. Con un evento por
-        // ocurrencia, un turno fijo anual encola 52 tareas @Async contra un pool con cola
-        // de 50 y manda 104 emails (ver B-07 en la auditoría).
-        verify(eventPublisher).publishEvent(new TurnoFijoCreadoEvent(List.of(500L, 501L, 502L)));
-        verify(eventPublisher, never()).publishEvent(any(ReservaConfirmadaEvent.class));
-    }
-
-    @Test
-    @DisplayName("crearReservaSemanal_Fallo_PeriodoQuePasaDelFinDeAnio")
-    void crearReservaSemanal_Fallo_PeriodoQuePasaDelFinDeAnio() {
-        // Un turno fijo se carga por año calendario: sin tope, "todos los lunes hasta 2040"
-        // arma ~700 reservas en una sola transacción, con la cancha bloqueada mientras corre.
-        ReservaSemanalRequest request = new ReservaSemanalRequest(
-                cancha.getId(), LocalDate.of(2030, 11, 5), LocalDate.of(2031, 2, 4), DayOfWeek.TUESDAY,
-                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.FUTBOL_5, null, "Cliente Fijo", "1122334455");
-
-        IllegalArgumentException excepcion = assertThrows(IllegalArgumentException.class,
-                () -> reservaService.crearReservaSemanal(request, dueno.getEmail()));
-
-        assertTrue(excepcion.getMessage().contains("31/12/2030"),
-                "el mensaje tiene que decir hasta qué fecha se puede cargar: " + excepcion.getMessage());
-        verify(reservaRepository, never()).saveAll(any());
-    }
-
-    @Test
-    @DisplayName("crearReservaSemanal_Exito_PeriodoQueTerminaJustoElUltimoDiaDelAnio")
-    void crearReservaSemanal_Exito_PeriodoQueTerminaJustoElUltimoDiaDelAnio() {
-        // Borde inclusivo: el 31/12 tiene que entrar.
-        ReservaSemanalRequest request = new ReservaSemanalRequest(
-                cancha.getId(), LocalDate.of(2030, 12, 3), LocalDate.of(2030, 12, 31), DayOfWeek.TUESDAY,
-                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.FUTBOL_5, null, "Cliente Fijo", "1122334455");
-
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
-        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
-        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
-        when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        List<ReservaResponse> responses = assertDoesNotThrow(
-                () -> reservaService.crearReservaSemanal(request, dueno.getEmail()));
-
-        // Martes 03, 10, 17, 24 y 31 de diciembre de 2030.
-        assertEquals(5, responses.size());
-    }
-
-    @Test
-    @DisplayName("crearReservaSemanal_Fallo_JugadorIdNoEsRolPlayer")
-    void crearReservaSemanal_Fallo_JugadorIdNoEsRolPlayer() {
-        // Arrange
-        LocalDate fechaInicioPeriodo = LocalDate.of(2030, 1, 8);
-        LocalDate fechaFinPeriodo = LocalDate.of(2030, 1, 22);
-        LocalTime horaInicio = LocalTime.of(20, 0);
-        LocalTime horaFin = LocalTime.of(21, 0);
-
-        ReservaSemanalRequest request = new ReservaSemanalRequest(
-                cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
-                horaInicio, horaFin, Deporte.FUTBOL_5, dueno.getId(), null, null);
-
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
-        when(usuarioRepository.findById(dueno.getId())).thenReturn(Optional.of(dueno));
-
-        // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> reservaService.crearReservaSemanal(request, dueno.getEmail())
-        );
-        assert exception.getMessage().contains("PLAYER");
-        verify(reservaRepository, never()).saveAll(any());
-    }
-
-    @Test
-    @DisplayName("crearReservaSemanal_Fallo_TodoONada_UnaFechaBloqueada")
-    void crearReservaSemanal_Fallo_TodoONada_UnaFechaBloqueada() {
-        // Arrange
-        LocalDate fechaInicioPeriodo = LocalDate.of(2030, 1, 8);
-        LocalDate fechaFinPeriodo = LocalDate.of(2030, 1, 22);
-        LocalTime horaInicio = LocalTime.of(20, 0);
-        LocalTime horaFin = LocalTime.of(21, 0);
-
-        ReservaSemanalRequest request = new ReservaSemanalRequest(
-                cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
-                horaInicio, horaFin, Deporte.FUTBOL_5, null, "Cliente Fijo", null);
-
-        LocalDateTime inicioBloqueado = LocalDate.of(2030, 1, 22).atTime(horaInicio);
-        LocalDateTime finBloqueado = LocalDate.of(2030, 1, 22).atTime(horaFin);
-
-        BloqueoCancha bloqueo = BloqueoCancha.builder()
-                .id(1L)
-                .cancha(cancha)
-                .fechaInicio(inicioBloqueado)
-                .fechaFin(finBloqueado)
-                .motivo("Mantenimiento")
-                .build();
-
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
-        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of(bloqueo));
-        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-
-        // Act
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> reservaService.crearReservaSemanal(request, dueno.getEmail())
-        );
-
-        // Assert: todo-o-nada, no debe guardarse ninguna reserva aunque las 2 primeras fechas eran válidas
-        assert exception.getMessage().contains("2030-01-22");
-        assert exception.getMessage().contains("bloqueada");
-        verify(reservaRepository, never()).saveAll(any());
-    }
-
-    @Test
-    @DisplayName("crearReservaSemanal_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
-    void crearReservaSemanal_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
-        // Arrange
-        ReservaSemanalRequest request = new ReservaSemanalRequest(
-                cancha.getId(), LocalDate.of(2030, 1, 8), LocalDate.of(2030, 1, 22), DayOfWeek.TUESDAY,
-                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.FUTBOL_5, null, "Cliente Fijo", null);
-
-        Usuario otroDueno = Usuario.builder()
-                .id(4L)
-                .email("otro-dueno-semanal@test.com")
-                .password("password")
-                .nombre("Otro Dueño")
-                .rol(Role.OWNER)
-                .isActive(true)
-                .emailVerified(true)
-                .telefonoVerificado(false)
-                .build();
-
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
-                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
-
-        // Act & Assert
-        assertThrows(
-                org.springframework.security.access.AccessDeniedException.class,
-                () -> reservaService.crearReservaSemanal(request, otroDueno.getEmail())
-        );
-    }
-
-    @Test
     @DisplayName("moverReservaDeCancha_Exito_ReasignaCancha")
     void moverReservaDeCancha_Exito_ReasignaCancha() {
         // Arrange
@@ -1185,42 +976,6 @@ class ReservaServiceTest {
     }
 
     @Test
-    @DisplayName("crearReservaSemanal_Fallo_TodoONada_DiaNoLaborableEnUnaFecha")
-    void crearReservaSemanal_Fallo_TodoONada_DiaNoLaborableEnUnaFecha() {
-        // Arrange: martes 08, 15 y 22 de enero de 2030; el 15 es feriado
-        LocalDate fechaInicioPeriodo = LocalDate.of(2030, 1, 8);
-        LocalDate fechaFinPeriodo = LocalDate.of(2030, 1, 22);
-        LocalTime horaInicio = LocalTime.of(20, 0);
-        LocalTime horaFin = LocalTime.of(21, 0);
-
-        ReservaSemanalRequest request = new ReservaSemanalRequest(
-                cancha.getId(), fechaInicioPeriodo, fechaFinPeriodo, DayOfWeek.TUESDAY,
-                horaInicio, horaFin, Deporte.FUTBOL_5, null, "Cliente Fijo", null);
-
-        DiaNoLaborable diaNoLaborable = DiaNoLaborable.builder()
-                .id(1L)
-                .establecimiento(establecimiento)
-                .fecha(LocalDate.of(2030, 1, 15))
-                .motivo("Feriado nacional")
-                .build();
-
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
-        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of(diaNoLaborable));
-        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
-        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-
-        // Act & Assert: todo-o-nada, no debe guardarse nada aunque el 08 era válido
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> reservaService.crearReservaSemanal(request, dueno.getEmail())
-        );
-        assert exception.getMessage().contains("2030-01-15");
-        assert exception.getMessage().contains("Feriado nacional");
-        verify(reservaRepository, never()).saveAll(any());
-    }
-
-    @Test
     @DisplayName("crearReserva_Fallo_DeporteNoSoportadoPorLaCancha")
     void crearReserva_Fallo_DeporteNoSoportadoPorLaCancha() {
         // Arrange: la cancha solo tiene habilitado FUTBOL
@@ -1256,25 +1011,6 @@ class ReservaServiceTest {
                 () -> reservaService.crearReservaManual(request, dueno.getEmail())
         );
         assert exception.getMessage().contains("PADEL");
-    }
-
-    @Test
-    @DisplayName("crearReservaSemanal_Fallo_DeporteNoSoportadoPorLaCancha")
-    void crearReservaSemanal_Fallo_DeporteNoSoportadoPorLaCancha() {
-        // Arrange
-        ReservaSemanalRequest request = new ReservaSemanalRequest(
-                cancha.getId(), LocalDate.of(2030, 1, 8), LocalDate.of(2030, 1, 22), DayOfWeek.TUESDAY,
-                LocalTime.of(20, 0), LocalTime.of(21, 0), Deporte.TENIS, null, "Cliente Fijo", null);
-
-        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
-        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
-
-        // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> reservaService.crearReservaSemanal(request, dueno.getEmail())
-        );
-        assert exception.getMessage().contains("TENIS");
     }
 
     @Test

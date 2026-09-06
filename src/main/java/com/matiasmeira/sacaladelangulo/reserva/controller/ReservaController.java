@@ -5,7 +5,6 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.MoverReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
-import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.service.ReservaService;
 import jakarta.validation.Valid;
@@ -24,7 +23,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 
 /**
  * Controlador REST para reservas.
@@ -68,25 +66,6 @@ public class ReservaController {
             @RequestBody @Valid ReservaManualRequest request) {
         ReservaResponse reserva = reservaService.crearReservaManual(request, userDetails.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED).body(reserva);
-    }
-
-    /**
-     * Crea un turno fijo semanal: genera una reserva individual, ya CONFIRMADA, por
-     * cada fecha del período que coincida con el día de la semana solicitado.
-     * Protegido: el dueño del establecimiento o un administrador (mismo criterio que
-     * ReservaService.validarPropietarioOAdmin, ver M12 en la auditoría).
-     *
-     * @param userDetails Detalles del usuario autenticado
-     * @param request DTO con el rango de fechas, día/horario recurrente y datos del cliente
-     * @return Lista de ReservaResponse con cada ocurrencia creada
-     */
-    @PostMapping("/semanal")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
-    public ResponseEntity<List<ReservaResponse>> crearReservaSemanal(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody @Valid ReservaSemanalRequest request) {
-        List<ReservaResponse> reservas = reservaService.crearReservaSemanal(request, userDetails.getUsername());
-        return ResponseEntity.status(HttpStatus.CREATED).body(reservas);
     }
 
     /**

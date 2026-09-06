@@ -16,6 +16,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,7 +89,20 @@ public class EmpleadoService {
                 .telefonoVerificado(true)
                 .build();
 
-        Usuario empleadoGuardado = usuarioRepository.save(empleado);
+        Usuario empleadoGuardado;
+        try {
+            empleadoGuardado = usuarioRepository.saveAndFlush(empleado);
+        } catch (DataIntegrityViolationException ex) {
+            // El existsBy... de arriba + save no es atómico: dos altas casi simultáneas del
+            // mismo nombre pueden pasar ambas el guard antes de que cualquiera persista, y
+            // quedarían dos empleados ACTIVOS homónimos — el estado que rompe el login de
+            // mostrador (ver AuthServiceEmpleadoHomonimoTest). El índice único parcial de V23
+            // lo frena en la base; acá se traduce al mismo mensaje de negocio que el guard,
+            // en vez de dejar salir el 409 genérico de GlobalExceptionHandler. Mismo patrón
+            // que AuthService.registerOwner con el único de usuarios.email.
+            log.debug("Carrera al crear un empleado de nombre duplicado en el establecimiento {}", establecimientoId);
+            throw new IllegalArgumentException("Ya existe un empleado con ese nombre en este establecimiento");
+        }
         log.info("Empleado creado. ID: {}, Establecimiento: {}", empleadoGuardado.getId(), establecimientoId);
 
         registroAuditoriaService.registrarAdministrativa(actor, empleadoGuardado, AccionAuditoria.CREAR_EMPLEADO,

@@ -121,7 +121,7 @@ class AuthServiceTest {
                 .authorities("ROLE_EMPLOYEE")
                 .build();
 
-        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "juan", Role.EMPLOYEE))
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(10L, "juan", Role.EMPLOYEE))
                 .thenReturn(Optional.of(empleado));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
@@ -137,7 +137,7 @@ class AuthServiceTest {
     @DisplayName("authenticateEmpleado_Fallo_EmpleadoNoEncontrado")
     void authenticateEmpleado_Fallo_EmpleadoNoEncontrado() {
         EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Fantasma", "1234");
-        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "fantasma", Role.EMPLOYEE))
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(10L, "fantasma", Role.EMPLOYEE))
                 .thenReturn(Optional.empty());
 
         BadCredentialsException exception = assertThrows(
@@ -153,16 +153,14 @@ class AuthServiceTest {
     @DisplayName("authenticateEmpleado_Fallo_EmpleadoInactivo")
     void authenticateEmpleado_Fallo_EmpleadoInactivo() {
         EmpleadoLoginRequest request = new EmpleadoLoginRequest(10L, "Juan", "1234");
-        Usuario empleadoInactivo = Usuario.builder()
-                .id(5L)
-                .email("empleado-uuid@empleados.sacaladelangulo.interno")
-                .nombre("Juan")
-                .rol(Role.EMPLOYEE)
-                .isActive(false)
-                .build();
 
-        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "juan", Role.EMPLOYEE))
-                .thenReturn(Optional.of(empleadoInactivo));
+        // Un empleado desactivado ya no lo devuelve la consulta: el filtro AndIsActiveTrue
+        // lo excluye en la base, en vez de traerlo y descartarlo después en el service. El
+        // efecto para quien intenta entrar es el mismo (credenciales inválidas), pero así el
+        // finder mira el mismo conjunto que el guard de unicidad del alta y puede seguir
+        // declarando Optional aunque haya un homónimo de baja (ver AuthServiceEmpleadoHomonimoTest).
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(10L, "juan", Role.EMPLOYEE))
+                .thenReturn(Optional.empty());
 
         BadCredentialsException exception = assertThrows(
                 BadCredentialsException.class,
@@ -185,7 +183,7 @@ class AuthServiceTest {
                 .isActive(true)
                 .build();
 
-        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "juan", Role.EMPLOYEE))
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(10L, "juan", Role.EMPLOYEE))
                 .thenReturn(Optional.of(empleado));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new BadCredentialsException("Bad credentials"));
@@ -251,7 +249,7 @@ class AuthServiceTest {
                 RateLimitExceededException.class,
                 () -> authService.authenticateEmpleado(request, 10L)
         );
-        verify(usuarioRepository, never()).findByEstablecimientoIdAndNombreIgnoreCaseAndRol(any(), any(), any());
+        verify(usuarioRepository, never()).findByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(any(), any(), any());
     }
 
     @Test
@@ -268,7 +266,7 @@ class AuthServiceTest {
         );
 
         assertEquals("Credenciales inválidas", exception.getMessage());
-        verify(usuarioRepository, never()).findByEstablecimientoIdAndNombreIgnoreCaseAndRol(any(), any(), any());
+        verify(usuarioRepository, never()).findByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(any(), any(), any());
     }
 
     @Test
@@ -288,7 +286,7 @@ class AuthServiceTest {
                 .authorities("ROLE_EMPLOYEE")
                 .build();
 
-        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRol(10L, "juan", Role.EMPLOYEE))
+        when(usuarioRepository.findByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(10L, "juan", Role.EMPLOYEE))
                 .thenReturn(Optional.of(empleado));
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));

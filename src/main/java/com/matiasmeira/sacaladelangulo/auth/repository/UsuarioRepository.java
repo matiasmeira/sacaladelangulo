@@ -23,11 +23,23 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     boolean existsByEmail(String email);
 
     /**
-     * IgnoreCase para que "Juan" y "juan" (o con espacios extra, ya trimeados por el
+     * Resuelve al empleado del login de mostrador (ver AuthService.authenticateEmpleado).
+     *
+     * <p>IgnoreCase para que "Juan" y "juan" (o con espacios extra, ya trimeados por el
      * llamador) se traten como el mismo empleado tanto al loguear como al validar
      * unicidad de nombre (ver B4 en la auditoría).
+     *
+     * <p>AndIsActiveTrue NO es sólo una comodidad: es lo que hace que este finder pueda
+     * declarar Optional. Tiene que mirar EXACTAMENTE el mismo conjunto que el guard de
+     * unicidad de abajo (activos del establecimiento), que es el único invariante que el
+     * alta garantiza. Sin el filtro, dar de baja a "Juan" y volver a darlo de alta —el
+     * flujo que existsBy...AndIsActiveTrue habilita a propósito— deja dos filas "Juan" y
+     * este finder corta con IncorrectResultSizeDataAccessException: un 500 permanente en el
+     * login de mostrador, sin forma de arreglarlo desde la API. Ver
+     * AuthServiceEmpleadoHomonimoTest.
      */
-    Optional<Usuario> findByEstablecimientoIdAndNombreIgnoreCaseAndRol(Long establecimientoId, String nombre, Role rol);
+    Optional<Usuario> findByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(
+            Long establecimientoId, String nombre, Role rol);
 
     /**
      * AndIsActiveTrue para que el nombre de un empleado desactivado quede libre y se

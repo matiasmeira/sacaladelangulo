@@ -267,6 +267,14 @@ class TurnoFijoServiceTest {
         assertThat(regla.getDiaSemana()).isEqualTo(DayOfWeek.TUESDAY);
         assertThat(regla.getEstado()).isEqualTo(EstadoTurnoFijo.ACTIVO);
         assertThat(regla.getCanceladoDesde()).isNull();
+        assertThat(regla.getHoraInicio()).isEqualTo(LocalTime.of(20, 0));
+        assertThat(regla.getHoraFin()).isEqualTo(LocalTime.of(21, 0));
+        assertThat(regla.getFechaInicioPeriodo()).isEqualTo(LocalDate.of(2030, 1, 8));
+        assertThat(regla.getFechaFinPeriodo()).isEqualTo(LocalDate.of(2030, 1, 29));
+        assertThat(regla.getCancha()).isSameAs(cancha);
+        assertThat(regla.getJugador()).isNull();
+        assertThat(regla.getNombreClienteManual()).isEqualTo("Grupo del Colo");
+        assertThat(regla.getTelefonoClienteManual()).isEqualTo("11 5555-4444");
 
         ArgumentCaptor<List<Reserva>> reservasCaptor = ArgumentCaptor.forClass(List.class);
         verify(reservaRepository).saveAll(reservasCaptor.capture());
@@ -276,6 +284,13 @@ class TurnoFijoServiceTest {
                 assertThat(r.getTurnoFijo()).isSameAs(regla));
 
         assertThat(respuesta.ocurrencias()).hasSize(4);
+        assertThat(respuesta.canchaId()).isEqualTo(cancha.getId());
+        assertThat(respuesta.canchaNombre()).isEqualTo(cancha.getNombre());
+        assertThat(respuesta.estado()).isEqualTo("ACTIVO");
+        assertThat(respuesta.diaSemana()).isEqualTo(DayOfWeek.TUESDAY);
+        assertThat(respuesta.horaInicio()).isEqualTo(LocalTime.of(20, 0));
+        assertThat(respuesta.nombreClienteManual()).isEqualTo("Grupo del Colo");
+        assertThat(respuesta.telefonoClienteManual()).isEqualTo("11 5555-4444");
     }
 
     @Test

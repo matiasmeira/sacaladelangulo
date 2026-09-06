@@ -113,7 +113,8 @@ class ReservaServiceMatrizTransicionesTest {
             return new ReservaResponse(r.getId(), null, null, r.getCancha().getId(), r.getCancha().getNombre(),
                     r.getFechaHoraInicio(), r.getFechaHoraFin(), r.getEstado().name(), r.getPrecioTotal(),
                     r.getSenaPagada(), null, null, r.getDeporteSeleccionado(), r.getExpiraEn(),
-                    r.getMetodoPago() != null ? r.getMetodoPago().name() : null);
+                    r.getMetodoPago() != null ? r.getMetodoPago().name() : null,
+                    r.getTurnoFijo() != null ? r.getTurnoFijo().getId() : null);
         });
     }
 

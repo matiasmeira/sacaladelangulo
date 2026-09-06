@@ -23,6 +23,8 @@ public record ReservaResponse(
         String telefonoClienteManual,
         Deporte deporteSeleccionado,
         LocalDateTime expiraEn,
-        String metodoPago
+        String metodoPago,
+        /** Id de la serie si esta reserva es una ocurrencia de un turno fijo; null si no. */
+        Long turnoFijoId
 ) {
 }

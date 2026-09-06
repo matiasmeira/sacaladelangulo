@@ -208,7 +208,8 @@ class ReservaServiceTest {
                     reserva.getTelefonoClienteManual(),
                     reserva.getDeporteSeleccionado(),
                     reserva.getExpiraEn(),
-                    reserva.getMetodoPago() != null ? reserva.getMetodoPago().name() : null
+                    reserva.getMetodoPago() != null ? reserva.getMetodoPago().name() : null,
+                    reserva.getTurnoFijo() != null ? reserva.getTurnoFijo().getId() : null
             );
         });
 
@@ -1842,7 +1843,7 @@ class ReservaServiceTest {
         ReservaResponse response = new ReservaResponse(
                 reserva.getId(), jugador.getId(), jugador.getNombre(), cancha.getId(), cancha.getNombre(),
                 reserva.getFechaHoraInicio(), reserva.getFechaHoraFin(), "CONFIRMADA",
-                reserva.getPrecioTotal(), reserva.getSenaPagada(), null, null, null, null, null);
+                reserva.getPrecioTotal(), reserva.getSenaPagada(), null, null, null, null, null, null);
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(reservaRepository.findByJugadorId(jugador.getId(), pageable)).thenReturn(pageReservas);

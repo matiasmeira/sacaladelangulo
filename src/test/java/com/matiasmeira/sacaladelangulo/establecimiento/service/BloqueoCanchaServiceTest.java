@@ -155,7 +155,8 @@ class BloqueoCanchaServiceTest {
                     reserva.getTelefonoClienteManual(),
                     reserva.getDeporteSeleccionado(),
                     reserva.getExpiraEn(),
-                    reserva.getMetodoPago() != null ? reserva.getMetodoPago().name() : null
+                    reserva.getMetodoPago() != null ? reserva.getMetodoPago().name() : null,
+                    reserva.getTurnoFijo() != null ? reserva.getTurnoFijo().getId() : null
             );
         });
 

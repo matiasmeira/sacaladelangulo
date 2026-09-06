@@ -56,15 +56,51 @@ class IdempotencyFilterTest {
     }
 
     @Test
-    @DisplayName("doFilter_SinHeader_PasaDirectoSinConsultarElRepositorio")
-    void doFilter_SinHeader_PasaDirectoSinConsultarElRepositorio() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/reservas");
+    @DisplayName("doFilter_RutaDeClaveOpcionalSinHeader_PasaDirectoSinConsultarElRepositorio")
+    void doFilter_RutaDeClaveOpcionalSinHeader_PasaDirectoSinConsultarElRepositorio() throws Exception {
+        // Subir una foto no mueve plata: repetirla deja un archivo de más, no un cobro de
+        // más. Ahí la clave sigue siendo opt-in, a diferencia de las rutas de plata.
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/establecimientos/7/fotos");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         idempotencyFilter.doFilter(request, response, filterChain);
 
         verify(filterChain).doFilter(request, response);
         verifyNoInteractions(solicitudIdempotenteRepository);
+    }
+
+    @Test
+    @DisplayName("doFilter_RutaQueMuevePlataSinHeader_Responde400YNoLlamaAlChain")
+    void doFilter_RutaQueMuevePlataSinHeader_Responde400YNoLlamaAlChain() throws Exception {
+        // Mientras la clave fue opt-in, un cliente que no la mandaba no tenía NINGUNA
+        // protección: un doble submit de una venta de buffet cargaba dos ventas, dos
+        // descuentos de stock y dos ingresos de caja. Que el efecto dependa de que el
+        // cliente se acuerde de pedir la protección es exactamente lo que se cierra acá.
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/buffet/ventas");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        idempotencyFilter.doFilter(request, response, filterChain);
+
+        assertEquals(400, response.getStatus());
+        assertEquals("application/json", response.getContentType());
+        verify(filterChain, never()).doFilter(any(ServletRequest.class), any(HttpServletResponse.class));
+        verifyNoInteractions(solicitudIdempotenteRepository);
+    }
+
+    @Test
+    @DisplayName("doFilter_RutaQueMuevePlataConElPathPorcentoCodificado_NoSeSalteaElFiltro")
+    void doFilter_RutaQueMuevePlataConElPathPorcentoCodificado_NoSeSalteaElFiltro() throws Exception {
+        // getRequestURI() devuelve la URI SIN decodificar, pero el HandlerMapping de Spring
+        // sí decodifica: "/api/v1/%62uffet/ventas" no matcheaba el set de rutas protegidas
+        // y el filtro se corría, pero el request llegaba igual al controller. Alcanzaba con
+        // escribir la URL apenas distinta para saltear la idempotencia por completo.
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/%62uffet/ventas");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        idempotencyFilter.doFilter(request, response, filterChain);
+
+        assertEquals(400, response.getStatus());
+        verify(filterChain, never()).doFilter(any(ServletRequest.class), any(HttpServletResponse.class));
     }
 
     @Test

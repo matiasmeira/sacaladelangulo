@@ -60,6 +60,22 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             "/api/v1/reservas/semanal",
             "/api/v1/buffet/ventas"
     );
+
+    /**
+     * Rutas donde la clave es OBLIGATORIA: sin header se responde 400 y no se llama a la
+     * cadena. Son las que mueven plata, y hoy coinciden con {@link #RUTAS_PROTEGIDAS}.
+     *
+     * <p>Existe como constante propia y no como sinónimo implícito de aquella porque son dos
+     * dimensiones distintas: RUTAS_PROTEGIDAS/PATRONES_PROTEGIDOS separa POR FORMA DE MATCHEO,
+     * y esto separa POR EFECTO. Una ruta futura que mueva plata y lleve un id adentro tendría
+     * que entrar en PATRONES_PROTEGIDOS (por la forma) y también acá (por el efecto).
+     *
+     * <p>Que la clave fuera opt-in era el agujero: un cliente que no la mandaba no tenía
+     * ninguna protección, así que el "no cobrar dos veces" dependía de que el frontend se
+     * acordara de pedirlo. Subir una foto queda afuera a propósito: repetirla deja un archivo
+     * de más en el CDN, no un cobro de más.
+     */
+    public static final Set<String> RUTAS_CLAVE_OBLIGATORIA = RUTAS_PROTEGIDAS;
     /**
      * Rutas protegidas que llevan un id adentro, y por eso NO se pueden matchear por
      * igualdad de string como RUTAS_PROTEGIDAS. Se guardan como patrón y se matchean con
@@ -75,9 +91,23 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     );
 
     private static final PathPatternParser PARSER = new PathPatternParser();
-    private static final List<PathPattern> PATRONES_COMPILADOS = PATRONES_PROTEGIDOS.stream()
-            .map(PARSER::parse)
-            .toList();
+
+    /**
+     * TODAS las rutas se matchean con PathPattern sobre un PathContainer, incluidas las que
+     * no llevan id adentro. Antes esas se comparaban por igualdad de string contra
+     * {@code request.getRequestURI()}, que devuelve la URI SIN decodificar mientras que el
+     * HandlerMapping de Spring sí la decodifica: "/api/v1/%62uffet/ventas" no matcheaba el
+     * set, el filtro se corría, y el request llegaba igual al controller. O sea que alcanzaba
+     * con escribir la URL apenas distinta para saltear la idempotencia entera.
+     * PathContainer.parsePath decodifica cada segmento, así que las dos formas de matcheo
+     * miran ahora exactamente lo mismo que el ruteo.
+     */
+    private static final List<PathPattern> PATRONES_CLAVE_OBLIGATORIA = compilar(RUTAS_CLAVE_OBLIGATORIA);
+    private static final List<PathPattern> PATRONES_CLAVE_OPCIONAL = compilar(PATRONES_PROTEGIDOS);
+
+    private static List<PathPattern> compilar(Set<String> rutas) {
+        return rutas.stream().map(PARSER::parse).toList();
+    }
     /**
      * Ventana corta para distinguir "en curso" de "abandonada" (el proceso murió entre
      * guardar la solicitud y completarla — ver M21 en la auditoría), independiente de la
@@ -98,13 +128,26 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        if (!aplicaAEstaRuta(request)) {
+        if (!"POST".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        PathContainer path = PathContainer.parsePath(request.getRequestURI());
+        boolean claveObligatoria = matchea(PATRONES_CLAVE_OBLIGATORIA, path);
+        if (!claveObligatoria && !matchea(PATRONES_CLAVE_OPCIONAL, path)) {
             filterChain.doFilter(request, response);
             return;
         }
 
         String clave = request.getHeader(HEADER_CLAVE);
         if (clave == null || clave.isBlank()) {
+            if (claveObligatoria) {
+                // No hace falta drenar el cuerpo como en descartarCuerpoMultipart: ninguna
+                // ruta de clave obligatoria es multipart (la única que lo es, la subida de
+                // fotos, tiene la clave opcional y cae en la rama de abajo).
+                responderClaveFaltante(response);
+                return;
+            }
             filterChain.doFilter(request, response);
             return;
         }
@@ -177,16 +220,8 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         }
     }
 
-    private boolean aplicaAEstaRuta(HttpServletRequest request) {
-        if (!"POST".equalsIgnoreCase(request.getMethod())) {
-            return false;
-        }
-        String uri = request.getRequestURI();
-        if (RUTAS_PROTEGIDAS.contains(uri)) {
-            return true;
-        }
-        PathContainer path = PathContainer.parsePath(uri);
-        return PATRONES_COMPILADOS.stream().anyMatch(patron -> patron.matches(path));
+    private static boolean matchea(List<PathPattern> patrones, PathContainer path) {
+        return patrones.stream().anyMatch(patron -> patron.matches(path));
     }
 
     /**
@@ -243,6 +278,13 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         response.setStatus(409);
         response.setContentType("application/json");
         response.getWriter().write("{\"error\":\"Ya existe una solicitud en curso con la misma clave de idempotencia.\"}");
+    }
+
+    private void responderClaveFaltante(HttpServletResponse response) throws IOException {
+        response.setStatus(400);
+        response.setContentType("application/json");
+        response.getWriter().write(
+                "{\"error\":\"Falta el header " + HEADER_CLAVE + ", obligatorio en esta operación.\"}");
     }
 
     private void responderClaveInvalida(HttpServletResponse response) throws IOException {

@@ -211,7 +211,7 @@ class ClienteServiceTest {
         ReservaResponse reservaResponse = new ReservaResponse(
                 10L, jugadorId, "Juan Perez", 2L, "Cancha 1",
                 LocalDateTime.of(2026, 1, 5, 18, 0), LocalDateTime.of(2026, 1, 5, 19, 0),
-                "AUSENTE", new BigDecimal("100.00"), BigDecimal.ZERO, null, null, null, null, null);
+                "AUSENTE", new BigDecimal("100.00"), BigDecimal.ZERO, null, null, null, null, null, null);
 
         Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "fechaHoraInicio"));
         when(reservaRepository.findByJugador_IdAndCancha_Establecimiento_Id(jugadorId, establecimientoId, pageable))

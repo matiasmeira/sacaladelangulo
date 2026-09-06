@@ -179,7 +179,11 @@ mismas validaciones, mismo lock, todo-o-nada. Crea una serie **nueva** con
   `validarFechas`; `generarFechasDelPeriodo` ya busca la primera ocurrencia del día pedido a
   partir de ahí.
 - Fin = 31 de diciembre del año destino.
-- Renovar dos veces da 409 con un mensaje claro. Sin el guard el segundo intento igual
+- Renovar dos veces da 400 con un mensaje claro. (Decia 409 en la primera version de esta
+  spec: al escribir el plan se verifico `GlobalExceptionHandler` y no existe ninguna
+  excepcion de negocio que mapee a 409 — solo `DataIntegrityViolationException` y el fallo
+  de optimistic locking. Todo error de negocio del dominio es `IllegalArgumentException` →
+  400.) Sin el guard el segundo intento igual
   fallaría, pero por solapamiento — *"la cancha ya está reservada el 05/01"* — que no le dice
   nada al dueño. El índice único sobre `renovado_desde_id` lo garantiza a nivel base.
 

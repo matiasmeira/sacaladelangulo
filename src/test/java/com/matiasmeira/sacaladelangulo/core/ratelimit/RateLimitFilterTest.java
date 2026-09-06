@@ -82,6 +82,26 @@ class RateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("doFilter_RegistroIniciar_EstaLimitadoPorIp")
+    void doFilter_RegistroIniciar_EstaLimitadoPorIp() throws Exception {
+        // Cada llamada a este endpoint dispara un email REAL a la dirección que venga en el
+        // body. El único tope que tenía era de 3 cada 15 min POR EMAIL (ver
+        // RegistroVerificacionService.iniciarRegistro), que se esquiva rotando direcciones:
+        // alcanzaba para usar el dominio de Canchear como relay de correo no solicitado hacia
+        // una lista arbitraria, quemándole la reputación de envío.
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/registro/iniciar");
+        request.setRemoteAddr("10.0.0.5");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        when(rateLimiterService.tryConsume(anyString(), anyInt(), anyLong())).thenReturn(false);
+
+        rateLimitFilter.doFilter(request, response, filterChain);
+
+        assertEquals(429, response.getStatus());
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
     @DisplayName("doFilter_IgnoraXForwardedFor_UsaSiempreElRemoteAddr")
     void doFilter_IgnoraXForwardedFor_UsaSiempreElRemoteAddr() throws Exception {
         // Sin proxy de confianza delante (despliegue de instancia única), el header

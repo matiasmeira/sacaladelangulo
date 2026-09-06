@@ -43,6 +43,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/v1/auth/login", new Limite(15, Duration.ofMinutes(5).toMillis()),
             "/api/v1/auth/empleados/login", new Limite(30, Duration.ofMinutes(5).toMillis()),
             "/api/v1/auth/register/owner", new Limite(5, Duration.ofMinutes(10).toMillis()),
+            // Paso 1 del registro de jugadores. A diferencia del resto de este mapa, acá lo
+            // que se protege no es una credencial sino el ENVÍO DE EMAIL: cada llamada dispara
+            // un mail real a la dirección del body. El límite por identidad de negocio que ya
+            // existe (3 cada 15 min por email, ver RegistroVerificacionService.iniciarRegistro)
+            // no cubre este caso, porque se esquiva rotando direcciones: sin un tope por IP,
+            // el endpoint sirve para mandar correo no solicitado desde el dominio propio a una
+            // lista arbitraria, y eso golpea la reputación de envío en Resend.
+            //
+            // 10/10min y no 5/10min como register/owner: este es el camino de alto volumen y
+            // de cara al consumidor, y detrás de un CGNAT (habitual en redes móviles) muchos
+            // usuarios legítimos comparten una misma IP. 10 sigue cortando el abuso en masa
+            // —que necesita miles de envíos para servir de algo— sin bloquear a una familia
+            // o a un club registrándose desde la misma conexión.
+            "/api/v1/auth/registro/iniciar", new Limite(10, Duration.ofMinutes(10).toMillis()),
             "/api/v1/caja/emparejar", new Limite(10, Duration.ofMinutes(5).toMillis())
     );
 

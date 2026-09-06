@@ -16,11 +16,13 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Envía los emails de notificación cuando una Reserva queda CONFIRMADA (ver
- * ReservaConfirmadaEvent y los 3 puntos de publicación en ReservaService). AFTER_COMMIT +
+ * Envía los emails de notificación del ciclo de vida de una reserva: confirmación
+ * (ReservaConfirmadaEvent), cancelación (ReservaCanceladaEvent) y alta de un turno fijo
+ * semanal completo (TurnoFijoCreadoEvent, un solo aviso para las N ocurrencias). AFTER_COMMIT +
  * @Async por el mismo motivo que RecuperacionPasswordEmailListener: el cambio de estado ya
  * quedó persistido antes de intentar el envío, y no se retiene la conexión de base de datos
  * durante la latencia de una llamada de red externa. El evento solo lleva el ID de la
@@ -39,6 +41,8 @@ public class ReservaNotificacionListener {
     private static final String ASUNTO_CANCELACION_JUGADOR = "Cancelaste tu reserva";
     private static final String ASUNTO_LIBERACION_DUENO = "Se liberó una cancha";
     private static final String ASUNTO_CANCELACION_POR_ESTABLECIMIENTO = "Tu reserva fue cancelada";
+    private static final String ASUNTO_TURNO_FIJO_JUGADOR = "Tu turno fijo quedó confirmado";
+    private static final String ASUNTO_TURNO_FIJO_DUENO = "Nuevo turno fijo en tu establecimiento";
     private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter FORMATO_HORA = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -70,6 +74,64 @@ public class ReservaNotificacionListener {
             String htmlDueno = emailRenderer.render("reserva-nueva-dueno", modeloDueno);
             emailService.enviar(dueno.getEmail(), ASUNTO_DUENO, htmlDueno);
         }
+    }
+
+    /**
+     * Aviso único de un turno fijo semanal recién creado: DOS emails (jugador y dueño) para
+     * todo el período, en vez de dos por ocurrencia. Ver TurnoFijoCreadoEvent para el porqué.
+     *
+     * <p>Todas las ocurrencias comparten cancha, deporte, horario, cliente y precio por
+     * construcción (ReservaService.crearReservaSemanal las genera desde un único request, y
+     * el precio lo resuelve la misma tarifa porque día de la semana y hora de inicio son
+     * idénticos): lo único que varía es la fecha. Por eso el modelo toma esos campos de la
+     * primera ocurrencia y sólo la lista de fechas se arma recorriendo todas.
+     */
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void enviarNotificacionesTurnoFijo(TurnoFijoCreadoEvent evento) {
+        List<Reserva> ocurrencias = reservaRepository.findAllByIdInConEstablecimientoYDueno(evento.reservaIds());
+        if (ocurrencias.isEmpty()) {
+            log.warn("No se encontró ninguna de las {} reservas del turno fijo al intentar enviar las notificaciones",
+                    evento.reservaIds().size());
+            return;
+        }
+
+        Reserva primera = ocurrencias.get(0);
+        Map<String, Object> modelo = construirModeloTurnoFijo(ocurrencias, primera);
+
+        Usuario jugador = primera.getJugador();
+        if (puedeNotificar(jugador)) {
+            String htmlJugador = emailRenderer.render("turno-fijo-confirmado", modelo);
+            emailService.enviar(jugador.getEmail(), ASUNTO_TURNO_FIJO_JUGADOR, htmlJugador);
+        }
+
+        Map<String, Object> modeloDueno = new HashMap<>(modelo);
+        modeloDueno.put("nombreCliente", jugador != null ? jugador.getNombre() : primera.getNombreClienteManual());
+        Usuario dueno = primera.getCancha().getEstablecimiento().getDueno();
+        if (puedeNotificar(dueno)) {
+            String htmlDueno = emailRenderer.render("turno-fijo-nuevo-dueno", modeloDueno);
+            emailService.enviar(dueno.getEmail(), ASUNTO_TURNO_FIJO_DUENO, htmlDueno);
+        }
+    }
+
+    private Map<String, Object> construirModeloTurnoFijo(List<Reserva> ocurrencias, Reserva primera) {
+        Map<String, Object> modelo = new HashMap<>();
+        modelo.put("establecimientoNombre", primera.getCancha().getEstablecimiento().getNombre());
+        modelo.put("canchaNombre", primera.getCancha().getNombre());
+        modelo.put("deporte", primera.getDeporteSeleccionado());
+        modelo.put("horaInicio", primera.getFechaHoraInicio().format(FORMATO_HORA));
+        modelo.put("horaFin", primera.getFechaHoraFin().format(FORMATO_HORA));
+        modelo.put("fechas", ocurrencias.stream()
+                .map(reserva -> reserva.getFechaHoraInicio().format(FORMATO_FECHA))
+                .toList());
+        modelo.put("cantidadTurnos", ocurrencias.size());
+        modelo.put("precioPorTurno", primera.getPrecioTotal());
+        // Se suma en vez de multiplicar precioPorTurno por la cantidad: si en el futuro el
+        // precio pudiera variar entre ocurrencias, el total sigue siendo el correcto.
+        modelo.put("precioTotalTurnoFijo", ocurrencias.stream()
+                .map(Reserva::getPrecioTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        return modelo;
     }
 
     @Async

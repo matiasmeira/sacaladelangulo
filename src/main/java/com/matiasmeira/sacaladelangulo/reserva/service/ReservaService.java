@@ -52,6 +52,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
@@ -76,6 +77,9 @@ public class ReservaService {
      * queda afuera a propósito, ya que existe justamente para turnos fijos de largo plazo.
      */
     private static final int LIMITE_ANTICIPACION_DIAS = 31;
+
+    /** Formato de fecha para los mensajes de error dirigidos al usuario. */
+    private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
      * Ventana de gracia para confirmar/pagar la seña de una reserva de jugador antes de
@@ -273,6 +277,7 @@ public class ReservaService {
         if (!request.horaInicio().isBefore(request.horaFin())) {
             throw new IllegalArgumentException("La hora de inicio debe ser anterior a la hora de fin");
         }
+        validarPeriodoDentroDelAnio(request.fechaInicioPeriodo(), request.fechaFinPeriodo());
 
         Cancha cancha = buscarCanchaPorId(request.canchaId());
         autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
@@ -357,7 +362,11 @@ public class ReservaService {
         List<Reserva> reservasGuardadas = reservaRepository.saveAll(reservasAGuardar);
         log.info("Turno fijo creado con éxito. {} reservas generadas para la cancha {}",
                 reservasGuardadas.size(), cancha.getNombre());
-        reservasGuardadas.forEach(r -> eventPublisher.publishEvent(new ReservaConfirmadaEvent(r.getId())));
+        // UN evento para todo el turno fijo, no uno por ocurrencia: el destinatario espera un
+        // solo aviso con la lista de fechas, y un evento por ocurrencia encolaba una tarea
+        // @Async por fecha contra un pool con cola de 50 (ver TurnoFijoCreadoEvent).
+        eventPublisher.publishEvent(new TurnoFijoCreadoEvent(
+                reservasGuardadas.stream().map(Reserva::getId).toList()));
 
         return reservasGuardadas.stream().map(reservaMapper::mapToResponse).toList();
     }
@@ -366,6 +375,26 @@ public class ReservaService {
      * Genera las fechas del período que coinciden con el día de la semana indicado,
      * avanzando de a una semana desde la primera ocurrencia dentro del rango.
      */
+    /**
+     * Un turno fijo se carga por año calendario: la fecha de fin no puede pasar del 31/12
+     * del año en que arranca. A diferencia de las reservas puntuales, acá NO aplica
+     * LIMITE_ANTICIPACION_DIAS (31 días) — un turno fijo existe justamente para el largo
+     * plazo — pero sin ningún tope el período tampoco tenía techo: "todos los lunes hasta
+     * 2040" son ~520 reservas creadas en UNA transacción, con el lock pesimista de la cancha
+     * tomado de punta a punta (ver bloquearCanchasRelacionadas), más el aviso al jugador de
+     * un compromiso a 15 años. El año calendario es el corte que el negocio usa para
+     * renovar: al llegar diciembre se carga el del año siguiente.
+     */
+    private void validarPeriodoDentroDelAnio(LocalDate fechaInicioPeriodo, LocalDate fechaFinPeriodo) {
+        LocalDate ultimoDiaDelAnio = LocalDate.of(fechaInicioPeriodo.getYear(), 12, 31);
+        if (fechaFinPeriodo.isAfter(ultimoDiaDelAnio)) {
+            throw new IllegalArgumentException(
+                    "Un turno fijo se carga hasta el fin del año en el que empieza: la fecha de fin no puede "
+                            + "pasar del " + ultimoDiaDelAnio.format(FORMATO_FECHA)
+                            + ". Para el año siguiente, cargá un turno fijo nuevo.");
+        }
+    }
+
     private List<LocalDate> generarFechasDelPeriodo(LocalDate fechaInicioPeriodo, LocalDate fechaFinPeriodo, DayOfWeek diaSemana) {
         List<LocalDate> fechas = new ArrayList<>();
         LocalDate fecha = fechaInicioPeriodo.with(TemporalAdjusters.nextOrSame(diaSemana));

@@ -54,6 +54,14 @@ public class Reserva {
     private Cancha cancha;
 
     /**
+     * Serie a la que pertenece esta ocurrencia, si es parte de un turno fijo semanal. Nulo
+     * en toda reserva puntual (de jugador o de mostrador), que es la enorme mayoría.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "turno_fijo_id")
+    private TurnoFijo turnoFijo;
+
+    /**
      * Deporte específico para el que se reservó la cancha en este turno. Una misma
      * cancha puede soportar varios deportes (ver Cancha.deportes); esto registra
      * cuál se usó para que el dueño prepare el equipamiento correspondiente

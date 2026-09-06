@@ -196,7 +196,7 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
      * <p>ORDER BY fechaHoraInicio y no por id: el email lista las fechas y tienen que salir
      * en orden cronológico. Hoy id y fecha coinciden en orden porque saveAll persiste las
      * ocurrencias ya ordenadas, pero eso es un detalle de implementación de
-     * ReservaService.crearReservaSemanal, no algo de lo que el email deba depender.
+     * TurnoFijoService.crear, no algo de lo que el email deba depender.
      */
     @Query("SELECT r FROM Reserva r " +
            "LEFT JOIN FETCH r.jugador " +

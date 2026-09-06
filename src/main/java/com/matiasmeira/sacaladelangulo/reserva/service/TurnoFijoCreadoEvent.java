@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * Evento publicado UNA sola vez por cada turno fijo semanal creado (ver
- * ReservaService.crearReservaSemanal), con los IDs de todas sus ocurrencias.
+ * TurnoFijoService.crear), con los IDs de todas sus ocurrencias.
  *
  * <p>Existe en vez de reusar {@link ReservaConfirmadaEvent} por ocurrencia porque un turno
  * fijo no son N reservas sueltas: es una sola decisión del dueño que el destinatario espera

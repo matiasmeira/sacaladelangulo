@@ -31,7 +31,6 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
-import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
@@ -52,10 +51,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalAdjusters;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -73,13 +69,10 @@ public class ReservaService {
     /**
      * Mismo tope que DisponibilidadService.RANGO_MAXIMO_DIAS: no tiene sentido permitir
      * reservar más adelante de lo que la propia grilla de disponibilidad puede mostrar.
-     * Solo aplica a reservas puntuales (crearReserva/crearReservaManual); crearReservaSemanal
+     * Solo aplica a reservas puntuales (crearReserva/crearReservaManual); TurnoFijoService.crear
      * queda afuera a propósito, ya que existe justamente para turnos fijos de largo plazo.
      */
     private static final int LIMITE_ANTICIPACION_DIAS = 31;
-
-    /** Formato de fecha para los mensajes de error dirigidos al usuario. */
-    private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
      * Ventana de gracia para confirmar/pagar la seña de una reserva de jugador antes de
@@ -253,158 +246,6 @@ public class ReservaService {
         }
     }
 
-    /**
-     * Crea un turno fijo semanal: genera una Reserva individual por cada fecha del
-     * período que coincida con el día de la semana solicitado, en el mismo horario.
-     * La operación es todo-o-nada: si una sola fecha no tiene disponibilidad (choca con
-     * otra reserva, un bloqueo por mantenimiento, o cae fuera del horario de atención),
-     * no se persiste ninguna reserva. Solo puede utilizarla el dueño real del
-     * establecimiento al que pertenece la cancha. Todas las reservas generadas nacen en
-     * estado CONFIRMADA, ya que las registra el propio dueño.
-     *
-     * @param request DTO con el rango de fechas, el día/horario recurrente y los datos del cliente
-     * @param email Email del usuario autenticado (OWNER)
-     * @return Lista de ReservaResponse con cada ocurrencia creada
-     */
-    public List<ReservaResponse> crearReservaSemanal(ReservaSemanalRequest request, String email) {
-        log.info("Iniciando creación de reserva semanal. Email: {}, Cancha: {}, Día: {}, Horario: {}-{}, Período: {} a {}",
-                email, request.canchaId(), request.diaSemana(), request.horaInicio(), request.horaFin(),
-                request.fechaInicioPeriodo(), request.fechaFinPeriodo());
-
-        if (request.fechaInicioPeriodo().isAfter(request.fechaFinPeriodo())) {
-            throw new IllegalArgumentException("La fecha de inicio del período no puede ser posterior a la fecha de fin del período");
-        }
-        if (!request.horaInicio().isBefore(request.horaFin())) {
-            throw new IllegalArgumentException("La hora de inicio debe ser anterior a la hora de fin");
-        }
-        validarPeriodoDentroDelAnio(request.fechaInicioPeriodo(), request.fechaFinPeriodo());
-
-        Cancha cancha = buscarCanchaPorId(request.canchaId());
-        autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
-        validarDeporteSoportado(request.deporteSeleccionado(), cancha);
-
-        Usuario jugador = null;
-        if (request.jugadorId() != null) {
-            jugador = usuarioRepository.findById(request.jugadorId())
-                    .orElseThrow(() -> new EntityNotFoundException("Jugador no encontrado"));
-            if (jugador.getRol() != Role.PLAYER) {
-                throw new IllegalArgumentException("El jugadorId indicado no corresponde a un usuario con rol PLAYER");
-            }
-        } else if (request.nombreClienteManual() == null || request.nombreClienteManual().isBlank()) {
-            throw new IllegalArgumentException("Debe indicar un jugador registrado (jugadorId) o el nombre del cliente (nombreClienteManual)");
-        }
-
-        List<LocalDate> fechasDelPeriodo = generarFechasDelPeriodo(
-                request.fechaInicioPeriodo(), request.fechaFinPeriodo(), request.diaSemana());
-        if (fechasDelPeriodo.isEmpty()) {
-            throw new IllegalArgumentException("El período indicado no contiene ningún " + request.diaSemana());
-        }
-
-        // Se bloquea una sola vez para todo el turno fijo: la cancha (y su pool) no cambia
-        // entre ocurrencias, solo la fecha/hora, así que un único lock por transacción alcanza.
-        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(cancha.getEstablecimiento().getId());
-        bloquearCanchasRelacionadas(cancha, todasLasCanchas);
-
-        // Se precarga una sola vez el rango completo del período (días no laborables,
-        // bloqueos y reservas existentes) y se filtra en memoria por cada ocurrencia, en
-        // vez de repetir 3 queries por fecha (mismo patrón que DisponibilidadService, que
-        // enfrenta el mismo problema al generar la grilla completa de turnos libres).
-        Long establecimientoId = cancha.getEstablecimiento().getId();
-        LocalDate primeraFecha = fechasDelPeriodo.get(0);
-        LocalDate ultimaFecha = fechasDelPeriodo.get(fechasDelPeriodo.size() - 1);
-        LocalDateTime rangoInicio = primeraFecha.atStartOfDay();
-        LocalDateTime rangoFin = ultimaFecha.plusDays(1).atTime(LocalTime.MAX);
-
-        List<DiaNoLaborable> diasNoLaborables = diaNoLaborableRepository
-                .findByEstablecimientoIdAndFechaBetween(establecimientoId, primeraFecha, ultimaFecha);
-        List<BloqueoCancha> bloqueosEnRango = bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, rangoInicio, rangoFin);
-        List<Reserva> reservasEnRango = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin, LocalDateTime.now());
-
-        List<Reserva> reservasAGuardar = new ArrayList<>();
-        for (LocalDate fecha : fechasDelPeriodo) {
-            LocalDateTime inicio = fecha.atTime(request.horaInicio());
-            LocalDateTime fin = fecha.atTime(request.horaFin());
-
-            try {
-                validarFechas(inicio, fin);
-                validarGranularidadHoraria(inicio, cancha);
-                long duracionMinutos = validarDuracion(inicio, fin, cancha);
-                validarSinBloqueos(inicio, fin, cancha, bloqueosEnRango);
-                validarDiaNoLaborable(inicio, cancha.getEstablecimiento(), diasNoLaborables);
-                validarHorarioAtencion(inicio, fin, cancha.getEstablecimiento());
-
-                List<Reserva> solapadas = reservasEnRango.stream()
-                        .filter(r -> seSuperponen(r.getFechaHoraInicio(), r.getFechaHoraFin(), inicio, fin))
-                        .toList();
-                validarCanchaExactaLibre(cancha, solapadas);
-                validarPoolCanchas(cancha, solapadas, todasLasCanchas);
-
-                BigDecimal precioCalculado = calcularPrecio(cancha, inicio, duracionMinutos);
-
-                reservasAGuardar.add(Reserva.builder()
-                        .jugador(jugador)
-                        .cancha(cancha)
-                        .deporteSeleccionado(request.deporteSeleccionado())
-                        .nombreClienteManual(jugador == null ? request.nombreClienteManual() : null)
-                        .telefonoClienteManual(jugador == null ? request.telefonoClienteManual() : null)
-                        .fechaHoraInicio(inicio)
-                        .fechaHoraFin(fin)
-                        .estado(EstadoReserva.CONFIRMADA)
-                        .precioTotal(precioCalculado)
-                        .senaPagada(BigDecimal.ZERO)
-                        .build());
-            } catch (IllegalArgumentException ex) {
-                log.warn("Reserva semanal rechazada en la fecha {}: {}", fecha, ex.getMessage());
-                throw new IllegalArgumentException("No se pudo crear el turno fijo para el " + fecha + ": " + ex.getMessage());
-            }
-        }
-
-        List<Reserva> reservasGuardadas = reservaRepository.saveAll(reservasAGuardar);
-        log.info("Turno fijo creado con éxito. {} reservas generadas para la cancha {}",
-                reservasGuardadas.size(), cancha.getNombre());
-        // UN evento para todo el turno fijo, no uno por ocurrencia: el destinatario espera un
-        // solo aviso con la lista de fechas, y un evento por ocurrencia encolaba una tarea
-        // @Async por fecha contra un pool con cola de 50 (ver TurnoFijoCreadoEvent).
-        eventPublisher.publishEvent(new TurnoFijoCreadoEvent(
-                reservasGuardadas.stream().map(Reserva::getId).toList()));
-
-        return reservasGuardadas.stream().map(reservaMapper::mapToResponse).toList();
-    }
-
-    /**
-     * Genera las fechas del período que coinciden con el día de la semana indicado,
-     * avanzando de a una semana desde la primera ocurrencia dentro del rango.
-     */
-    /**
-     * Un turno fijo se carga por año calendario: la fecha de fin no puede pasar del 31/12
-     * del año en que arranca. A diferencia de las reservas puntuales, acá NO aplica
-     * LIMITE_ANTICIPACION_DIAS (31 días) — un turno fijo existe justamente para el largo
-     * plazo — pero sin ningún tope el período tampoco tenía techo: "todos los lunes hasta
-     * 2040" son ~520 reservas creadas en UNA transacción, con el lock pesimista de la cancha
-     * tomado de punta a punta (ver bloquearCanchasRelacionadas), más el aviso al jugador de
-     * un compromiso a 15 años. El año calendario es el corte que el negocio usa para
-     * renovar: al llegar diciembre se carga el del año siguiente.
-     */
-    private void validarPeriodoDentroDelAnio(LocalDate fechaInicioPeriodo, LocalDate fechaFinPeriodo) {
-        LocalDate ultimoDiaDelAnio = LocalDate.of(fechaInicioPeriodo.getYear(), 12, 31);
-        if (fechaFinPeriodo.isAfter(ultimoDiaDelAnio)) {
-            throw new IllegalArgumentException(
-                    "Un turno fijo se carga hasta el fin del año en el que empieza: la fecha de fin no puede "
-                            + "pasar del " + ultimoDiaDelAnio.format(FORMATO_FECHA)
-                            + ". Para el año siguiente, cargá un turno fijo nuevo.");
-        }
-    }
-
-    private List<LocalDate> generarFechasDelPeriodo(LocalDate fechaInicioPeriodo, LocalDate fechaFinPeriodo, DayOfWeek diaSemana) {
-        List<LocalDate> fechas = new ArrayList<>();
-        LocalDate fecha = fechaInicioPeriodo.with(TemporalAdjusters.nextOrSame(diaSemana));
-        while (!fecha.isAfter(fechaFinPeriodo)) {
-            fechas.add(fecha);
-            fecha = fecha.plusWeeks(1);
-        }
-        return fechas;
-    }
-
     private Usuario buscarUsuarioPorEmail(String email) {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
@@ -412,7 +253,7 @@ public class ReservaService {
         return usuario;
     }
 
-    private Cancha buscarCanchaPorId(Long canchaId) {
+    Cancha buscarCanchaPorId(Long canchaId) {
         Cancha cancha = canchaRepository.findById(canchaId)
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
         log.debug("Cancha encontrada: {} - Establecimiento: {}", cancha.getId(), cancha.getEstablecimiento().getId());
@@ -423,7 +264,7 @@ public class ReservaService {
         validarFechas(request.fechaHoraInicio(), request.fechaHoraFin());
     }
 
-    private void validarFechas(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin) {
+    void validarFechas(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin) {
         if (!fechaHoraInicio.isBefore(fechaHoraFin)) {
             log.warn("Fechas inválidas. Inicio >= Fin");
             throw new IllegalArgumentException("La fecha de inicio debe ser anterior a la de fin");
@@ -436,7 +277,7 @@ public class ReservaService {
 
     /**
      * Cota superior de anticipación para reservas puntuales (ver LIMITE_ANTICIPACION_DIAS).
-     * No se llama desde crearReservaSemanal a propósito.
+     * No se llama desde TurnoFijoService.crear a propósito.
      */
     private void validarLimiteDeAnticipacion(LocalDateTime fechaHoraInicio) {
         if (ChronoUnit.DAYS.between(LocalDateTime.now(), fechaHoraInicio) >= LIMITE_ANTICIPACION_DIAS) {
@@ -450,7 +291,7 @@ public class ReservaService {
         validarGranularidadHoraria(request.fechaHoraInicio(), cancha);
     }
 
-    private void validarGranularidadHoraria(LocalDateTime fechaHoraInicio, Cancha cancha) {
+    void validarGranularidadHoraria(LocalDateTime fechaHoraInicio, Cancha cancha) {
         int minutoInicio = fechaHoraInicio.getMinute();
         if (minutoInicio != 0 && minutoInicio != 30) {
             log.warn("Inicio de reserva inválido: {}", fechaHoraInicio);
@@ -466,7 +307,7 @@ public class ReservaService {
         return validarDuracion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha);
     }
 
-    private long validarDuracion(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Cancha cancha) {
+    long validarDuracion(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Cancha cancha) {
         long duracionMinutos = Duration.between(fechaHoraInicio, fechaHoraFin).toMinutes();
         if (!cancha.getDuracionesPermitidas().contains((int) duracionMinutos)) {
             log.warn("Duración no permitida: {} minutos", duracionMinutos);
@@ -490,9 +331,9 @@ public class ReservaService {
     /**
      * Misma validación que {@link #validarSinBloqueos(LocalDateTime, LocalDateTime, Cancha)},
      * pero filtrando en memoria una lista de bloqueos ya precargada para el rango completo
-     * (ver crearReservaSemanal), en vez de consultar la base de datos por cada ocurrencia.
+     * (ver TurnoFijoService.crear), en vez de consultar la base de datos por cada ocurrencia.
      */
-    private void validarSinBloqueos(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Cancha cancha, List<BloqueoCancha> bloqueosPrecargados) {
+    void validarSinBloqueos(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Cancha cancha, List<BloqueoCancha> bloqueosPrecargados) {
         Optional<BloqueoCancha> bloqueo = bloqueosPrecargados.stream()
                 .filter(b -> b.getCancha().getId().equals(cancha.getId()))
                 .filter(b -> seSuperponen(b.getFechaInicio(), b.getFechaFin(), fechaHoraInicio, fechaHoraFin))
@@ -507,7 +348,7 @@ public class ReservaService {
      * puede soportar varios deportes (ej. fútbol y hockey), pero solo se puede
      * reservar para uno de los que tiene realmente habilitados.
      */
-    private void validarDeporteSoportado(Deporte deporteSeleccionado, Cancha cancha) {
+    void validarDeporteSoportado(Deporte deporteSeleccionado, Cancha cancha) {
         if (!cancha.getDeportes().contains(deporteSeleccionado)) {
             log.warn("Deporte no soportado por la cancha. Cancha: {}, Deporte solicitado: {}", cancha.getId(), deporteSeleccionado);
             throw new IllegalArgumentException("La cancha no está habilitada para el deporte " + deporteSeleccionado);
@@ -533,10 +374,10 @@ public class ReservaService {
     /**
      * Misma validación que {@link #validarDiaNoLaborable(LocalDateTime, Establecimiento)},
      * pero filtrando en memoria una lista de días no laborables ya precargada para el rango
-     * completo (ver crearReservaSemanal), en vez de consultar la base de datos por cada
+     * completo (ver TurnoFijoService.crear), en vez de consultar la base de datos por cada
      * ocurrencia.
      */
-    private void validarDiaNoLaborable(LocalDateTime fechaHoraInicio, Establecimiento establecimiento, List<DiaNoLaborable> diasNoLaborablesPrecargados) {
+    void validarDiaNoLaborable(LocalDateTime fechaHoraInicio, Establecimiento establecimiento, List<DiaNoLaborable> diasNoLaborablesPrecargados) {
         diasNoLaborablesPrecargados.stream()
                 .filter(d -> d.getFecha().equals(fechaHoraInicio.toLocalDate()))
                 .findFirst()
@@ -549,7 +390,7 @@ public class ReservaService {
                 });
     }
 
-    private boolean seSuperponen(LocalDateTime inicioA, LocalDateTime finA, LocalDateTime inicioB, LocalDateTime finB) {
+    boolean seSuperponen(LocalDateTime inicioA, LocalDateTime finA, LocalDateTime inicioB, LocalDateTime finB) {
         return inicioA.isBefore(finB) && finA.isAfter(inicioB);
     }
 
@@ -557,7 +398,7 @@ public class ReservaService {
         validarHorarioAtencion(request.fechaHoraInicio(), request.fechaHoraFin(), establecimiento);
     }
 
-    private void validarHorarioAtencion(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Establecimiento establecimiento) {
+    void validarHorarioAtencion(LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin, Establecimiento establecimiento) {
         DayOfWeek diaSemana = fechaHoraInicio.getDayOfWeek();
         LocalTime horaInicio = fechaHoraInicio.toLocalTime();
         LocalTime horaFin = fechaHoraFin.toLocalTime();
@@ -592,7 +433,7 @@ public class ReservaService {
         }
     }
 
-    private void validarCanchaExactaLibre(Cancha cancha, List<Reserva> solapadas) {
+    void validarCanchaExactaLibre(Cancha cancha, List<Reserva> solapadas) {
         boolean canchaExactaReservada = solapadas.stream()
                 .anyMatch(r -> r.getCancha().getId().equals(cancha.getId()));
 
@@ -607,7 +448,7 @@ public class ReservaService {
         return calcularPrecio(cancha, request.fechaHoraInicio(), duracionMinutos);
     }
 
-    private BigDecimal calcularPrecio(Cancha cancha, LocalDateTime fechaHoraInicio, long duracionMinutos) {
+    BigDecimal calcularPrecio(Cancha cancha, LocalDateTime fechaHoraInicio, long duracionMinutos) {
         return PrecioReservaCalculator.calcularPrecio(cancha, fechaHoraInicio, duracionMinutos);
     }
 
@@ -974,7 +815,7 @@ public class ReservaService {
      * @param todasLasCanchasDelEstablecimiento canchas activas del establecimiento, ya
      *                                           precargadas por el llamador (evita repetir la query)
      */
-    private void validarPoolCanchas(Cancha cancha, List<Reserva> solapadas, List<Cancha> todasLasCanchasDelEstablecimiento) {
+    void validarPoolCanchas(Cancha cancha, List<Reserva> solapadas, List<Cancha> todasLasCanchasDelEstablecimiento) {
         if (!PoolCanchaCalculator.hayDisponibilidad(cancha, solapadas, todasLasCanchasDelEstablecimiento)) {
             log.warn("No hay disponibilidad en el pool. Cancha: {}", cancha.getId());
             throw new IllegalArgumentException("No hay disponibilidad en el pool para armar esta cancha");
@@ -989,7 +830,7 @@ public class ReservaService {
      * doble-booking (dos reservas solapadas creadas en simultáneo pasando ambas la
      * validación de "cancha libre").
      */
-    private void bloquearCanchasRelacionadas(Cancha cancha, List<Cancha> todasLasCanchasDelEstablecimiento) {
+    void bloquearCanchasRelacionadas(Cancha cancha, List<Cancha> todasLasCanchasDelEstablecimiento) {
         List<Long> idsOrdenados = PoolCanchaCalculator.canchasRelacionadas(cancha, todasLasCanchasDelEstablecimiento)
                 .stream()
                 .sorted()

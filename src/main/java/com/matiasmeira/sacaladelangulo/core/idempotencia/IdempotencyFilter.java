@@ -57,7 +57,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     public static final Set<String> RUTAS_PROTEGIDAS = Set.of(
             "/api/v1/reservas",
             "/api/v1/reservas/manual",
-            "/api/v1/reservas/semanal",
+            "/api/v1/turnos-fijos",
             "/api/v1/buffet/ventas"
     );
 

@@ -704,12 +704,19 @@ class TurnoFijoServiceTest {
     @Test
     @DisplayName("listar_DeOtroEstablecimiento_LanzaAccessDenied")
     void listar_DeOtroEstablecimiento_LanzaAccessDenied() {
+        // eq(establecimiento) y no any(): si el código autorizara contra el establecimiento
+        // equivocado, el stub no matchearía, no se lanzaría la excepción, y
+        // assertThatThrownBy fallaría sola (además del verify de abajo, que ancla los tres
+        // argumentos explícitamente).
         doThrow(new AccessDeniedException("No autorizado"))
-                .when(autorizacionEmpleadoService).validarLectura(any(), eq(EMAIL_INTRUSO), any());
+                .when(autorizacionEmpleadoService).validarLectura(eq(establecimiento), eq(EMAIL_INTRUSO), any());
 
         assertThatThrownBy(() -> turnoFijoService.listar(EST_ID, null, PageRequest.of(0, 20), EMAIL_INTRUSO))
                 .isInstanceOf(AccessDeniedException.class);
         verify(turnoFijoRepository, never()).findByCancha_Establecimiento_IdAndEstado(any(), any(), any());
+        verify(autorizacionEmpleadoService).validarLectura(
+                eq(establecimiento), eq(EMAIL_INTRUSO),
+                eq(AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA));
     }
 
     @Test
@@ -717,11 +724,17 @@ class TurnoFijoServiceTest {
     void detalle_DeOtroEstablecimiento_LanzaAccessDenied() {
         when(turnoFijoRepository.findByIdConCanchaYEstablecimiento(TURNO_FIJO_ID))
                 .thenReturn(Optional.of(turnoFijoActivo));
+        // El establecimiento de la CANCHA DE LA SERIE, no cualquier otro: es justo la
+        // distinción que este test tiene que poder detectar (ver comentario de arriba).
+        Establecimiento establecimientoDeLaSerie = turnoFijoActivo.getCancha().getEstablecimiento();
         doThrow(new AccessDeniedException("No autorizado"))
-                .when(autorizacionEmpleadoService).validarLectura(any(), eq(EMAIL_INTRUSO), any());
+                .when(autorizacionEmpleadoService).validarLectura(eq(establecimientoDeLaSerie), eq(EMAIL_INTRUSO), any());
 
         assertThatThrownBy(() -> turnoFijoService.detalle(TURNO_FIJO_ID, EMAIL_INTRUSO))
                 .isInstanceOf(AccessDeniedException.class);
+        verify(autorizacionEmpleadoService).validarLectura(
+                eq(establecimientoDeLaSerie), eq(EMAIL_INTRUSO),
+                eq(AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA));
     }
 
     @Test

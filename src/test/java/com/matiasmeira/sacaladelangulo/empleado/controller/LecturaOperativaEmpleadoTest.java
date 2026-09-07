@@ -4,8 +4,14 @@ import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.reserva.model.EstadoTurnoFijo;
+import com.matiasmeira.sacaladelangulo.reserva.model.TurnoFijo;
+import com.matiasmeira.sacaladelangulo.reserva.repository.TurnoFijoRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +20,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Set;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -58,6 +67,12 @@ class LecturaOperativaEmpleadoTest {
     @Autowired
     private EstablecimientoRepository establecimientoRepository;
 
+    @Autowired
+    private CanchaRepository canchaRepository;
+
+    @Autowired
+    private TurnoFijoRepository turnoFijoRepository;
+
     private Establecimiento establecimiento;
 
     private Establecimiento sembrarLocal(String sufijo) {
@@ -99,6 +114,29 @@ class LecturaOperativaEmpleadoTest {
         return email;
     }
 
+    private TurnoFijo sembrarTurnoFijo(Establecimiento local) {
+        Cancha cancha = canchaRepository.save(Cancha.builder()
+                .nombre("Cancha lectura")
+                .deportes(Set.of(Deporte.FUTBOL_5))
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(1000))
+                .montoSena(BigDecimal.valueOf(200))
+                .establecimiento(local)
+                .build());
+
+        return turnoFijoRepository.save(TurnoFijo.builder()
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
+                .diaSemana(DayOfWeek.TUESDAY)
+                .horaInicio(LocalTime.of(20, 0))
+                .horaFin(LocalTime.of(21, 0))
+                .fechaInicioPeriodo(LocalDate.of(2030, 1, 1))
+                .fechaFinPeriodo(LocalDate.of(2030, 12, 31))
+                .estado(EstadoTurnoFijo.ACTIVO)
+                .nombreClienteManual("Cliente Fijo")
+                .build());
+    }
+
     @Test
     @DisplayName("agenda_EmpleadoConPermisoDeReserva_LaVe")
     void agenda_EmpleadoConPermisoDeReserva_LaVe() throws Exception {
@@ -135,6 +173,62 @@ class LecturaOperativaEmpleadoTest {
 
         mockMvc.perform(get("/api/v1/reservas/establecimiento/" + establecimiento.getId())
                         .param("fecha", LocalDate.now().toString())
+                        .with(user(email).roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("turnosFijos_EmpleadoConPermisoDeReserva_LoVe")
+    void turnosFijos_EmpleadoConPermisoDeReserva_LoVe() throws Exception {
+        establecimiento = sembrarLocal("turnos-fijos-listado-si");
+        // Misma regla que la agenda: el listado de series es lectura, no escritura, así
+        // que cualquiera de los permisos operativos de reserva alcanza (ver
+        // AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA).
+        String email = sembrarEmpleado(establecimiento, "Cobrador2", Set.of(PermisoEmpleado.FINALIZAR_RESERVA));
+
+        mockMvc.perform(get("/api/v1/turnos-fijos")
+                        .param("establecimientoId", establecimiento.getId().toString())
+                        .with(user(email).roles("EMPLOYEE")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("turnosFijos_EmpleadoDeOtroLocal_NoLoVe")
+    void turnosFijos_EmpleadoDeOtroLocal_NoLoVe() throws Exception {
+        establecimiento = sembrarLocal("turnos-fijos-listado-propio");
+        Establecimiento ajeno = sembrarLocal("turnos-fijos-listado-ajeno");
+        // Tiene el permiso, pero en OTRO establecimiento: no puede ver las series ajenas.
+        String email = sembrarEmpleado(ajeno, "Intruso2", Set.of(PermisoEmpleado.FINALIZAR_RESERVA));
+
+        mockMvc.perform(get("/api/v1/turnos-fijos")
+                        .param("establecimientoId", establecimiento.getId().toString())
+                        .with(user(email).roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("turnoFijoDetalle_EmpleadoConPermisoDeReserva_LoVe")
+    void turnoFijoDetalle_EmpleadoConPermisoDeReserva_LoVe() throws Exception {
+        establecimiento = sembrarLocal("turnos-fijos-detalle-si");
+        TurnoFijo turnoFijo = sembrarTurnoFijo(establecimiento);
+        String email = sembrarEmpleado(establecimiento, "Cobrador3", Set.of(PermisoEmpleado.FINALIZAR_RESERVA));
+
+        mockMvc.perform(get("/api/v1/turnos-fijos/" + turnoFijo.getId())
+                        .with(user(email).roles("EMPLOYEE")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("turnoFijoDetalle_EmpleadoDeOtroLocal_NoLoVe")
+    void turnoFijoDetalle_EmpleadoDeOtroLocal_NoLoVe() throws Exception {
+        establecimiento = sembrarLocal("turnos-fijos-detalle-propio");
+        TurnoFijo turnoFijo = sembrarTurnoFijo(establecimiento);
+        Establecimiento ajeno = sembrarLocal("turnos-fijos-detalle-ajeno");
+        // Tiene el permiso, pero en OTRO establecimiento: no puede ver el detalle de una
+        // serie ajena aunque conozca (o adivine) su id — es justo el caso IDOR.
+        String email = sembrarEmpleado(ajeno, "Intruso3", Set.of(PermisoEmpleado.FINALIZAR_RESERVA));
+
+        mockMvc.perform(get("/api/v1/turnos-fijos/" + turnoFijo.getId())
                         .with(user(email).roles("EMPLOYEE")))
                 .andExpect(status().isForbidden());
     }

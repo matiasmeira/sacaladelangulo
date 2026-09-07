@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaR
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.reserva.dto.CancelacionTurnoFijoResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
@@ -43,6 +44,7 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -65,6 +67,11 @@ public class TurnoFijoService {
 
     /** Formato de fecha para los mensajes de error dirigidos al usuario. */
     private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    /** Estados que una cancelación de serie nunca toca. */
+    private static final Set<EstadoReserva> ESTADOS_INTOCABLES = Set.of(
+            EstadoReserva.FINALIZADA, EstadoReserva.AUSENTE,
+            EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
 
     private final TurnoFijoRepository turnoFijoRepository;
     private final ReservaRepository reservaRepository;
@@ -267,6 +274,60 @@ public class TurnoFijoService {
     private TurnoFijo buscarTurnoFijo(Long id) {
         return turnoFijoRepository.findByIdConCanchaYEstablecimiento(id)
                 .orElseThrow(() -> new EntityNotFoundException("Turno fijo no encontrado"));
+    }
+
+    /**
+     * Da de baja la serie desde una fecha en adelante (por defecto, desde ahora).
+     *
+     * <p>El corte es fechaHoraInicio > max(ahora, desde): cancelar "desde hoy" a las 21 no
+     * toca el turno de hoy a las 20, que ya se jugó y hay que finalizar o marcar ausente,
+     * no cancelar.
+     *
+     * <p>No toma el lock pesimista de la cancha: cancelar no crea solapamientos. El @Version
+     * de cada Reserva alcanza.
+     */
+    public CancelacionTurnoFijoResponse cancelar(Long id, LocalDate desde, String email) {
+        TurnoFijo turnoFijo = buscarTurnoFijo(id);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(turnoFijo.getCancha().getEstablecimiento(), email);
+
+        LocalDate desdeEfectiva = desde != null ? desde : LocalDate.now();
+        LocalDateTime corte = maximo(LocalDateTime.now(), desdeEfectiva.atStartOfDay());
+
+        List<Reserva> canceladas = new ArrayList<>();
+        List<CancelacionTurnoFijoResponse.OcurrenciaOmitida> omitidas = new ArrayList<>();
+
+        for (Reserva ocurrencia : reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(id)) {
+            if (!ocurrencia.getFechaHoraInicio().isAfter(corte)) {
+                continue;   // ya pasó o queda antes del corte pedido: no es parte de la baja
+            }
+            if (ESTADOS_INTOCABLES.contains(ocurrencia.getEstado())) {
+                omitidas.add(new CancelacionTurnoFijoResponse.OcurrenciaOmitida(
+                        ocurrencia.getFechaHoraInicio(), ocurrencia.getEstado().name()));
+                continue;
+            }
+            ocurrencia.setEstado(EstadoReserva.CANCELADA);
+            canceladas.add(ocurrencia);
+        }
+
+        reservaRepository.saveAll(canceladas);
+
+        turnoFijo.setEstado(EstadoTurnoFijo.CANCELADO);
+        turnoFijo.setCanceladoDesde(desdeEfectiva);
+        turnoFijoRepository.save(turnoFijo);
+
+        log.info("Turno fijo {} cancelado desde {}. {} ocurrencias dadas de baja, {} omitidas",
+                id, desdeEfectiva, canceladas.size(), omitidas.size());
+
+        if (!canceladas.isEmpty()) {
+            eventPublisher.publishEvent(new TurnoFijoCanceladoEvent(
+                    id, canceladas.stream().map(Reserva::getId).toList()));
+        }
+
+        return new CancelacionTurnoFijoResponse(canceladas.size(), omitidas);
+    }
+
+    private LocalDateTime maximo(LocalDateTime a, LocalDateTime b) {
+        return a.isAfter(b) ? a : b;
     }
 
     /**

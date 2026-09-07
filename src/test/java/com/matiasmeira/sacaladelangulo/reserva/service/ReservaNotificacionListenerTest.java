@@ -617,4 +617,61 @@ class ReservaNotificacionListenerTest {
         verify(emailService, never()).enviar(any(), any(), any());
         verify(emailRenderer, never()).render(any(), anyMap());
     }
+
+    @Test
+    @DisplayName("enviarNotificacionesTurnoFijoCancelado_ConJugador_EnviaUnSoloMailAlJugadorYOtroAlDueno")
+    void enviarNotificacionesTurnoFijoCancelado_ConJugador_EnviaUnSoloMailAlJugadorYOtroAlDueno() {
+        Usuario jugador = Usuario.builder()
+                .id(1L)
+                .email("jugador@test.com")
+                .nombre("Juan")
+                .rol(Role.PLAYER)
+                .build();
+        List<Long> ids = List.of(60L, 61L, 62L);
+
+        when(reservaRepository.findAllByIdInConEstablecimientoYDueno(ids))
+                .thenReturn(ocurrenciasDeTurnoFijo(jugador, null));
+        when(emailRenderer.render(eq("turno-fijo-cancelado"), anyMap())).thenReturn("<html>cancelado</html>");
+
+        listener.enviarNotificacionesTurnoFijoCancelado(new TurnoFijoCanceladoEvent(300L, ids));
+
+        // El punto de todo el cambio: 3 ocurrencias canceladas -> 2 emails, no 6.
+        verify(emailService, times(1))
+                .enviar(eq("jugador@test.com"), eq("Se dio de baja tu turno fijo"), eq("<html>cancelado</html>"));
+        verify(emailService, times(1))
+                .enviar(eq("dueno@test.com"), eq("Se dio de baja un turno fijo en tu establecimiento"), eq("<html>cancelado</html>"));
+        verify(emailService, times(2)).enviar(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesTurnoFijoCancelado_SinJugador_EnviaSoloMailAlDuenoConElNombreDelClienteManual")
+    void enviarNotificacionesTurnoFijoCancelado_SinJugador_EnviaSoloMailAlDuenoConElNombreDelClienteManual() {
+        List<Long> ids = List.of(60L, 61L, 62L);
+
+        when(reservaRepository.findAllByIdInConEstablecimientoYDueno(ids))
+                .thenReturn(ocurrenciasDeTurnoFijo(null, "Cliente Fijo"));
+        when(emailRenderer.render(eq("turno-fijo-cancelado"), anyMap())).thenReturn("<html>cancelado</html>");
+
+        listener.enviarNotificacionesTurnoFijoCancelado(new TurnoFijoCanceladoEvent(300L, ids));
+
+        verify(emailService, times(1))
+                .enviar(eq("dueno@test.com"), eq("Se dio de baja un turno fijo en tu establecimiento"), eq("<html>cancelado</html>"));
+        verify(emailService, times(1)).enviar(any(), any(), any());
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(emailRenderer).render(eq("turno-fijo-cancelado"), captor.capture());
+        assertEquals("Cliente Fijo", captor.getValue().get("nombreCliente"));
+    }
+
+    @Test
+    @DisplayName("enviarNotificacionesTurnoFijoCancelado_ReservasNoEncontradas_NoEnviaNingunMailNiLanzaExcepcion")
+    void enviarNotificacionesTurnoFijoCancelado_ReservasNoEncontradas_NoEnviaNingunMailNiLanzaExcepcion() {
+        List<Long> ids = List.of(998L, 999L);
+        when(reservaRepository.findAllByIdInConEstablecimientoYDueno(ids)).thenReturn(List.of());
+
+        listener.enviarNotificacionesTurnoFijoCancelado(new TurnoFijoCanceladoEvent(300L, ids));
+
+        verify(emailService, never()).enviar(any(), any(), any());
+        verify(emailRenderer, never()).render(any(), anyMap());
+    }
 }

@@ -141,6 +141,7 @@ class TurnoFijoServiceTest {
     private static final Long EST_ID = 10L;
     private static final String EMAIL_DUENO = "dueno@test.com";
     private static final String EMAIL_INTRUSO = "intruso@test.com";
+    private static final String EMAIL_EMPLEADO = "empleado@test.com";
     private static final Long TURNO_FIJO_ID = 300L;
 
     private Usuario jugador;
@@ -281,6 +282,29 @@ class TurnoFijoServiceTest {
         // fijo (ver crear_TurnoFijo_Exito_GeneraUnaReservaConfirmadaPorFecha), pero queda
         // lenient por si algún test nuevo lo necesita.
         lenient().when(bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(any(), any())).thenReturn(false);
+
+        // Default para los tests de cancelar(): la regla se resuelve con su cancha y
+        // establecimiento (mismo camino que buscarTurnoFijo). Cada test puede pisarlo.
+        lenient().when(turnoFijoRepository.findByIdConCanchaYEstablecimiento(TURNO_FIJO_ID))
+                .thenReturn(Optional.of(turnoFijoActivo));
+    }
+
+    /**
+     * Una ocurrencia de turnoFijoActivo en la fecha/estado pedidos, para los tests de
+     * cancelar(). Comparte cancha con el resto del fixture; lo único que varía por test es
+     * la fecha (pasada/futura respecto de "ahora") y el estado.
+     */
+    private Reserva ocurrencia(LocalDateTime inicio, EstadoReserva estado) {
+        return Reserva.builder()
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
+                .fechaHoraInicio(inicio)
+                .fechaHoraFin(inicio.plusHours(1))
+                .estado(estado)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .turnoFijo(turnoFijoActivo)
+                .build();
     }
 
     @Test
@@ -770,5 +794,76 @@ class TurnoFijoServiceTest {
 
         assertThrows(EntityNotFoundException.class,
                 () -> turnoFijoService.detalle(999L, EMAIL_DUENO));
+    }
+
+    @Test
+    @DisplayName("cancelar_CancelaLasFuturasYDejaIntactasLasPasadas")
+    void cancelar_CancelaLasFuturasYDejaIntactasLasPasadas() {
+        Reserva pasada = ocurrencia(LocalDateTime.now().minusDays(7), EstadoReserva.CONFIRMADA);
+        Reserva futura = ocurrencia(LocalDateTime.now().plusDays(7), EstadoReserva.CONFIRMADA);
+        when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
+                .thenReturn(List.of(pasada, futura));
+
+        var resumen = turnoFijoService.cancelar(TURNO_FIJO_ID, null, EMAIL_DUENO);
+
+        assertThat(resumen.canceladas()).isEqualTo(1);
+        assertThat(pasada.getEstado()).isEqualTo(EstadoReserva.CONFIRMADA);
+        assertThat(futura.getEstado()).isEqualTo(EstadoReserva.CANCELADA);
+    }
+
+    @Test
+    @DisplayName("cancelar_OmiteFinalizadasYAusentesYLasReporta")
+    void cancelar_OmiteFinalizadasYAusentesYLasReporta() {
+        Reserva finalizada = ocurrencia(LocalDateTime.now().plusDays(1), EstadoReserva.FINALIZADA);
+        Reserva ausente = ocurrencia(LocalDateTime.now().plusDays(2), EstadoReserva.AUSENTE);
+        Reserva viva = ocurrencia(LocalDateTime.now().plusDays(3), EstadoReserva.CONFIRMADA);
+        when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
+                .thenReturn(List.of(finalizada, ausente, viva));
+
+        var resumen = turnoFijoService.cancelar(TURNO_FIJO_ID, null, EMAIL_DUENO);
+
+        assertThat(resumen.canceladas()).isEqualTo(1);
+        assertThat(resumen.omitidas()).hasSize(2);
+        assertThat(finalizada.getEstado()).isEqualTo(EstadoReserva.FINALIZADA);
+        assertThat(ausente.getEstado()).isEqualTo(EstadoReserva.AUSENTE);
+    }
+
+    @Test
+    @DisplayName("cancelar_PublicaUnSoloEventoYNoUnoPorOcurrencia")
+    void cancelar_PublicaUnSoloEventoYNoUnoPorOcurrencia() {
+        when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
+                .thenReturn(List.of(
+                        ocurrencia(LocalDateTime.now().plusDays(1), EstadoReserva.CONFIRMADA),
+                        ocurrencia(LocalDateTime.now().plusDays(8), EstadoReserva.CONFIRMADA),
+                        ocurrencia(LocalDateTime.now().plusDays(15), EstadoReserva.CONFIRMADA)));
+
+        turnoFijoService.cancelar(TURNO_FIJO_ID, null, EMAIL_DUENO);
+
+        verify(eventPublisher, times(1)).publishEvent(any(TurnoFijoCanceladoEvent.class));
+        verify(eventPublisher, never()).publishEvent(any(ReservaCanceladaEvent.class));
+    }
+
+    @Test
+    @DisplayName("cancelar_DesdeUnaFechaFutura_NoTocaLasAnteriores")
+    void cancelar_DesdeUnaFechaFutura_NoTocaLasAnteriores() {
+        Reserva antes = ocurrencia(LocalDateTime.now().plusDays(3), EstadoReserva.CONFIRMADA);
+        Reserva despues = ocurrencia(LocalDateTime.now().plusDays(17), EstadoReserva.CONFIRMADA);
+        when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
+                .thenReturn(List.of(antes, despues));
+
+        turnoFijoService.cancelar(TURNO_FIJO_ID, LocalDate.now().plusDays(10), EMAIL_DUENO);
+
+        assertThat(antes.getEstado()).isEqualTo(EstadoReserva.CONFIRMADA);
+        assertThat(despues.getEstado()).isEqualTo(EstadoReserva.CANCELADA);
+    }
+
+    @Test
+    @DisplayName("cancelar_ComoEmpleado_LanzaAccessDenied")
+    void cancelar_ComoEmpleado_LanzaAccessDenied() {
+        doThrow(new AccessDeniedException("No autorizado"))
+                .when(autorizacionEmpleadoService).validarPropietarioOAdmin(any(), eq(EMAIL_EMPLEADO));
+
+        assertThatThrownBy(() -> turnoFijoService.cancelar(TURNO_FIJO_ID, null, EMAIL_EMPLEADO))
+                .isInstanceOf(AccessDeniedException.class);
     }
 }

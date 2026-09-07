@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Se dio de baja un turno fijo</title>
+</head>
+<body>
+
+<!--
+  Aviso ÚNICO de una serie de turno fijo dada de baja: mismo motivo que
+  turno-fijo-confirmado.html (ver TurnoFijoCanceladoEvent), pero una sola plantilla
+  compartida entre jugador y dueño, porque a los dos les interesa el mismo dato -- qué
+  fechas se liberaron -- y sólo cambia el asunto del mail (ver
+  ReservaNotificacionListener.enviarNotificacionesTurnoFijoCancelado).
+-->
+<div th:replace="~{layout :: email(titulo='Se dio de baja un turno fijo', contenidoHtml=~{::#contenido})}">
+
+    <div id="contenido">
+        <p style="margin:0 0 24px 0;">
+            Se dio de baja el turno fijo de <strong th:text="${nombreCliente}">Cliente</strong>:
+            se liberaron <strong th:text="${cantidadTurnos}">0</strong> fechas.
+        </p>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="width:100%;border-collapse:collapse;">
+            <tr>
+                <td style="padding:10px 0;font-size:13px;color:#5b6472;border-bottom:1px solid #eef1f6;">Establecimiento</td>
+                <td style="padding:10px 0;font-size:14px;color:#0a1f3d;font-weight:600;text-align:right;border-bottom:1px solid #eef1f6;" th:text="${establecimientoNombre}">Establecimiento</td>
+            </tr>
+            <tr>
+                <td style="padding:10px 0;font-size:13px;color:#5b6472;border-bottom:1px solid #eef1f6;">Cancha</td>
+                <td style="padding:10px 0;font-size:14px;color:#0a1f3d;font-weight:600;text-align:right;border-bottom:1px solid #eef1f6;" th:text="${canchaNombre}">Cancha</td>
+            </tr>
+            <tr>
+                <td style="padding:10px 0;font-size:13px;color:#5b6472;border-bottom:1px solid #eef1f6;">Deporte</td>
+                <td style="padding:10px 0;font-size:14px;color:#0a1f3d;font-weight:600;text-align:right;border-bottom:1px solid #eef1f6;" th:text="${deporte}">Deporte</td>
+            </tr>
+            <tr>
+                <td style="padding:10px 0;font-size:13px;color:#5b6472;">Horario</td>
+                <td style="padding:10px 0;font-size:14px;color:#0a1f3d;font-weight:600;text-align:right;">
+                    <span th:text="${horaInicio}">00:00</span> - <span th:text="${horaFin}">00:00</span>
+                </td>
+            </tr>
+        </table>
+
+        <p style="margin:28px 0 12px 0;font-size:13px;font-weight:700;color:#0a1f3d;">
+            Fechas canceladas
+        </p>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="width:100%;border-collapse:collapse;">
+            <tr th:each="fecha : ${fechas}">
+                <td style="padding:8px 0;font-size:14px;color:#0a1f3d;border-bottom:1px solid #eef1f6;"
+                    th:text="${fecha}">00/00/0000</td>
+            </tr>
+        </table>
+    </div>
+
+</div>
+
+</body>
+</html>

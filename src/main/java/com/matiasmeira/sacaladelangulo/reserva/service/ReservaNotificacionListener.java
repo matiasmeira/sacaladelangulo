@@ -43,6 +43,8 @@ public class ReservaNotificacionListener {
     private static final String ASUNTO_CANCELACION_POR_ESTABLECIMIENTO = "Tu reserva fue cancelada";
     private static final String ASUNTO_TURNO_FIJO_JUGADOR = "Tu turno fijo quedó confirmado";
     private static final String ASUNTO_TURNO_FIJO_DUENO = "Nuevo turno fijo en tu establecimiento";
+    private static final String ASUNTO_TURNO_FIJO_CANCELADO_JUGADOR = "Se dio de baja tu turno fijo";
+    private static final String ASUNTO_TURNO_FIJO_CANCELADO_DUENO = "Se dio de baja un turno fijo en tu establecimiento";
     private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter FORMATO_HORA = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -132,6 +134,43 @@ public class ReservaNotificacionListener {
                 .map(Reserva::getPrecioTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
         return modelo;
+    }
+
+    /**
+     * Aviso único de una serie de turno fijo dada de baja: DOS emails (jugador y dueño)
+     * para toda la baja, no uno por ocurrencia. Mismo motivo que enviarNotificacionesTurnoFijo
+     * (ver TurnoFijoCanceladoEvent).
+     *
+     * <p>Comparte una única plantilla entre ambos destinatarios en vez de una por rol: acá no
+     * hay nada que distinga la perspectiva de uno y otro (a los dos les interesa el mismo
+     * dato, qué fechas se liberaron), a diferencia del alta donde el jugador recibe una
+     * confirmación y el dueño una notificación de nueva ocupación. Sólo cambia el asunto.
+     */
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void enviarNotificacionesTurnoFijoCancelado(TurnoFijoCanceladoEvent evento) {
+        List<Reserva> ocurrencias = reservaRepository.findAllByIdInConEstablecimientoYDueno(evento.reservaIds());
+        if (ocurrencias.isEmpty()) {
+            log.warn("No se encontró ninguna de las {} reservas del turno fijo cancelado al intentar enviar las notificaciones",
+                    evento.reservaIds().size());
+            return;
+        }
+
+        Reserva primera = ocurrencias.get(0);
+        Map<String, Object> modelo = construirModeloTurnoFijo(ocurrencias, primera);
+        Usuario jugador = primera.getJugador();
+        modelo.put("nombreCliente", jugador != null ? jugador.getNombre() : primera.getNombreClienteManual());
+
+        if (puedeNotificar(jugador)) {
+            String htmlJugador = emailRenderer.render("turno-fijo-cancelado", modelo);
+            emailService.enviar(jugador.getEmail(), ASUNTO_TURNO_FIJO_CANCELADO_JUGADOR, htmlJugador);
+        }
+
+        Usuario dueno = primera.getCancha().getEstablecimiento().getDueno();
+        if (puedeNotificar(dueno)) {
+            String htmlDueno = emailRenderer.render("turno-fijo-cancelado", modelo);
+            emailService.enviar(dueno.getEmail(), ASUNTO_TURNO_FIJO_CANCELADO_DUENO, htmlDueno);
+        }
     }
 
     @Async

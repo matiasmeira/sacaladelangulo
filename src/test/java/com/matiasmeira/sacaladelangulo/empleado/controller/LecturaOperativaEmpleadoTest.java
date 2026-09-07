@@ -28,6 +28,7 @@ import java.util.Set;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -229,6 +230,22 @@ class LecturaOperativaEmpleadoTest {
         String email = sembrarEmpleado(ajeno, "Intruso3", Set.of(PermisoEmpleado.FINALIZAR_RESERVA));
 
         mockMvc.perform(get("/api/v1/turnos-fijos/" + turnoFijo.getId())
+                        .with(user(email).roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("turnoFijoCancelar_Empleado_NoPuedeAunqueTengaElPermisoDeReserva")
+    void turnoFijoCancelar_Empleado_NoPuedeAunqueTengaElPermisoDeReserva() throws Exception {
+        establecimiento = sembrarLocal("turnos-fijos-cancelar");
+        TurnoFijo turnoFijo = sembrarTurnoFijo(establecimiento);
+        // FINALIZAR_RESERVA alcanza para leer la agenda y el listado de series (ver los
+        // tests de arriba), pero dar de baja una serie es escritura reservada a OWNER/ADMIN:
+        // ni con permisos operativos de reserva un empleado puede cancelarla. Sin body: el
+        // endpoint acepta CancelarTurnoFijoRequest opcional, y esto de paso cubre ese wiring.
+        String email = sembrarEmpleado(establecimiento, "Cobrador4", Set.of(PermisoEmpleado.FINALIZAR_RESERVA));
+
+        mockMvc.perform(post("/api/v1/turnos-fijos/" + turnoFijo.getId() + "/cancelar")
                         .with(user(email).roles("EMPLOYEE")))
                 .andExpect(status().isForbidden());
     }

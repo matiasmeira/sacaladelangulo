@@ -809,6 +809,29 @@ class TurnoFijoServiceTest {
         assertThat(resumen.canceladas()).isEqualTo(1);
         assertThat(pasada.getEstado()).isEqualTo(EstadoReserva.CONFIRMADA);
         assertThat(futura.getEstado()).isEqualTo(EstadoReserva.CANCELADA);
+        // La postcondición central de "cancelar como UNIDAD": la REGLA también tiene que
+        // quedar dada de baja, no sólo sus ocurrencias. Es además el par exacto que exige el
+        // CHECK chk_turnos_fijos_cancelacion de V24 (estado=CANCELADO <=> canceladoDesde no
+        // nulo): con Flyway apagado en los tests, nada más lo detecta.
+        assertThat(turnoFijoActivo.getEstado()).isEqualTo(EstadoTurnoFijo.CANCELADO);
+        assertThat(turnoFijoActivo.getCanceladoDesde()).isEqualTo(LocalDate.now());
+    }
+
+    @Test
+    @DisplayName("cancelar_ConFechaPasada_ClampeaCanceladoDesdeAHoyEnVezDeMentir")
+    void cancelar_ConFechaPasada_ClampeaCanceladoDesdeAHoyEnVezDeMentir() {
+        // Una fecha pasada no cambia el corte real (sigue siendo "ahora": nada que ya pasó
+        // se toca), pero si canceladoDesde guardara la fecha pasada tal cual, el campo
+        // mentiría: diría que la serie no generaba compromiso desde hace 5 años, mientras
+        // esas ocurrencias siguen CONFIRMADA/FINALIZADA con plata cobrada.
+        Reserva futura = ocurrencia(LocalDateTime.now().plusDays(5), EstadoReserva.CONFIRMADA);
+        when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
+                .thenReturn(List.of(futura));
+
+        turnoFijoService.cancelar(TURNO_FIJO_ID, LocalDate.now().minusYears(5), EMAIL_DUENO);
+
+        assertThat(turnoFijoActivo.getCanceladoDesde()).isEqualTo(LocalDate.now());
+        assertThat(futura.getEstado()).isEqualTo(EstadoReserva.CANCELADA);
     }
 
     @Test

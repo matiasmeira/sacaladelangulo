@@ -4,17 +4,20 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.TestPropertySource;
 
 import java.time.LocalDateTime;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * TurnoFijoService le llama métodos package-private a ReservaService (validarFechas,
- * validarHorarioAtencion, etc., ver ReservaService) por inyección. En producción el
- * bean de ReservaService no es la instancia original: la clase lleva @Transactional,
+ * validarHorarioAtencion, capPageSize, etc., ver ReservaService) por inyección. En
+ * producción el bean de ReservaService no es la instancia original: la clase lleva @Transactional,
  * así que Spring lo envuelve en un proxy CGLIB (subclase generada en runtime en el
  * mismo paquete, condición necesaria para poder overridear un método package-private).
  * {@link TurnoFijoServiceTest} no ejercita esa ruta real: instancia ReservaService con
@@ -62,5 +65,19 @@ class ReservaServiceDelegacionATravesDelProxyTest {
         assertTrue(excepcion.getMessage().contains("anterior a la de fin"),
                 "la delegación del proxy tiene que llegar hasta la lógica real de validarFechas: "
                         + excepcion.getMessage());
+    }
+
+    /**
+     * Mismo riesgo que el test de arriba, para capPageSize: TurnoFijoService.listar lo
+     * llama por inyección en vez de copiar el Math.min (ver TurnoFijoService), así que
+     * también tiene que resolverse a través del proxy real, no solo con `new ReservaService(...)`.
+     */
+    @Test
+    @DisplayName("capPageSize_LlamadaSobreElBeanProxiadoDeSpring_CapeaElTamanioDePaginaA100")
+    void capPageSize_LlamadaSobreElBeanProxiadoDeSpring_CapeaElTamanioDePaginaA100() {
+        Pageable pageableCapado = reservaService.capPageSize(PageRequest.of(0, 500));
+
+        assertEquals(100, pageableCapado.getPageSize(),
+                "la delegación del proxy tiene que llegar hasta la lógica real de capPageSize");
     }
 }

@@ -19,6 +19,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborable
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
+import com.matiasmeira.sacaladelangulo.reserva.dto.EditarClienteTurnoFijoRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
@@ -922,5 +923,33 @@ class TurnoFijoServiceTest {
         assertThatThrownBy(() -> turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ya fue renovado");
+    }
+
+    @Test
+    @DisplayName("editarCliente_PropagaSoloALasOcurrenciasFuturasVivas")
+    void editarCliente_PropagaSoloALasOcurrenciasFuturasVivas() {
+        Reserva pasada = ocurrencia(LocalDateTime.now().minusDays(7), EstadoReserva.FINALIZADA);
+        Reserva futura = ocurrencia(LocalDateTime.now().plusDays(7), EstadoReserva.CONFIRMADA);
+        pasada.setNombreClienteManual("Grupo del Colo");
+        futura.setNombreClienteManual("Grupo del Colo");
+        when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
+                .thenReturn(List.of(pasada, futura));
+
+        turnoFijoService.editarCliente(TURNO_FIJO_ID,
+                new EditarClienteTurnoFijoRequest("Grupo del Colorado", "11 6666-7777"), EMAIL_DUENO);
+
+        assertThat(pasada.getNombreClienteManual()).isEqualTo("Grupo del Colo");
+        assertThat(futura.getNombreClienteManual()).isEqualTo("Grupo del Colorado");
+    }
+
+    @Test
+    @DisplayName("editarCliente_SobreSerieDeJugador_LanzaIllegalArgument")
+    void editarCliente_SobreSerieDeJugador_LanzaIllegalArgument() {
+        turnoFijoActivo.setJugador(jugador);
+
+        assertThatThrownBy(() -> turnoFijoService.editarCliente(TURNO_FIJO_ID,
+                new EditarClienteTurnoFijoRequest("Otro", null), EMAIL_DUENO))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("jugador registrado");
     }
 }

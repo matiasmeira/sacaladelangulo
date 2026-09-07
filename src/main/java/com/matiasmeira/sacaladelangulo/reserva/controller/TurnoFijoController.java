@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.reserva.controller;
 
 import com.matiasmeira.sacaladelangulo.reserva.dto.CancelacionTurnoFijoResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.CancelarTurnoFijoRequest;
+import com.matiasmeira.sacaladelangulo.reserva.dto.EditarClienteTurnoFijoRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoListadoResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoResponse;
@@ -102,5 +103,18 @@ public class TurnoFijoController {
             @PathVariable Long id) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(turnoFijoService.renovar(id, userDetails.getUsername()));
+    }
+
+    /**
+     * Corrige a nombre de quién figura una serie de mostrador. Sólo el dueño real del
+     * establecimiento o un admin.
+     */
+    @PatchMapping("/{id}/cliente")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<TurnoFijoResponse> editarCliente(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id,
+            @RequestBody @Valid EditarClienteTurnoFijoRequest request) {
+        return ResponseEntity.ok(turnoFijoService.editarCliente(id, request, userDetails.getUsername()));
     }
 }

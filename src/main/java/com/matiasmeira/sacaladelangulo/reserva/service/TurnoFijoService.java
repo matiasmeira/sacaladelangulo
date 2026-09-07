@@ -14,6 +14,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaReposito
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.reserva.dto.CancelacionTurnoFijoResponse;
+import com.matiasmeira.sacaladelangulo.reserva.dto.EditarClienteTurnoFijoRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
@@ -397,6 +398,46 @@ public class TurnoFijoService {
         }
 
         return new CancelacionTurnoFijoResponse(canceladas.size(), omitidas);
+    }
+
+    /**
+     * Corrige a quién figura la serie. Sólo en series de mostrador: si la serie está atada a
+     * un jugador registrado, el nombre sale de su cuenta y no es un campo editable acá.
+     *
+     * <p>Propaga sólo a las ocurrencias futuras y vivas ({@code fechaHoraInicio} posterior a
+     * ahora, en estado CONFIRMADA o PENDIENTE_SENA). Las pasadas son registro de lo que
+     * ocurrió y no se reescriben.
+     */
+    public TurnoFijoResponse editarCliente(Long id, EditarClienteTurnoFijoRequest request, String email) {
+        TurnoFijo turnoFijo = buscarTurnoFijo(id);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(turnoFijo.getCancha().getEstablecimiento(), email);
+
+        if (turnoFijo.getJugador() != null) {
+            throw new IllegalArgumentException(
+                    "Este turno fijo está a nombre de un jugador registrado: el nombre sale de su cuenta.");
+        }
+
+        turnoFijo.setNombreClienteManual(request.nombre());
+        turnoFijo.setTelefonoClienteManual(request.telefono());
+        turnoFijoRepository.save(turnoFijo);
+
+        LocalDateTime ahora = LocalDateTime.now();
+        List<Reserva> aActualizar = reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(id).stream()
+                .filter(r -> r.getFechaHoraInicio().isAfter(ahora))
+                .filter(r -> r.getEstado() == EstadoReserva.CONFIRMADA
+                          || r.getEstado() == EstadoReserva.PENDIENTE_SENA)
+                .toList();
+        // For explícito y no .peek(): peek() no garantiza ejecutar su acción para todos los
+        // elementos en toda pipeline (por ejemplo si se agregara un short-circuit más
+        // adelante), y usarlo para un efecto de lado que sí necesitamos que corra siempre
+        // es un antipatrón.
+        for (Reserva ocurrencia : aActualizar) {
+            ocurrencia.setNombreClienteManual(request.nombre());
+            ocurrencia.setTelefonoClienteManual(request.telefono());
+        }
+        reservaRepository.saveAll(aActualizar);
+
+        return turnoFijoMapper.mapToResponse(turnoFijo, List.of());
     }
 
     private LocalDateTime maximo(LocalDateTime a, LocalDateTime b) {

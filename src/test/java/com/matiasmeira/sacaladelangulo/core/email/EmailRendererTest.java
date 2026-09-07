@@ -74,4 +74,19 @@ class EmailRendererTest {
         assertTrue(html.contains("Cancha A"));
         assertTrue(html.contains("4500"), "falta el total del período");
     }
+
+    @Test
+    @DisplayName("render_TurnoFijoCancelado_ListaTodasLasFechasCanceladasYElCliente")
+    void render_TurnoFijoCancelado_ListaTodasLasFechasCanceladasYElCliente() {
+        EmailRenderer emailRenderer = new EmailRenderer();
+
+        String html = emailRenderer.render("turno-fijo-cancelado", modeloDeTurnoFijo());
+
+        // Plantilla única para jugador y dueño: los dos necesitan ver las mismas fechas.
+        assertTrue(html.contains("Juan Pérez"), "falta el cliente");
+        assertTrue(html.contains("08/01/2030"), "falta la 1ª fecha");
+        assertTrue(html.contains("15/01/2030"), "falta la 2ª fecha");
+        assertTrue(html.contains("22/01/2030"), "falta la 3ª fecha");
+        assertTrue(html.contains("Cancha A"));
+    }
 }

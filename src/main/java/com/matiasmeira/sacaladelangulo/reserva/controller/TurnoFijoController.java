@@ -1,5 +1,7 @@
 package com.matiasmeira.sacaladelangulo.reserva.controller;
 
+import com.matiasmeira.sacaladelangulo.reserva.dto.CancelacionTurnoFijoResponse;
+import com.matiasmeira.sacaladelangulo.reserva.dto.CancelarTurnoFijoRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoListadoResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoResponse;
@@ -17,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 /**
  * Turnos fijos semanales. La creación vivía en ReservaController como POST
@@ -69,5 +73,20 @@ public class TurnoFijoController {
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long id) {
         return ResponseEntity.ok(turnoFijoService.detalle(id, userDetails.getUsername()));
+    }
+
+    /**
+     * Da de baja la serie completa desde una fecha en adelante (por defecto, desde ahora).
+     * Sólo el dueño real del establecimiento o un admin: un empleado no puede dar de baja
+     * una serie ni con permisos operativos de reserva.
+     */
+    @PostMapping("/{id}/cancelar")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<CancelacionTurnoFijoResponse> cancelar(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id,
+            @RequestBody(required = false) CancelarTurnoFijoRequest request) {
+        LocalDate desde = request != null ? request.desde() : null;
+        return ResponseEntity.ok(turnoFijoService.cancelar(id, desde, userDetails.getUsername()));
     }
 }

@@ -66,6 +66,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -888,5 +889,38 @@ class TurnoFijoServiceTest {
 
         assertThatThrownBy(() -> turnoFijoService.cancelar(TURNO_FIJO_ID, null, EMAIL_EMPLEADO))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("renovar_CreaLaSerieDelAnioSiguienteConRenovadoDesde")
+    void renovar_CreaLaSerieDelAnioSiguienteConRenovadoDesde() {
+        turnoFijoActivo.setFechaFinPeriodo(LocalDate.of(2026, 12, 31));
+        when(turnoFijoRepository.existsByRenovadoDesdeId(TURNO_FIJO_ID)).thenReturn(false);
+        // Mismo camino que crear(): renovar arma un ReservaSemanalRequest y pasa por
+        // crearInterno, así que necesita el mismo arreglo que crear_TurnoFijo_Exito.
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO);
+
+        ArgumentCaptor<TurnoFijo> captor = ArgumentCaptor.forClass(TurnoFijo.class);
+        verify(turnoFijoRepository, atLeastOnce()).save(captor.capture());
+        TurnoFijo nueva = captor.getValue();
+        assertThat(nueva.getRenovadoDesdeId()).isEqualTo(TURNO_FIJO_ID);
+        assertThat(nueva.getFechaFinPeriodo()).isEqualTo(LocalDate.of(2027, 12, 31));
+    }
+
+    @Test
+    @DisplayName("renovar_YaRenovada_LanzaIllegalArgumentConMensajePropio")
+    void renovar_YaRenovada_LanzaIllegalArgumentConMensajePropio() {
+        when(turnoFijoRepository.existsByRenovadoDesdeId(TURNO_FIJO_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ya fue renovado");
     }
 }

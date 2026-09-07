@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
+import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
@@ -21,8 +22,10 @@ import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
+import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoListadoResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoResponse;
+import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoTurnoFijo;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.TurnoFijo;
@@ -36,6 +39,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -48,14 +56,20 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -124,10 +138,17 @@ class TurnoFijoServiceTest {
 
     private TurnoFijoService turnoFijoService;
 
+    private static final Long EST_ID = 10L;
+    private static final String EMAIL_DUENO = "dueno@test.com";
+    private static final String EMAIL_INTRUSO = "intruso@test.com";
+    private static final Long TURNO_FIJO_ID = 300L;
+
     private Usuario jugador;
     private Usuario dueno;
     private Establecimiento establecimiento;
     private Cancha cancha;
+    private TurnoFijo turnoFijoActivo;
+    private TurnoFijo otroTurnoFijoActivo;
 
     @BeforeEach
     void setUp() {
@@ -196,8 +217,39 @@ class TurnoFijoServiceTest {
         turnoFijoMapper = new TurnoFijoMapper(reservaMapper);
         turnoFijoService = new TurnoFijoService(
                 turnoFijoRepository, reservaRepository, canchaRepository, bloqueoCanchaRepository,
-                diaNoLaborableRepository, usuarioRepository, autorizacionEmpleadoService, reservaMapper,
-                turnoFijoMapper, eventPublisher, reservaService);
+                diaNoLaborableRepository, establecimientoRepository, usuarioRepository, autorizacionEmpleadoService,
+                reservaMapper, turnoFijoMapper, eventPublisher, reservaService);
+
+        turnoFijoActivo = TurnoFijo.builder()
+                .id(TURNO_FIJO_ID)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
+                .diaSemana(DayOfWeek.TUESDAY)
+                .horaInicio(LocalTime.of(20, 0))
+                .horaFin(LocalTime.of(21, 0))
+                .fechaInicioPeriodo(LocalDate.of(2030, 1, 8))
+                .fechaFinPeriodo(LocalDate.of(2030, 12, 31))
+                .estado(EstadoTurnoFijo.ACTIVO)
+                .nombreClienteManual("Grupo del Colo")
+                .telefonoClienteManual("11 5555-4444")
+                .build();
+
+        otroTurnoFijoActivo = TurnoFijo.builder()
+                .id(301L)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
+                .diaSemana(DayOfWeek.WEDNESDAY)
+                .horaInicio(LocalTime.of(19, 0))
+                .horaFin(LocalTime.of(20, 0))
+                .fechaInicioPeriodo(LocalDate.of(2030, 1, 9))
+                .fechaFinPeriodo(LocalDate.of(2030, 12, 31))
+                .estado(EstadoTurnoFijo.ACTIVO)
+                .nombreClienteManual("Otro Grupo")
+                .build();
+
+        // Default: el establecimiento del dueño se resuelve para listar/detalle. Cada test
+        // puede pisarlo si necesita otro escenario.
+        lenient().when(establecimientoRepository.findById(EST_ID)).thenReturn(Optional.of(establecimiento));
 
         lenient().when(reservaMapper.mapToResponse(any(Reserva.class))).thenAnswer(invocation -> {
             Reserva reserva = invocation.getArgument(0);
@@ -557,5 +609,153 @@ class TurnoFijoServiceTest {
                 () -> turnoFijoService.crear(request, dueno.getEmail())
         );
         assert exception.getMessage().contains("TENIS");
+    }
+
+    @Test
+    @DisplayName("listar_SinEstado_TraeSoloLosActivos")
+    void listar_SinEstado_TraeSoloLosActivos() {
+        // arrange: establecimiento del dueño, un turno fijo ACTIVO y uno CANCELADO
+        when(turnoFijoRepository.findByCancha_Establecimiento_IdAndEstado(
+                eq(EST_ID), eq(EstadoTurnoFijo.ACTIVO), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(turnoFijoActivo)));
+
+        var pagina = turnoFijoService.listar(EST_ID, null, PageRequest.of(0, 20), EMAIL_DUENO);
+
+        assertThat(pagina.getContent()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("listar_ResuelveLosAgregadosEnUnaSolaConsulta")
+    void listar_ResuelveLosAgregadosEnUnaSolaConsulta() {
+        when(turnoFijoRepository.findByCancha_Establecimiento_IdAndEstado(anyLong(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(turnoFijoActivo, otroTurnoFijoActivo)));
+
+        turnoFijoService.listar(EST_ID, null, PageRequest.of(0, 20), EMAIL_DUENO);
+
+        // Una sola llamada agregada para toda la página, no una por fila.
+        verify(reservaRepository, times(1)).agregadosPorTurnoFijo(anyList(), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("listar_ConEstadoExplicito_NoAplicaElActivoPorDefecto")
+    void listar_ConEstadoExplicito_NoAplicaElActivoPorDefecto() {
+        when(turnoFijoRepository.findByCancha_Establecimiento_IdAndEstado(
+                eq(EST_ID), eq(EstadoTurnoFijo.CANCELADO), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        turnoFijoService.listar(EST_ID, EstadoTurnoFijo.CANCELADO, PageRequest.of(0, 20), EMAIL_DUENO);
+
+        verify(turnoFijoRepository).findByCancha_Establecimiento_IdAndEstado(
+                eq(EST_ID), eq(EstadoTurnoFijo.CANCELADO), any(Pageable.class));
+        verify(turnoFijoRepository, never()).findByCancha_Establecimiento_IdAndEstado(
+                eq(EST_ID), eq(EstadoTurnoFijo.ACTIVO), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("listar_PaginaVacia_NoConsultaAgregados")
+    void listar_PaginaVacia_NoConsultaAgregados() {
+        // Sin filas que agregar, no vale la pena ni disparar la consulta.
+        when(turnoFijoRepository.findByCancha_Establecimiento_IdAndEstado(anyLong(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        Page<TurnoFijoListadoResponse> pagina = turnoFijoService.listar(EST_ID, null, PageRequest.of(0, 20), EMAIL_DUENO);
+
+        assertThat(pagina.getContent()).isEmpty();
+        verify(reservaRepository, never()).agregadosPorTurnoFijo(any(), any());
+    }
+
+    @Test
+    @DisplayName("listar_MapeaLosAgregadosPorSerieYCeroCuandoNoHayOcurrenciasFuturas")
+    void listar_MapeaLosAgregadosPorSerieYCeroCuandoNoHayOcurrenciasFuturas() {
+        LocalDateTime proxima = LocalDateTime.of(2030, 1, 15, 20, 0);
+        when(turnoFijoRepository.findByCancha_Establecimiento_IdAndEstado(anyLong(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(turnoFijoActivo, otroTurnoFijoActivo)));
+        // Solo turnoFijoActivo tiene fila en el agregado: otroTurnoFijoActivo no tiene
+        // ninguna ocurrencia futura viva y no aparece en el resultado de la consulta.
+        when(reservaRepository.agregadosPorTurnoFijo(anyList(), any(LocalDateTime.class)))
+                .thenReturn(List.<Object[]>of(new Object[]{TURNO_FIJO_ID, 3L, proxima}));
+
+        Page<TurnoFijoListadoResponse> pagina = turnoFijoService.listar(EST_ID, null, PageRequest.of(0, 20), EMAIL_DUENO);
+
+        TurnoFijoListadoResponse conOcurrencias = pagina.getContent().stream()
+                .filter(r -> r.id().equals(TURNO_FIJO_ID)).findFirst().orElseThrow();
+        assertThat(conOcurrencias.ocurrenciasActivas()).isEqualTo(3L);
+        assertThat(conOcurrencias.proximaOcurrencia()).isEqualTo(proxima);
+
+        TurnoFijoListadoResponse sinOcurrencias = pagina.getContent().stream()
+                .filter(r -> r.id().equals(301L)).findFirst().orElseThrow();
+        assertThat(sinOcurrencias.ocurrenciasActivas()).isEqualTo(0L);
+        assertThat(sinOcurrencias.proximaOcurrencia()).isNull();
+    }
+
+    @Test
+    @DisplayName("listar_TamanioDePaginaSuperaElMaximo_LoCapeaA100")
+    void listar_TamanioDePaginaSuperaElMaximo_LoCapeaA100() {
+        // Mismo cap de ReservaService: no puede quedar sin techo el día que alguien
+        // cambie el de ReservaService y se olvide de este.
+        when(turnoFijoRepository.findByCancha_Establecimiento_IdAndEstado(anyLong(), any(), any(Pageable.class)))
+                .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(2), 0));
+
+        Page<TurnoFijoListadoResponse> pagina = turnoFijoService.listar(EST_ID, null, PageRequest.of(0, 500), EMAIL_DUENO);
+
+        assertThat(pagina.getPageable().getPageSize()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("listar_DeOtroEstablecimiento_LanzaAccessDenied")
+    void listar_DeOtroEstablecimiento_LanzaAccessDenied() {
+        doThrow(new AccessDeniedException("No autorizado"))
+                .when(autorizacionEmpleadoService).validarLectura(any(), eq(EMAIL_INTRUSO), any());
+
+        assertThatThrownBy(() -> turnoFijoService.listar(EST_ID, null, PageRequest.of(0, 20), EMAIL_INTRUSO))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(turnoFijoRepository, never()).findByCancha_Establecimiento_IdAndEstado(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("detalle_DeOtroEstablecimiento_LanzaAccessDenied")
+    void detalle_DeOtroEstablecimiento_LanzaAccessDenied() {
+        when(turnoFijoRepository.findByIdConCanchaYEstablecimiento(TURNO_FIJO_ID))
+                .thenReturn(Optional.of(turnoFijoActivo));
+        doThrow(new AccessDeniedException("No autorizado"))
+                .when(autorizacionEmpleadoService).validarLectura(any(), eq(EMAIL_INTRUSO), any());
+
+        assertThatThrownBy(() -> turnoFijoService.detalle(TURNO_FIJO_ID, EMAIL_INTRUSO))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("detalle_Exito_DevuelveLaReglaConSusOcurrencias")
+    void detalle_Exito_DevuelveLaReglaConSusOcurrencias() {
+        when(turnoFijoRepository.findByIdConCanchaYEstablecimiento(TURNO_FIJO_ID))
+                .thenReturn(Optional.of(turnoFijoActivo));
+        Reserva ocurrencia = Reserva.builder()
+                .id(900L)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 8, 20, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 8, 21, 0))
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .turnoFijo(turnoFijoActivo)
+                .build();
+        when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
+                .thenReturn(List.of(ocurrencia));
+
+        TurnoFijoResponse respuesta = turnoFijoService.detalle(TURNO_FIJO_ID, EMAIL_DUENO);
+
+        assertThat(respuesta.id()).isEqualTo(TURNO_FIJO_ID);
+        assertThat(respuesta.ocurrencias()).hasSize(1);
+        assertThat(respuesta.ocurrencias().get(0).id()).isEqualTo(900L);
+    }
+
+    @Test
+    @DisplayName("detalle_TurnoFijoInexistente_LanzaEntityNotFound")
+    void detalle_TurnoFijoInexistente_LanzaEntityNotFound() {
+        when(turnoFijoRepository.findByIdConCanchaYEstablecimiento(999L)).thenReturn(Optional.empty());
+
+        assertThrows(EntityNotFoundException.class,
+                () -> turnoFijoService.detalle(999L, EMAIL_DUENO));
     }
 }

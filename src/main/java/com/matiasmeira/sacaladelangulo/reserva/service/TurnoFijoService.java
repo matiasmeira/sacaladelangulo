@@ -283,6 +283,14 @@ public class TurnoFijoService {
      * toca el turno de hoy a las 20, que ya se jugó y hay que finalizar o marcar ausente,
      * no cancelar.
      *
+     * <p>canceladoDesde persiste el corte EFECTIVO (max(ahora, desde).toLocalDate()), no el
+     * `desde` crudo del pedido: con una fecha pasada, el corte real ya queda en "ahora" (no
+     * se toca nada que ya pasó), pero si canceladoDesde guardara la fecha pasada, el campo
+     * mentiría — su semántica es "la serie dejó de generar compromiso a partir de acá", y
+     * ese valor se expone tal cual en TurnoFijoResponse/TurnoFijoListadoResponse. Se clampea
+     * en vez de rechazar: un dueño que manda una fecha pasada está diciendo "dala de baja
+     * desde ya", y esa es la lectura honesta del pedido.
+     *
      * <p>No toma el lock pesimista de la cancha: cancelar no crea solapamientos. El @Version
      * de cada Reserva alcanza.
      */
@@ -292,6 +300,7 @@ public class TurnoFijoService {
 
         LocalDate desdeEfectiva = desde != null ? desde : LocalDate.now();
         LocalDateTime corte = maximo(LocalDateTime.now(), desdeEfectiva.atStartOfDay());
+        LocalDate corteEfectivo = corte.toLocalDate();
 
         List<Reserva> canceladas = new ArrayList<>();
         List<CancelacionTurnoFijoResponse.OcurrenciaOmitida> omitidas = new ArrayList<>();
@@ -312,11 +321,11 @@ public class TurnoFijoService {
         reservaRepository.saveAll(canceladas);
 
         turnoFijo.setEstado(EstadoTurnoFijo.CANCELADO);
-        turnoFijo.setCanceladoDesde(desdeEfectiva);
+        turnoFijo.setCanceladoDesde(corteEfectivo);
         turnoFijoRepository.save(turnoFijo);
 
         log.info("Turno fijo {} cancelado desde {}. {} ocurrencias dadas de baja, {} omitidas",
-                id, desdeEfectiva, canceladas.size(), omitidas.size());
+                id, corteEfectivo, canceladas.size(), omitidas.size());
 
         if (!canceladas.isEmpty()) {
             eventPublisher.publishEvent(new TurnoFijoCanceladoEvent(

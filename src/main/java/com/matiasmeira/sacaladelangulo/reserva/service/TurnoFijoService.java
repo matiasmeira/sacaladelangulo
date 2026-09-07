@@ -103,11 +103,18 @@ public class TurnoFijoService {
      * Vuelve a cargar la misma serie para el año siguiente al de su período, sin que el
      * dueño tenga que recargarla campo por campo. Crea una serie NUEVA (no muta la vieja) y
      * pasa por el mismo camino de creación: mismas validaciones, mismo lock, todo-o-nada.
+     * Sólo se puede renovar una serie ACTIVA: una CANCELADA no vuelve a la vida por esta vía.
      *
      * <p>El inicio es max(1 de enero del año destino, hoy). El max con hoy es lo que hace
      * que renovar tarde — en febrero, no en enero — no falle contra @FutureOrPresent ni
      * contra validarFechas; generarFechasDelPeriodo ya busca la primera ocurrencia del día
      * pedido a partir de ahí.
+     *
+     * <p>Excepción al max de arriba: si "hoy" es justo el día de semana de la serie y su
+     * horario de hoy ya pasó, arrancar en "hoy" es inválido igual —
+     * generarFechasDelPeriodo toma "hoy" como primera ocurrencia porque nextOrSame no mira
+     * la hora, y validarFechas la rechazaría por estar en el pasado, reventando las ~52
+     * ocurrencias por esa única fecha (todo-o-nada). Ahí se arranca al día siguiente.
      *
      * @param id Id del turno fijo a renovar
      * @param email Email del usuario autenticado (OWNER o ADMIN)
@@ -116,6 +123,10 @@ public class TurnoFijoService {
     public TurnoFijoResponse renovar(Long id, String email) {
         TurnoFijo original = buscarTurnoFijo(id);
         autorizacionEmpleadoService.validarPropietarioOAdmin(original.getCancha().getEstablecimiento(), email);
+
+        if (original.getEstado() != EstadoTurnoFijo.ACTIVO) {
+            throw new IllegalArgumentException("Este turno fijo está cancelado: no se puede renovar.");
+        }
 
         // El índice único de V24 lo garantiza igual, pero sin este chequeo el segundo click
         // fallaría por solapamiento ("la cancha ya está reservada el 05/01"), que no le dice
@@ -128,7 +139,14 @@ public class TurnoFijoService {
         int anioDestino = original.getFechaFinPeriodo().getYear() + 1;
         LocalDate primeroDeEnero = LocalDate.of(anioDestino, 1, 1);
         LocalDate hoy = LocalDate.now();
-        LocalDate inicio = primeroDeEnero.isAfter(hoy) ? primeroDeEnero : hoy;
+        LocalDate inicio;
+        if (primeroDeEnero.isAfter(hoy)) {
+            inicio = primeroDeEnero;
+        } else {
+            boolean hoyEsElDiaYaPaso = hoy.getDayOfWeek() == original.getDiaSemana()
+                    && !hoy.atTime(original.getHoraInicio()).isAfter(LocalDateTime.now());
+            inicio = hoyEsElDiaYaPaso ? hoy.plusDays(1) : hoy;
+        }
 
         ReservaSemanalRequest pedido = new ReservaSemanalRequest(
                 original.getCancha().getId(),
@@ -421,8 +439,10 @@ public class TurnoFijoService {
         turnoFijo.setTelefonoClienteManual(request.telefono());
         turnoFijoRepository.save(turnoFijo);
 
+        List<Reserva> ocurrencias = reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(id);
+
         LocalDateTime ahora = LocalDateTime.now();
-        List<Reserva> aActualizar = reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(id).stream()
+        List<Reserva> aActualizar = ocurrencias.stream()
                 .filter(r -> r.getFechaHoraInicio().isAfter(ahora))
                 .filter(r -> r.getEstado() == EstadoReserva.CONFIRMADA
                           || r.getEstado() == EstadoReserva.PENDIENTE_SENA)
@@ -437,7 +457,11 @@ public class TurnoFijoService {
         }
         reservaRepository.saveAll(aActualizar);
 
-        return turnoFijoMapper.mapToResponse(turnoFijo, List.of());
+        // TurnoFijoResponse documenta "ocurrencias" como poblada salvo en el listado: acá no
+        // es el listado, así que van las ocurrencias ya cargadas arriba (mismo objeto, sin
+        // pegarle una segunda consulta a la base).
+        return turnoFijoMapper.mapToResponse(turnoFijo,
+                ocurrencias.stream().map(reservaMapper::mapToResponse).toList());
     }
 
     private LocalDateTime maximo(LocalDateTime a, LocalDateTime b) {

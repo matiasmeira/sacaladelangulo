@@ -895,7 +895,12 @@ class TurnoFijoServiceTest {
     @Test
     @DisplayName("renovar_CreaLaSerieDelAnioSiguienteConRenovadoDesde")
     void renovar_CreaLaSerieDelAnioSiguienteConRenovadoDesde() {
-        turnoFijoActivo.setFechaFinPeriodo(LocalDate.of(2026, 12, 31));
+        // Año bien futuro (mismo criterio que el resto de la suite, ver
+        // crear_TurnoFijo_PersisteLaReglaYLinkeaTodasLasOcurrencias): con un año cercano a
+        // "hoy" este test se autodestruye apenas pasa el 1° de enero del año destino, porque
+        // "hoy" empieza a ganarle al max() y deja de probar la rama que queremos cubrir acá
+        // (ver el test de renovación tardía, más abajo, para esa otra rama).
+        turnoFijoActivo.setFechaFinPeriodo(LocalDate.of(2030, 12, 31));
         when(turnoFijoRepository.existsByRenovadoDesdeId(TURNO_FIJO_ID)).thenReturn(false);
         // Mismo camino que crear(): renovar arma un ReservaSemanalRequest y pasa por
         // crearInterno, así que necesita el mismo arreglo que crear_TurnoFijo_Exito.
@@ -912,7 +917,98 @@ class TurnoFijoServiceTest {
         verify(turnoFijoRepository, atLeastOnce()).save(captor.capture());
         TurnoFijo nueva = captor.getValue();
         assertThat(nueva.getRenovadoDesdeId()).isEqualTo(TURNO_FIJO_ID);
-        assertThat(nueva.getFechaFinPeriodo()).isEqualTo(LocalDate.of(2027, 12, 31));
+        // El 1° de enero del año destino (2031), no "hoy": esta aserción es la que distingue
+        // una implementación con el max(1° de enero, hoy) de una que hardcodeara
+        // `inicio = primeroDeEnero` sin más — ambas pasarían si sólo se revisara
+        // fechaFinPeriodo/renovadoDesdeId.
+        assertThat(nueva.getFechaInicioPeriodo()).isEqualTo(LocalDate.of(2031, 1, 1));
+        assertThat(nueva.getFechaFinPeriodo()).isEqualTo(LocalDate.of(2031, 12, 31));
+    }
+
+    @Test
+    @DisplayName("renovar_Tardio_ArrancaHoyEnVezDelPrimeroDeEnero")
+    void renovar_Tardio_ArrancaHoyEnVezDelPrimeroDeEnero() {
+        // La serie venció hace más de un año: el 1° de enero del "año destino" (año pasado +
+        // 1 = año actual) ya quedó en el pasado, así que max(1° de enero, hoy) tiene que
+        // resolver a hoy. Se usa el día de semana de MAÑANA (garantizado distinto al de hoy,
+        // cualquiera sea hoy) para que este test no se acople al fix de "hoy es justo el día
+        // de la serie y ya pasó su horario" (cubierto aparte, más abajo): así el resultado no
+        // depende de la hora del reloj en que corra la suite, sólo de la fecha.
+        LocalDate hoy = LocalDate.now();
+        DayOfWeek diaDeManiana = hoy.plusDays(1).getDayOfWeek();
+        turnoFijoActivo.setDiaSemana(diaDeManiana);
+        turnoFijoActivo.setFechaFinPeriodo(hoy.minusYears(1));
+        establecimiento.setHorariosAtencion(List.of(
+                HorarioAtencion.builder()
+                        .diaSemana(diaDeManiana)
+                        .horaApertura(LocalTime.of(10, 0))
+                        .horaCierre(LocalTime.of(22, 0))
+                        .establecimiento(establecimiento)
+                        .build()));
+        when(turnoFijoRepository.existsByRenovadoDesdeId(TURNO_FIJO_ID)).thenReturn(false);
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO);
+
+        ArgumentCaptor<TurnoFijo> captor = ArgumentCaptor.forClass(TurnoFijo.class);
+        verify(turnoFijoRepository, atLeastOnce()).save(captor.capture());
+        assertThat(captor.getValue().getFechaInicioPeriodo()).isEqualTo(hoy);
+    }
+
+    @Test
+    @DisplayName("renovar_TardeYPasoElHorarioDeHoy_ArrancaAlDiaSiguiente")
+    void renovar_TardeYPasoElHorarioDeHoy_ArrancaAlDiaSiguiente() {
+        // Caso puntual del fix: la renovación es tardía Y hoy resulta ser justo el día de
+        // semana de la serie Y su horario de hoy ya pasó. Sin el fix, generarFechasDelPeriodo
+        // toma "hoy" como primera ocurrencia (nextOrSame no mira la hora) y validarFechas la
+        // rechaza por estar en el pasado, reventando las ~52 ocurrencias por esa única fecha.
+        // Se usa 00:00-01:00 como horario de la serie: es, para cualquier hora real en que
+        // corra esta suite, un horario que ya "pasó" hoy (salvo el minuto exacto post-
+        // medianoche, un riesgo despreciable), sin depender del reloj de la máquina de CI.
+        LocalDate hoy = LocalDate.now();
+        DayOfWeek diaDeHoy = hoy.getDayOfWeek();
+        turnoFijoActivo.setDiaSemana(diaDeHoy);
+        turnoFijoActivo.setHoraInicio(LocalTime.MIDNIGHT);
+        turnoFijoActivo.setHoraFin(LocalTime.of(1, 0));
+        turnoFijoActivo.setFechaFinPeriodo(hoy.minusYears(1));
+        establecimiento.setHorariosAtencion(List.of(
+                HorarioAtencion.builder()
+                        .diaSemana(diaDeHoy)
+                        .horaApertura(LocalTime.MIDNIGHT)
+                        .horaCierre(LocalTime.of(23, 59))
+                        .establecimiento(establecimiento)
+                        .build()));
+        when(turnoFijoRepository.existsByRenovadoDesdeId(TURNO_FIJO_ID)).thenReturn(false);
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO);
+
+        ArgumentCaptor<TurnoFijo> captor = ArgumentCaptor.forClass(TurnoFijo.class);
+        verify(turnoFijoRepository, atLeastOnce()).save(captor.capture());
+        assertThat(captor.getValue().getFechaInicioPeriodo()).isEqualTo(hoy.plusDays(1));
+    }
+
+    @Test
+    @DisplayName("renovar_SerieCancelada_LanzaIllegalArgument")
+    void renovar_SerieCancelada_LanzaIllegalArgument() {
+        // Una serie CANCELADA no se renueva: renovarla crearía ~52 reservas CONFIRMADAS
+        // nuevas, con precio, a partir de algo que el dueño dio de baja explícitamente.
+        turnoFijoActivo.setEstado(EstadoTurnoFijo.CANCELADO);
+
+        assertThatThrownBy(() -> turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cancelado");
+        verify(turnoFijoRepository, never()).existsByRenovadoDesdeId(any());
     }
 
     @Test
@@ -935,11 +1031,15 @@ class TurnoFijoServiceTest {
         when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
                 .thenReturn(List.of(pasada, futura));
 
-        turnoFijoService.editarCliente(TURNO_FIJO_ID,
+        TurnoFijoResponse respuesta = turnoFijoService.editarCliente(TURNO_FIJO_ID,
                 new EditarClienteTurnoFijoRequest("Grupo del Colorado", "11 6666-7777"), EMAIL_DUENO);
 
         assertThat(pasada.getNombreClienteManual()).isEqualTo("Grupo del Colo");
         assertThat(futura.getNombreClienteManual()).isEqualTo("Grupo del Colorado");
+        // TurnoFijoResponse documenta "ocurrencias" como poblada salvo en el listado: acá no
+        // estamos listando, así que el llamador (por ejemplo, el frontend que consume este
+        // mismo endpoint) tiene que recibir las ocurrencias ya cargadas, no una lista vacía.
+        assertThat(respuesta.ocurrencias()).hasSize(2);
     }
 
     @Test

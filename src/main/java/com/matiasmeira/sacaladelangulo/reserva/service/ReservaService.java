@@ -892,7 +892,13 @@ public class ReservaService {
         return reservas.map(reservaMapper::mapToResponse);
     }
 
-    private Pageable capPageSize(Pageable pageable) {
+    /**
+     * Techo compartido para el tamaño de página de todos los listados de este servicio.
+     * Package-private (no privado): TurnoFijoService la reutiliza por inyección en vez de
+     * copiar el Math.min, igual que hace con los demás validadores de esta clase — así el
+     * cap de 100 es uno solo y no queda uno sin techo el día que cambie el otro.
+     */
+    Pageable capPageSize(Pageable pageable) {
         if (pageable.getPageSize() <= TAMANIO_PAGINA_MAXIMO) {
             return pageable;
         }

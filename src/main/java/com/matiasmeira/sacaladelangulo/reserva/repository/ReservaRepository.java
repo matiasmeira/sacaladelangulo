@@ -333,6 +333,28 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     boolean existsByJugador_IdAndCancha_Establecimiento_Id(Long jugadorId, Long establecimientoId);
 
+    // ===== Turnos fijos (TurnoFijoService) =====
+
+    /**
+     * Cantidad de ocurrencias futuras vivas y fecha de la próxima, por serie, para toda una
+     * página del listado de turnos fijos EN UNA SOLA consulta. Sin esto el listado hace dos
+     * consultas por fila, que es el N+1 clásico de un listado con agregados.
+     */
+    @Query("SELECT r.turnoFijo.id, COUNT(r), MIN(r.fechaHoraInicio) FROM Reserva r " +
+           "WHERE r.turnoFijo.id IN :turnoFijoIds " +
+           "AND r.estado IN ('CONFIRMADA', 'PENDIENTE_SENA') " +
+           "AND r.fechaHoraInicio > :ahora " +
+           "GROUP BY r.turnoFijo.id")
+    List<Object[]> agregadosPorTurnoFijo(@Param("turnoFijoIds") List<Long> turnoFijoIds,
+                                         @Param("ahora") LocalDateTime ahora);
+
+    /**
+     * Ocurrencias de una serie de turno fijo, para el detalle. No necesita @EntityGraph: la
+     * cancha (y el jugador, si lo hay) son siempre los mismos en toda la serie, así que el
+     * caché de primer nivel de Hibernate ya evita repetir esas consultas fila a fila.
+     */
+    List<Reserva> findByTurnoFijoIdOrderByFechaHoraInicioAsc(Long turnoFijoId);
+
     /**
      * Historial completo (todos los estados) de reservas de un jugador en un establecimiento,
      * para la ficha del cliente. Mismo @EntityGraph que el resto de los listados paginados de

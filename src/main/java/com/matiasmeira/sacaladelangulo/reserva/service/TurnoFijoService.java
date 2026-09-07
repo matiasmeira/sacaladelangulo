@@ -8,11 +8,15 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
+import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
+import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoListadoResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.TurnoFijoResponse;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
@@ -24,6 +28,8 @@ import com.matiasmeira.sacaladelangulo.reserva.repository.TurnoFijoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +42,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Servicio de negocio para turnos fijos semanales: la creación de la serie vivía en
@@ -63,6 +71,7 @@ public class TurnoFijoService {
     private final CanchaRepository canchaRepository;
     private final BloqueoCanchaRepository bloqueoCanchaRepository;
     private final DiaNoLaborableRepository diaNoLaborableRepository;
+    private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final ReservaMapper reservaMapper;
@@ -205,6 +214,59 @@ public class TurnoFijoService {
 
         return turnoFijoMapper.mapToResponse(regla,
                 reservasGuardadas.stream().map(reservaMapper::mapToResponse).toList());
+    }
+
+    /**
+     * Listado de turnos fijos del establecimiento. Por defecto sólo los ACTIVOS: los
+     * cancelados se piden explícitamente, para auditar.
+     *
+     * <p>Lectura, no escritura: un empleado que ya ve la agenda tiene que poder ver también
+     * las series. No puede cancelarlas ni renovarlas — eso pasa por validarPropietarioOAdmin.
+     *
+     * <p>cantidadOcurrenciasActivas y proximaOcurrencia NO se calculan por fila: se resuelven
+     * con una sola consulta agregada por los ids de la página entera (ver
+     * ReservaRepository.agregadosPorTurnoFijo). Sin esto el listado dispara dos consultas
+     * extra por fila, el N+1 clásico de un listado con agregados.
+     */
+    @Transactional(readOnly = true)
+    public Page<TurnoFijoListadoResponse> listar(Long estId, EstadoTurnoFijo estado, Pageable pageable, String email) {
+        Establecimiento establecimiento = establecimientoRepository.findById(estId)
+                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        autorizacionEmpleadoService.validarLectura(establecimiento, email,
+                AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
+
+        EstadoTurnoFijo estadoBuscado = estado != null ? estado : EstadoTurnoFijo.ACTIVO;
+        Page<TurnoFijo> pagina = turnoFijoRepository.findByCancha_Establecimiento_IdAndEstado(
+                estId, estadoBuscado, reservaService.capPageSize(pageable));
+
+        List<Long> ids = pagina.getContent().stream().map(TurnoFijo::getId).toList();
+        Map<Long, Object[]> agregados = ids.isEmpty() ? Map.of()
+                : reservaRepository.agregadosPorTurnoFijo(ids, LocalDateTime.now()).stream()
+                        .collect(Collectors.toMap(fila -> (Long) fila[0], fila -> fila));
+
+        return pagina.map(turnoFijo -> turnoFijoMapper.mapToListado(turnoFijo, agregados.get(turnoFijo.getId())));
+    }
+
+    /**
+     * Detalle de una serie con todas sus ocurrencias, para auditarla o revisarla antes de
+     * cancelarla o renovarla.
+     *
+     * <p>Lectura, no escritura: mismo criterio de autorización que listar.
+     */
+    @Transactional(readOnly = true)
+    public TurnoFijoResponse detalle(Long id, String email) {
+        TurnoFijo turnoFijo = buscarTurnoFijo(id);
+        autorizacionEmpleadoService.validarLectura(turnoFijo.getCancha().getEstablecimiento(), email,
+                AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
+
+        List<ReservaResponse> ocurrencias = reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(id)
+                .stream().map(reservaMapper::mapToResponse).toList();
+        return turnoFijoMapper.mapToResponse(turnoFijo, ocurrencias);
+    }
+
+    private TurnoFijo buscarTurnoFijo(Long id) {
+        return turnoFijoRepository.findByIdConCanchaYEstablecimiento(id)
+                .orElseThrow(() -> new EntityNotFoundException("Turno fijo no encontrado"));
     }
 
     /**

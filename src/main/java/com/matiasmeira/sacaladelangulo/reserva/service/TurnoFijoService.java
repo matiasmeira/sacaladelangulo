@@ -87,6 +87,64 @@ public class TurnoFijoService {
     private final ReservaService reservaService;
 
     /**
+     * Crea un turno fijo semanal nuevo. Delega en {@link #crearInterno} sin marca de
+     * renovación: ver ese método para el detalle de la operación.
+     *
+     * @param request DTO con el rango de fechas, el día/horario recurrente y los datos del cliente
+     * @param email Email del usuario autenticado (OWNER)
+     * @return TurnoFijoResponse con la regla creada y cada ocurrencia generada
+     */
+    public TurnoFijoResponse crear(ReservaSemanalRequest request, String email) {
+        return crearInterno(request, email, null);
+    }
+
+    /**
+     * Vuelve a cargar la misma serie para el año siguiente al de su período, sin que el
+     * dueño tenga que recargarla campo por campo. Crea una serie NUEVA (no muta la vieja) y
+     * pasa por el mismo camino de creación: mismas validaciones, mismo lock, todo-o-nada.
+     *
+     * <p>El inicio es max(1 de enero del año destino, hoy). El max con hoy es lo que hace
+     * que renovar tarde — en febrero, no en enero — no falle contra @FutureOrPresent ni
+     * contra validarFechas; generarFechasDelPeriodo ya busca la primera ocurrencia del día
+     * pedido a partir de ahí.
+     *
+     * @param id Id del turno fijo a renovar
+     * @param email Email del usuario autenticado (OWNER o ADMIN)
+     * @return TurnoFijoResponse con la serie nueva y sus ocurrencias
+     */
+    public TurnoFijoResponse renovar(Long id, String email) {
+        TurnoFijo original = buscarTurnoFijo(id);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(original.getCancha().getEstablecimiento(), email);
+
+        // El índice único de V24 lo garantiza igual, pero sin este chequeo el segundo click
+        // fallaría por solapamiento ("la cancha ya está reservada el 05/01"), que no le dice
+        // nada al dueño.
+        if (turnoFijoRepository.existsByRenovadoDesdeId(id)) {
+            throw new IllegalArgumentException(
+                    "Este turno fijo ya fue renovado. Buscá la serie del año siguiente en el listado.");
+        }
+
+        int anioDestino = original.getFechaFinPeriodo().getYear() + 1;
+        LocalDate primeroDeEnero = LocalDate.of(anioDestino, 1, 1);
+        LocalDate hoy = LocalDate.now();
+        LocalDate inicio = primeroDeEnero.isAfter(hoy) ? primeroDeEnero : hoy;
+
+        ReservaSemanalRequest pedido = new ReservaSemanalRequest(
+                original.getCancha().getId(),
+                inicio,
+                LocalDate.of(anioDestino, 12, 31),
+                original.getDiaSemana(),
+                original.getHoraInicio(),
+                original.getHoraFin(),
+                original.getDeporteSeleccionado(),
+                original.getJugador() != null ? original.getJugador().getId() : null,
+                original.getNombreClienteManual(),
+                original.getTelefonoClienteManual());
+
+        return crearInterno(pedido, email, id);
+    }
+
+    /**
      * Crea un turno fijo semanal: persiste la regla y genera una Reserva CONFIRMADA por
      * cada fecha del período que coincida con el día de la semana solicitado, en el mismo
      * horario, apuntando a esa regla. La operación es todo-o-nada: si una sola fecha no
@@ -94,11 +152,16 @@ public class TurnoFijoService {
      * fuera del horario de atención), no se persiste ni la regla ni ninguna reserva. Solo
      * puede utilizarla el dueño real del establecimiento al que pertenece la cancha.
      *
+     * <p>Compartido por {@link #crear} y {@link #renovar}: {@code renovadoDesdeId} viaja nulo
+     * en una carga nueva y con el id de la serie original cuando la llamada viene de renovar,
+     * para que ambos caminos validen y persistan exactamente igual.
+     *
      * @param request DTO con el rango de fechas, el día/horario recurrente y los datos del cliente
      * @param email Email del usuario autenticado (OWNER)
+     * @param renovadoDesdeId Id de la serie de la que esta es la renovación, o null si es una carga nueva
      * @return TurnoFijoResponse con la regla creada y cada ocurrencia generada
      */
-    public TurnoFijoResponse crear(ReservaSemanalRequest request, String email) {
+    private TurnoFijoResponse crearInterno(ReservaSemanalRequest request, String email, Long renovadoDesdeId) {
         log.info("Iniciando creación de turno fijo. Email: {}, Cancha: {}, Día: {}, Horario: {}-{}, Período: {} a {}",
                 email, request.canchaId(), request.diaSemana(), request.horaInicio(), request.horaFin(),
                 request.fechaInicioPeriodo(), request.fechaFinPeriodo());
@@ -168,6 +231,7 @@ public class TurnoFijoService {
                 .nombreClienteManual(jugador == null ? request.nombreClienteManual() : null)
                 .telefonoClienteManual(jugador == null ? request.telefonoClienteManual() : null)
                 .estado(EstadoTurnoFijo.ACTIVO)
+                .renovadoDesdeId(renovadoDesdeId)
                 .build());
 
         List<Reserva> reservasAGuardar = new ArrayList<>();

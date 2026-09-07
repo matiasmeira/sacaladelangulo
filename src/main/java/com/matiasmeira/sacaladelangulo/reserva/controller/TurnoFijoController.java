@@ -89,4 +89,18 @@ public class TurnoFijoController {
         LocalDate desde = request != null ? request.desde() : null;
         return ResponseEntity.ok(turnoFijoService.cancelar(id, desde, userDetails.getUsername()));
     }
+
+    /**
+     * Vuelve a cargar la misma serie para el año siguiente al de su período, sin que el
+     * dueño tenga que recargarla campo por campo. Sólo el dueño real del establecimiento o
+     * un admin: misma restricción que crear, porque compromete la agenda a otro año.
+     */
+    @PostMapping("/{id}/renovar")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<TurnoFijoResponse> renovar(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(turnoFijoService.renovar(id, userDetails.getUsername()));
+    }
 }

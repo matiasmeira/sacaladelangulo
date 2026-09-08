@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -28,6 +29,7 @@ import java.util.Set;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -247,6 +249,36 @@ class LecturaOperativaEmpleadoTest {
 
         mockMvc.perform(post("/api/v1/turnos-fijos/" + turnoFijo.getId() + "/cancelar")
                         .with(user(email).roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("turnoFijoRenovar_Empleado_NoPuedeAunqueTengaElPermisoDeReserva")
+    void turnoFijoRenovar_Empleado_NoPuedeAunqueTengaElPermisoDeReserva() throws Exception {
+        establecimiento = sembrarLocal("turnos-fijos-renovar");
+        TurnoFijo turnoFijo = sembrarTurnoFijo(establecimiento);
+        // Mismo criterio que cancelar: renovar crea ~52 reservas CONFIRMADA con precio para
+        // el año siguiente, y es escritura reservada a OWNER/ADMIN.
+        String email = sembrarEmpleado(establecimiento, "Cobrador5", Set.of(PermisoEmpleado.FINALIZAR_RESERVA));
+
+        mockMvc.perform(post("/api/v1/turnos-fijos/" + turnoFijo.getId() + "/renovar")
+                        .with(user(email).roles("EMPLOYEE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("turnoFijoEditarCliente_Empleado_NoPuedeAunqueTengaElPermisoDeReserva")
+    void turnoFijoEditarCliente_Empleado_NoPuedeAunqueTengaElPermisoDeReserva() throws Exception {
+        establecimiento = sembrarLocal("turnos-fijos-editar-cliente");
+        TurnoFijo turnoFijo = sembrarTurnoFijo(establecimiento);
+        // Reescribe datos de cliente sobre reservas futuras con plata: escritura reservada
+        // a OWNER/ADMIN, igual que cancelar y renovar.
+        String email = sembrarEmpleado(establecimiento, "Cobrador6", Set.of(PermisoEmpleado.FINALIZAR_RESERVA));
+
+        mockMvc.perform(patch("/api/v1/turnos-fijos/" + turnoFijo.getId() + "/cliente")
+                        .with(user(email).roles("EMPLOYEE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nombre\":\"Otro nombre\"}"))
                 .andExpect(status().isForbidden());
     }
 

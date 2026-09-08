@@ -893,6 +893,39 @@ class TurnoFijoServiceTest {
     }
 
     @Test
+    @DisplayName("cancelar_SegundaCancelacionConCorteMasTardio_NoPisaElCanceladoDesdeMasTemprano")
+    void cancelar_SegundaCancelacionConCorteMasTardio_NoPisaElCanceladoDesdeMasTemprano() {
+        // La serie ya se había cancelado antes desde junio (primera cancelación). Volver a
+        // cancelarla ahora "desde noviembre" no puede correr ese corte hacia adelante: la
+        // serie dejó de generar compromiso en junio, y noviembre mentiría al respecto.
+        turnoFijoActivo.setEstado(EstadoTurnoFijo.CANCELADO);
+        turnoFijoActivo.setCanceladoDesde(LocalDate.of(2030, 6, 1));
+        Reserva futura = ocurrencia(LocalDateTime.of(2030, 11, 5, 20, 0), EstadoReserva.CONFIRMADA);
+        when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
+                .thenReturn(List.of(futura));
+
+        turnoFijoService.cancelar(TURNO_FIJO_ID, LocalDate.of(2030, 11, 1), EMAIL_DUENO);
+
+        assertThat(turnoFijoActivo.getCanceladoDesde()).isEqualTo(LocalDate.of(2030, 6, 1));
+    }
+
+    @Test
+    @DisplayName("cancelar_SegundaCancelacionConCorteMasTemprano_SiActualizaElCanceladoDesde")
+    void cancelar_SegundaCancelacionConCorteMasTemprano_SiActualizaElCanceladoDesde() {
+        // Caso simétrico: si el corte nuevo es MÁS temprano que el que ya estaba, sí hay
+        // que quedarse con el nuevo — la serie comprometía menos de lo que se creía.
+        turnoFijoActivo.setEstado(EstadoTurnoFijo.CANCELADO);
+        turnoFijoActivo.setCanceladoDesde(LocalDate.of(2030, 11, 1));
+        Reserva futura = ocurrencia(LocalDateTime.of(2030, 6, 4, 20, 0), EstadoReserva.CONFIRMADA);
+        when(reservaRepository.findByTurnoFijoIdOrderByFechaHoraInicioAsc(TURNO_FIJO_ID))
+                .thenReturn(List.of(futura));
+
+        turnoFijoService.cancelar(TURNO_FIJO_ID, LocalDate.of(2030, 6, 1), EMAIL_DUENO);
+
+        assertThat(turnoFijoActivo.getCanceladoDesde()).isEqualTo(LocalDate.of(2030, 6, 1));
+    }
+
+    @Test
     @DisplayName("renovar_CreaLaSerieDelAnioSiguienteConRenovadoDesde")
     void renovar_CreaLaSerieDelAnioSiguienteConRenovadoDesde() {
         // Año bien futuro (mismo criterio que el resto de la suite, ver

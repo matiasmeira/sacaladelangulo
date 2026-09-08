@@ -404,7 +404,14 @@ public class TurnoFijoService {
         reservaRepository.saveAll(canceladas);
 
         turnoFijo.setEstado(EstadoTurnoFijo.CANCELADO);
-        turnoFijo.setCanceladoDesde(corteEfectivo);
+        // Se queda con el corte MÁS TEMPRANO: cancelar la serie una segunda vez con un
+        // "desde" posterior al que ya tenía (por ejemplo, cancelar en junio y de nuevo en
+        // noviembre) no puede correr canceladoDesde hacia adelante. Ese campo documenta
+        // hasta cuándo estuvo comprometida la serie, y noviembre mentiría: el compromiso
+        // real terminó en junio.
+        if (turnoFijo.getCanceladoDesde() == null || corteEfectivo.isBefore(turnoFijo.getCanceladoDesde())) {
+            turnoFijo.setCanceladoDesde(corteEfectivo);
+        }
         turnoFijoRepository.save(turnoFijo);
 
         log.info("Turno fijo {} cancelado desde {}. {} ocurrencias dadas de baja, {} omitidas",

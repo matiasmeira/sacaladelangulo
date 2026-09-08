@@ -893,6 +893,27 @@ class TurnoFijoServiceTest {
     }
 
     @Test
+    @DisplayName("renovar_ComoEmpleado_LanzaAccessDenied")
+    void renovar_ComoEmpleado_LanzaAccessDenied() {
+        doThrow(new AccessDeniedException("No autorizado"))
+                .when(autorizacionEmpleadoService).validarPropietarioOAdmin(any(), eq(EMAIL_EMPLEADO));
+
+        assertThatThrownBy(() -> turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_EMPLEADO))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("editarCliente_ComoEmpleado_LanzaAccessDenied")
+    void editarCliente_ComoEmpleado_LanzaAccessDenied() {
+        doThrow(new AccessDeniedException("No autorizado"))
+                .when(autorizacionEmpleadoService).validarPropietarioOAdmin(any(), eq(EMAIL_EMPLEADO));
+
+        assertThatThrownBy(() -> turnoFijoService.editarCliente(TURNO_FIJO_ID,
+                new EditarClienteTurnoFijoRequest("Otro", null), EMAIL_EMPLEADO))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
     @DisplayName("cancelar_SegundaCancelacionConCorteMasTardio_NoPisaElCanceladoDesdeMasTemprano")
     void cancelar_SegundaCancelacionConCorteMasTardio_NoPisaElCanceladoDesdeMasTemprano() {
         // La serie ya se había cancelado antes desde junio (primera cancelación). Volver a

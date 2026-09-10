@@ -28,7 +28,13 @@ public class DisponibilidadController {
      * Devuelve, para un establecimiento y un rango de fechas (o un único día si se omite
      * fechaFin), la grilla de turnos 100% disponibles por cancha y duración, ya cruzada
      * contra horarios de atención, días no laborables, bloqueos y reservas existentes.
-     * Accesible a cualquier usuario autenticado (no expone datos de jugadores ni reservas).
+     * Cada cancha trae además ocupadaPorPool: los rangos en los que queda sin cupo por
+     * consumo de pool de otra cancha (ver DisponibilidadCanchaResponse). Accesible a
+     * cualquier usuario autenticado, incluido PLAYER: no expone identidad de jugadores ni
+     * datos de reservas ajenas, aunque ocupadaPorPool sí es información derivada de
+     * reservas existentes del establecimiento. La protección al jugador anónimo (sin
+     * cuenta) es responsabilidad de ComplejoPublicoService, que pide esta misma grilla
+     * con ese campo en null.
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN', 'EMPLOYEE')")

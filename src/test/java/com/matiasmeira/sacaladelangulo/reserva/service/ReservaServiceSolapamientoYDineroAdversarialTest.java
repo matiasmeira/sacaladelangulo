@@ -114,13 +114,13 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
         cancha = Cancha.builder().id(100L).nombre("Cancha A").deportes(java.util.Set.of(Deporte.FUTBOL_5))
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO)
                 .duracionesPermitidas(new ArrayList<>(List.of(60))).permiteInicioMediaHora(true)
-                .establecimiento(establecimiento).isActive(true).tarifas(new ArrayList<>()).canchasFisicas(new ArrayList<>())
+                .establecimiento(establecimiento).isActive(true).tarifas(new ArrayList<>()).canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         canchaDestino = Cancha.builder().id(101L).nombre("Cancha B").deportes(java.util.Set.of(Deporte.FUTBOL_5))
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO)
                 .duracionesPermitidas(new ArrayList<>(List.of(60))).permiteInicioMediaHora(true)
-                .establecimiento(establecimiento).isActive(true).tarifas(new ArrayList<>()).canchasFisicas(new ArrayList<>())
+                .establecimiento(establecimiento).isActive(true).tarifas(new ArrayList<>()).canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         lenient().when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));

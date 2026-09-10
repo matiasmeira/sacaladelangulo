@@ -535,15 +535,15 @@ class ComplejoPublicoServiceTest {
         Cancha fisicaUno = Cancha.builder()
                 .id(10L).nombre("Cancha F5 1").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(300))
-                .establecimiento(est).canchasFisicas(List.of()).build();
+                .establecimiento(est).canchasFisicas(Set.of()).build();
         Cancha fisicaDos = Cancha.builder()
                 .id(11L).nombre("Cancha F5 2").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(300))
-                .establecimiento(est).canchasFisicas(List.of()).build();
+                .establecimiento(est).canchasFisicas(Set.of()).build();
         Cancha compuesta = Cancha.builder()
                 .id(12L).nombre("Cancha F7").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(2000)).montoSena(BigDecimal.valueOf(700))
-                .establecimiento(est).canchasFisicas(List.of(fisicaUno, fisicaDos)).canchasNecesarias(2).build();
+                .establecimiento(est).canchasFisicas(Set.of(fisicaUno, fisicaDos)).canchasNecesarias(2).build();
 
         LocalDate fecha = LocalDate.of(2026, 8, 10);
         LocalTime hora = LocalTime.of(10, 0);
@@ -586,15 +586,15 @@ class ComplejoPublicoServiceTest {
         Cancha fisicaUno = Cancha.builder()
                 .id(10L).nombre("Cancha F5 1").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(300))
-                .establecimiento(est).canchasFisicas(List.of()).build();
+                .establecimiento(est).canchasFisicas(Set.of()).build();
         Cancha fisicaDos = Cancha.builder()
                 .id(11L).nombre("Cancha F5 2").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(300))
-                .establecimiento(est).canchasFisicas(List.of()).build();
+                .establecimiento(est).canchasFisicas(Set.of()).build();
         Cancha compuesta = Cancha.builder()
                 .id(12L).nombre("Cancha F7").deportes(Set.of(Deporte.FUTBOL_5)).isActive(true)
                 .precioBase(BigDecimal.valueOf(2000)).montoSena(BigDecimal.valueOf(700))
-                .establecimiento(est).canchasFisicas(List.of(fisicaUno, fisicaDos)).canchasNecesarias(2).build();
+                .establecimiento(est).canchasFisicas(Set.of(fisicaUno, fisicaDos)).canchasNecesarias(2).build();
 
         LocalDate fecha = LocalDate.of(2026, 8, 10);
         LocalTime hora = LocalTime.of(10, 0);

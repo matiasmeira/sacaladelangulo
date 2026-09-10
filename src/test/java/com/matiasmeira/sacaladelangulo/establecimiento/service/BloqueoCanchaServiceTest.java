@@ -121,7 +121,7 @@ class BloqueoCanchaServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         cancha5B = Cancha.builder()
@@ -135,7 +135,7 @@ class BloqueoCanchaServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         lenient().when(reservaMapper.mapToResponse(any(Reserva.class))).thenAnswer(invocation -> {

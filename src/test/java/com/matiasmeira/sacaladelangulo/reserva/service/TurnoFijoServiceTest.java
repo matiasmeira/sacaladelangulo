@@ -210,7 +210,7 @@ class TurnoFijoServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         reservaService = new ReservaService(

@@ -403,10 +403,13 @@ public class ComplejoPublicoService {
      * DisponibilidadCanchaResponse -> DisponibilidadDuracionResponse ->
      * SlotDisponibleResponse) ya es 100% libre/ocupado por slot: no tiene ningún campo de
      * jugador/titular, así que no hace falta filtrar nada acá.
+     * Pasa incluirOcupacionPool=false: la ocupación derivada de pool es información
+     * interna del complejo (ver DisponibilidadCanchaResponse.ocupadaPorPool) que no debe
+     * llegar al jugador anónimo.
      */
     public DisponibilidadEstablecimientoResponse obtenerDisponibilidad(String slug, LocalDate fecha, LocalDate fechaFin) {
         Establecimiento establecimiento = establecimientoRepository.findBySlugAndIsActiveTrue(slug)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-        return disponibilidadService.obtenerDisponibilidad(establecimiento.getId(), fecha, fechaFin);
+        return disponibilidadService.obtenerDisponibilidad(establecimiento.getId(), fecha, fechaFin, false);
     }
 }

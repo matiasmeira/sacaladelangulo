@@ -36,6 +36,6 @@ public class DisponibilidadController {
             @PathVariable Long establecimientoId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin) {
-        return ResponseEntity.ok(disponibilidadService.obtenerDisponibilidad(establecimientoId, fecha, fechaFin));
+        return ResponseEntity.ok(disponibilidadService.obtenerDisponibilidad(establecimientoId, fecha, fechaFin, true));
     }
 }

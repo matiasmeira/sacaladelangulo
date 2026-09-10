@@ -43,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -739,11 +740,12 @@ class ComplejoPublicoServiceTest {
                 new com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse(1L, fecha, fecha, List.of());
 
         when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
-        when(disponibilidadService.obtenerDisponibilidad(1L, fecha, fecha)).thenReturn(respuestaEsperada);
+        when(disponibilidadService.obtenerDisponibilidad(1L, fecha, fecha, false)).thenReturn(respuestaEsperada);
 
         var resultado = complejoPublicoService.obtenerDisponibilidad("complejo-uno", fecha, fecha);
 
         assertEquals(respuestaEsperada, resultado);
+        verify(disponibilidadService).obtenerDisponibilidad(1L, fecha, fecha, false);
     }
 
     @Test

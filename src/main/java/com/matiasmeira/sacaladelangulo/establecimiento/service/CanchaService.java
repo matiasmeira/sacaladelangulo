@@ -73,6 +73,7 @@ public class CanchaService {
                 .build();
 
         cancha.setCanchasFisicas(resolverCanchasFisicas(establecimientoId, request.canchasFisicasIds()));
+        validarConfiguracionDePool(establecimientoId, null, cancha.getCanchasFisicas());
         cancha.setTarifas(mapearTarifas(request.tarifas(), cancha));
 
         Cancha canchaGuardada = canchaRepository.save(cancha);
@@ -129,6 +130,7 @@ public class CanchaService {
         cancha.setPermiteInicioMediaHora(request.permiteInicioMediaHora() != null ? request.permiteInicioMediaHora() : true);
         cancha.setCanchasNecesarias(calcularCanchasNecesarias(request.canchasFisicasIds(), request.cantidadCanchasNecesarias()));
         cancha.setCanchasFisicas(resolverCanchasFisicas(establecimientoId, request.canchasFisicasIds()));
+        validarConfiguracionDePool(establecimientoId, canchaId, cancha.getCanchasFisicas());
 
         if (request.tarifas() != null) {
             cancha.getTarifas().clear();
@@ -242,6 +244,51 @@ public class CanchaService {
             throw new IllegalArgumentException("Las canchas físicas deben pertenecer a este establecimiento");
         }
         return canchasFisicas;
+    }
+
+    /**
+     * PoolCanchaCalculator.hayDisponibilidad valida la capacidad de un GRUPO de físicas
+     * (cierre transitivo de pools que se intersectan) sumando las demandas de las reservas
+     * que caen dentro de ese grupo. Esa suma solo es exacta si, dentro de un mismo grupo,
+     * todos los pools son idénticos entre sí: si dos lógicas activas se pisan con pools
+     * PARCIALMENTE distintos (ej. una usa [F1,F2,F3] y otra [F1,F2]), la suma sobrevende en
+     * silencio (ver diagnóstico del bug de disponibilidad entre lógicas superpuestas).
+     * Por eso este guard corre solo en altas/ediciones, nunca retroactivamente: no hay que
+     * desactivar configuraciones ya existentes, solo impedir que se sume una nueva
+     * configuración inconsistente.
+     */
+    private void validarConfiguracionDePool(Long establecimientoId, Long canchaIdActual, Set<Cancha> canchasFisicas) {
+        if (canchasFisicas.isEmpty()) {
+            return;
+        }
+
+        boolean incluyeOtraCanchaCombinada = canchasFisicas.stream()
+                .anyMatch(c -> c.getCanchasFisicas() != null && !c.getCanchasFisicas().isEmpty());
+        if (incluyeOtraCanchaCombinada) {
+            throw new IllegalArgumentException(
+                    "No podés armar una cancha combinada usando otra cancha combinada como si fuera física: "
+                            + "elegí únicamente canchas físicas individuales para el pool.");
+        }
+
+        Set<Long> idsPool = canchasFisicas.stream().map(Cancha::getId).collect(Collectors.toSet());
+
+        List<Cancha> otrasLogicasActivas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId).stream()
+                .filter(c -> c.getCanchasFisicas() != null && !c.getCanchasFisicas().isEmpty())
+                .filter(c -> canchaIdActual == null || !c.getId().equals(canchaIdActual))
+                .toList();
+
+        for (Cancha otraLogica : otrasLogicasActivas) {
+            Set<Long> idsOtroPool = otraLogica.getCanchasFisicas().stream().map(Cancha::getId).collect(Collectors.toSet());
+            boolean seIntersectan = idsPool.stream().anyMatch(idsOtroPool::contains);
+            boolean sonIdenticos = idsPool.equals(idsOtroPool);
+            if (seIntersectan && !sonIdenticos) {
+                throw new IllegalArgumentException(
+                        "Esta combinación de canchas se pisa parcialmente con \"" + otraLogica.getNombre()
+                                + "\", que usa un grupo distinto de canchas físicas. Para combinar canchas que "
+                                + "comparten físicas, todas las combinaciones que se solapen tienen que usar "
+                                + "exactamente el mismo grupo de canchas físicas.");
+            }
+        }
     }
 
     private List<Tarifa> mapearTarifas(List<TarifaDto> tarifasDto, Cancha cancha) {

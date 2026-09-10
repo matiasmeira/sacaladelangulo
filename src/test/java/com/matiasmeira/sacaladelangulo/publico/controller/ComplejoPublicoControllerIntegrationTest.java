@@ -33,6 +33,7 @@ import java.util.Set;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -304,6 +305,7 @@ class ComplejoPublicoControllerIntegrationTest {
                         .param("fecha", LocalDate.of(2026, 8, 10).toString()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(not(containsString("jugador"))))
-                .andExpect(content().string(not(containsString("titular"))));
+                .andExpect(content().string(not(containsString("titular"))))
+                .andExpect(jsonPath("$.dias[0].canchas[0].ocupadaPorPool").value(nullValue()));
     }
 }

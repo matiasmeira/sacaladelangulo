@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadDuracion
 import com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.disponibilidad.dto.RangoOcupadoResponse;
 import com.matiasmeira.sacaladelangulo.disponibilidad.dto.SlotDisponibleResponse;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
@@ -57,6 +58,7 @@ public class DisponibilidadService {
     private final DiaNoLaborableRepository diaNoLaborableRepository;
     private final BloqueoCanchaRepository bloqueoCanchaRepository;
     private final ReservaRepository reservaRepository;
+    private final AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     /**
      * @param incluirOcupacionPool si es {@code true}, cada DisponibilidadCanchaResponse trae
@@ -71,6 +73,35 @@ public class DisponibilidadService {
 
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+
+        return calcularGrilla(establecimientoId, fechaInicio, fechaFinResuelta, establecimiento, incluirOcupacionPool);
+    }
+
+    /**
+     * Punto de entrada para el panel autenticado (ver DisponibilidadController): sólo
+     * puebla ocupadaPorPool cuando el usuario autenticado tiene acceso de PANEL a ESE
+     * establecimiento (dueño, admin, o empleado con permiso operativo de agenda) —
+     * estar autenticado no alcanza, porque registrarse es gratis y el @PreAuthorize del
+     * endpoint acepta también a PLAYER, sin distinguir de qué establecimiento es cada
+     * uno. Para quien no califica (otro jugador, o el dueño de OTRO establecimiento) el
+     * campo va en null, igual que en la disponibilidad pública.
+     */
+    public DisponibilidadEstablecimientoResponse obtenerDisponibilidadParaPanel(Long establecimientoId, LocalDate fechaInicio, LocalDate fechaFin,
+            String email) {
+        LocalDate fechaFinResuelta = fechaFin != null ? fechaFin : fechaInicio;
+        validarRango(fechaInicio, fechaFinResuelta);
+
+        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
+                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+
+        boolean incluirOcupacionPool = autorizacionEmpleadoService.tieneAccesoDePanel(
+                establecimiento, email, AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
+
+        return calcularGrilla(establecimientoId, fechaInicio, fechaFinResuelta, establecimiento, incluirOcupacionPool);
+    }
+
+    private DisponibilidadEstablecimientoResponse calcularGrilla(Long establecimientoId, LocalDate fechaInicio, LocalDate fechaFinResuelta,
+            Establecimiento establecimiento, boolean incluirOcupacionPool) {
 
         List<Cancha> canchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId);
         List<DiaNoLaborable> diasNoLaborables = diaNoLaborableRepository

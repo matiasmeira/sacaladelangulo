@@ -74,16 +74,31 @@ public class AutorizacionEmpleadoService {
         Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
 
-        boolean esAdmin = usuarioAutenticado.getRol() == Role.ADMIN;
-        boolean esDueno = usuarioAutenticado.getRol() == Role.OWNER
-                && establecimiento.getDueno().getId().equals(usuarioAutenticado.getId());
-        boolean esEmpleadoHabilitado = permisosQueHabilitan.stream()
-                .anyMatch(permiso -> tienePermiso(usuarioAutenticado, establecimiento, permiso));
-
-        if (!esAdmin && !esDueno && !esEmpleadoHabilitado) {
+        if (!tieneAccesoDeLectura(usuarioAutenticado, establecimiento, permisosQueHabilitan)) {
             throw new AccessDeniedException("No autorizado para ver esta información de este establecimiento");
         }
         return usuarioAutenticado;
+    }
+
+    private boolean tieneAccesoDeLectura(Usuario usuario, Establecimiento establecimiento, Set<PermisoEmpleado> permisosQueHabilitan) {
+        boolean esAdmin = usuario.getRol() == Role.ADMIN;
+        boolean esDueno = usuario.getRol() == Role.OWNER
+                && establecimiento.getDueno().getId().equals(usuario.getId());
+        boolean esEmpleadoHabilitado = permisosQueHabilitan.stream()
+                .anyMatch(permiso -> tienePermiso(usuario, establecimiento, permiso));
+        return esAdmin || esDueno || esEmpleadoHabilitado;
+    }
+
+    /**
+     * Igual chequeo que validarLectura, pero sin lanzar excepción: para lecturas que deben
+     * seguir respondiendo igual a quien no califica (sólo cambia qué parte de la respuesta
+     * se puebla), no rechazar el acceso. Un email sin usuario asociado cuenta como "sin
+     * acceso", no como error.
+     */
+    public boolean tieneAccesoDePanel(Establecimiento establecimiento, String email, Set<PermisoEmpleado> permisosQueHabilitan) {
+        return usuarioRepository.findByEmail(email)
+                .map(usuario -> tieneAccesoDeLectura(usuario, establecimiento, permisosQueHabilitan))
+                .orElse(false);
     }
 
     /**

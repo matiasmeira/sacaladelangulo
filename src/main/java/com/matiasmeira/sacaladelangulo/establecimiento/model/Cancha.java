@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -63,6 +64,15 @@ public class Cancha {
     @JoinColumn(name = "establecimiento_id", nullable = false)
     private Establecimiento establecimiento;
 
+    /**
+     * Set, no List: el finder que la trae (CanchaRepository.findByEstablecimientoIdAndIsActiveTrue)
+     * usa un @EntityGraph que fetch-joinea esta colección junto con "deportes" en la misma
+     * consulta. Hibernate 6 arma un único JOIN de ambas colecciones, así que cada fila del
+     * resultado es un par (cancha física, deporte): con un bag (List) esas filas quedaban
+     * todas en la lista tal cual, duplicando cada física una vez por cada deporte de la
+     * cancha lógica (3 físicas × 2 deportes = 6, con cada física repetida). Un Set se
+     * reconstruye deduplicando esas filas, igual que ya hacía "deportes" en esa misma query.
+     */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "cancha_composicion",
@@ -70,7 +80,7 @@ public class Cancha {
             inverseJoinColumns = @JoinColumn(name = "cancha_fisica_id")
     )
     @Builder.Default
-    private List<Cancha> canchasFisicas = new ArrayList<>();
+    private Set<Cancha> canchasFisicas = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "cancha", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

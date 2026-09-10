@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -222,11 +223,11 @@ public class CanchaService {
         return cantidadSolicitada;
     }
 
-    private List<Cancha> resolverCanchasFisicas(Long establecimientoId, List<Long> canchasFisicasIds) {
+    private Set<Cancha> resolverCanchasFisicas(Long establecimientoId, List<Long> canchasFisicasIds) {
         if (canchasFisicasIds == null || canchasFisicasIds.isEmpty()) {
-            return new ArrayList<>();
+            return new LinkedHashSet<>();
         }
-        List<Cancha> canchasFisicas = new ArrayList<>();
+        Set<Cancha> canchasFisicas = new LinkedHashSet<>();
         canchaRepository.findAllById(canchasFisicasIds).forEach(canchasFisicas::add);
 
         if (canchasFisicas.size() != canchasFisicasIds.size()) {

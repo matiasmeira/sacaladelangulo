@@ -86,4 +86,69 @@ class CanchaRepositoryTest {
         assertEquals(1, resultado.get(0).getTarifas().size());
         assertEquals(0, BigDecimal.valueOf(6000).compareTo(resultado.get(0).getTarifas().get(0).getPrecio()));
     }
+
+    @Test
+    @DisplayName("findByEstablecimientoIdAndIsActiveTrue_conCanchaLogicaDeVariosDeportes_noDuplicaCanchasFisicas")
+    void findByEstablecimientoIdAndIsActiveTrue_conCanchaLogicaDeVariosDeportes_noDuplicaCanchasFisicas() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno2@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+        Establecimiento establecimiento = entityManager.persist(Establecimiento.builder()
+                .nombre("Complejo Test 2")
+                .direccion("Calle Test 2")
+                .slug("complejo-test-2")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .isActive(true)
+                .dueno(dueno)
+                .build());
+
+        // El @EntityGraph de findByEstablecimientoIdAndIsActiveTrue trae "canchasFisicas" y
+        // "deportes" en la misma consulta. Con canchasFisicas como bag (List), Hibernate 6
+        // arma un unico JOIN de ambas colecciones y produce el producto cartesiano:
+        // 3 fisicas x 2 deportes = 6 filas, cada fisica repetida.
+        List<Cancha> fisicas = new java.util.ArrayList<>();
+        for (int i = 1; i <= 3; i++) {
+            fisicas.add(entityManager.persist(Cancha.builder()
+                    .nombre("Fisica " + i)
+                    .deportes(Set.of(Deporte.FUTBOL_5))
+                    .isActive(true)
+                    .precioBase(BigDecimal.valueOf(5000))
+                    .montoSena(BigDecimal.valueOf(1000))
+                    .establecimiento(establecimiento)
+                    .build()));
+        }
+
+        Cancha logica = Cancha.builder()
+                .nombre("Cancha Logica (pool de 3)")
+                .deportes(Set.of(Deporte.FUTBOL_5, Deporte.FUTBOL_7))
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(15000))
+                .montoSena(BigDecimal.valueOf(3000))
+                .establecimiento(establecimiento)
+                .canchasFisicas(new java.util.LinkedHashSet<>(fisicas))
+                .build();
+        entityManager.persist(logica);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        List<Cancha> resultado = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId());
+
+        Cancha logicaLeida = resultado.stream()
+                .filter(c -> c.getNombre().startsWith("Cancha Logica"))
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(3, logicaLeida.getCanchasFisicas().size(),
+                "El pool tiene 3 canchas fisicas; no debe duplicarse por tener 2 deportes asociados");
+    }
 }

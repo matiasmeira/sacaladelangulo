@@ -188,7 +188,7 @@ class ReservaServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         lenient().when(reservaMapper.mapToResponse(any(Reserva.class))).thenAnswer(invocation -> {
@@ -438,7 +438,7 @@ class ReservaServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         Cancha canchaFisicaDos = Cancha.builder()
@@ -452,7 +452,7 @@ class ReservaServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         Cancha canchaLogica = Cancha.builder()
@@ -466,7 +466,7 @@ class ReservaServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>(List.of(canchaFisicaUno, canchaFisicaDos)))
+                .canchasFisicas(new java.util.LinkedHashSet<>(List.of(canchaFisicaUno, canchaFisicaDos)))
                 .canchasNecesarias(2)
                 .build();
 
@@ -777,7 +777,7 @@ class ReservaServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaOriginal.getId()))
@@ -839,7 +839,7 @@ class ReservaServiceTest {
                 .establecimiento(otroEstablecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaOriginal.getId()))
@@ -1041,7 +1041,7 @@ class ReservaServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .tarifas(new ArrayList<>())
-                .canchasFisicas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
                 .build();
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaOriginal.getId()))

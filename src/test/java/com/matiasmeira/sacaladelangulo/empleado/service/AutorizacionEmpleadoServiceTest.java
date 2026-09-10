@@ -198,4 +198,58 @@ class AutorizacionEmpleadoServiceTest {
 
         assertFalse(autorizacionEmpleadoService.tienePermiso(empleado, establecimiento, PermisoEmpleado.FINALIZAR_RESERVA));
     }
+
+    @Test
+    @DisplayName("tieneAccesoDePanel_True_EsDuenoReal")
+    void tieneAccesoDePanel_True_EsDuenoReal() {
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        assertTrue(autorizacionEmpleadoService.tieneAccesoDePanel(
+                establecimiento, dueno.getEmail(), AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA));
+    }
+
+    @Test
+    @DisplayName("tieneAccesoDePanel_True_EsEmpleadoConPermisoOperativo")
+    void tieneAccesoDePanel_True_EsEmpleadoConPermisoOperativo() {
+        Usuario empleado = Usuario.builder()
+                .id(5L)
+                .email("empleado@test.com")
+                .rol(Role.EMPLOYEE)
+                .establecimiento(establecimiento)
+                .permisos(Set.of(PermisoEmpleado.FINALIZAR_RESERVA))
+                .build();
+        when(usuarioRepository.findByEmail(empleado.getEmail())).thenReturn(Optional.of(empleado));
+
+        assertTrue(autorizacionEmpleadoService.tieneAccesoDePanel(
+                establecimiento, empleado.getEmail(), AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA));
+    }
+
+    @Test
+    @DisplayName("tieneAccesoDePanel_False_JugadorAutenticado")
+    void tieneAccesoDePanel_False_JugadorAutenticado() {
+        Usuario jugador = Usuario.builder().id(7L).email("jugador@test.com").rol(Role.PLAYER).build();
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+
+        assertFalse(autorizacionEmpleadoService.tieneAccesoDePanel(
+                establecimiento, jugador.getEmail(), AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA));
+    }
+
+    @Test
+    @DisplayName("tieneAccesoDePanel_False_DuenoDeOtroEstablecimiento")
+    void tieneAccesoDePanel_False_DuenoDeOtroEstablecimiento() {
+        Usuario otroDueno = Usuario.builder().id(3L).email("otro@test.com").rol(Role.OWNER).build();
+        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+
+        assertFalse(autorizacionEmpleadoService.tieneAccesoDePanel(
+                establecimiento, otroDueno.getEmail(), AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA));
+    }
+
+    @Test
+    @DisplayName("tieneAccesoDePanel_False_UsuarioNoEncontrado_NoLanza")
+    void tieneAccesoDePanel_False_UsuarioNoEncontrado_NoLanza() {
+        when(usuarioRepository.findByEmail("fantasma@test.com")).thenReturn(Optional.empty());
+
+        assertFalse(autorizacionEmpleadoService.tieneAccesoDePanel(
+                establecimiento, "fantasma@test.com", AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA));
+    }
 }

@@ -239,4 +239,17 @@ class DisponibilidadServiceOcupacionPorPoolTest {
         assertTrue(canchas.get(2L).ocupadaPorPool().isEmpty());
         assertTrue(canchas.get(3L).ocupadaPorPool().isEmpty());
     }
+
+    @Test
+    @DisplayName("Con incluirOcupacionPool=false (uso público) ocupadaPorPool viaja en null")
+    void flagFalse_ocupadaPorPoolEsNullParaTodasLasCanchas() {
+        when(reservaRepository.findSuperpuestas(eq(100L), any(), any(), any()))
+                .thenReturn(List.of(reservaSobre(cancha9, LocalTime.of(17, 0), LocalTime.of(18, 0))));
+
+        DisponibilidadEstablecimientoResponse response = disponibilidadService.obtenerDisponibilidad(100L, fecha, null, false);
+
+        for (DisponibilidadCanchaResponse cancha : response.dias().get(0).canchas()) {
+            assertEquals(null, cancha.ocupadaPorPool());
+        }
+    }
 }

@@ -48,5 +48,14 @@ public enum AccionAuditoria {
     // ImageKit): tocan la cara pública del establecimiento en el marketplace.
     SUBIR_FOTO_ESTABLECIMIENTO,
     ELIMINAR_FOTO_ESTABLECIMIENTO,
-    REORDENAR_FOTOS_ESTABLECIMIENTO
+    REORDENAR_FOTOS_ESTABLECIMIENTO,
+
+    // Resolución de la verificación manual de un establecimiento por parte de un ADMIN
+    // (ver AdminEstablecimientoController / EstadoVerificacion): a diferencia de todo lo de
+    // arriba, el actor acá nunca es el dueño/empleado del propio establecimiento, sino un
+    // ADMIN ajeno a él -- por eso conviene revisar estos registros con la misma atención que
+    // ACTUALIZAR_PERMISOS_EMPLEADO/DESACTIVAR_EMPLEADO (acciones de un tercero sobre el
+    // establecimiento de otro).
+    VERIFICAR_ESTABLECIMIENTO,
+    RECHAZAR_ESTABLECIMIENTO
 }

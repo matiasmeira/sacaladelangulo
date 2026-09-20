@@ -77,6 +77,27 @@ class UsuarioRepositoryFinPruebaTest {
         assertEquals(0, resultado.size());
     }
 
+    @Test
+    @DisplayName("findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull_FechaFinPruebaNula_NoLoDevuelve")
+    void findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull_FechaFinPruebaNula_NoLoDevuelve() {
+        // fechaFinPrueba=null es "trial no iniciado todavía" (ver AuthService.registerOwner),
+        // no una fecha que pueda caer dentro de ningún rango: NULL BETWEEN x AND y es UNKNOWN
+        // en SQL, así que este finder ya lo excluye por construcción. Se deja explícito acá
+        // (mismo criterio que UsuarioRepositoryExpiracionPruebaTest) para que un futuro
+        // refactor de esta query no vuelva a mandarle avisos de fin de prueba a un dueño que
+        // ni siquiera la empezó.
+        LocalDateTime desde = LocalDateTime.now().plusDays(7).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime hasta = desde.plusDays(1);
+
+        entityManager.persist(usuarioDePrueba("sin-trial-iniciado@test.com", null, false));
+        entityManager.flush();
+
+        List<Usuario> resultado = usuarioRepository
+                .findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull(desde, hasta);
+
+        assertEquals(0, resultado.size());
+    }
+
     private Usuario usuarioDePrueba(String email, LocalDateTime fechaFinPrueba, boolean aviso7Enviado) {
         return Usuario.builder()
                 .email(email)

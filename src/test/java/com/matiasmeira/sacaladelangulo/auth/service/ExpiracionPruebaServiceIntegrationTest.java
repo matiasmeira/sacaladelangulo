@@ -127,6 +127,33 @@ class ExpiracionPruebaServiceIntegrationTest {
         assertThat(usuarioRepository.findById(u3.getId()).orElseThrow().getPlanSuscripcion()).isEqualTo(PlanSuscripcion.FREE);
     }
 
+    @Test
+    @DisplayName("degradarPruebasVencidas_UsuarioTrialSinFechaFinPruebaIniciada_NoLoDegradaNiMandaEmail")
+    void degradarPruebasVencidas_UsuarioTrialSinFechaFinPruebaIniciada_NoLoDegradaNiMandaEmail() {
+        // fechaFinPrueba=null es "trial no iniciado todavía" (ver AuthService.registerOwner /
+        // AdminEstablecimientoVerificacionService.iniciarPruebaAlVerificar), no "vencido hace
+        // mucho": si la query de buscarVencidos alguna vez dejara de excluir explícitamente
+        // este caso, este dueño perdería el plan TRIAL sin haber arrancado nunca su prueba,
+        // en silencio (sin ninguna excepción).
+        Usuario dueno = usuarioRepository.save(Usuario.builder()
+                .email("dueno-sin-trial-iniciado@test.com")
+                .password("hash")
+                .nombre("Dueño sin trial iniciado")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .fechaFinPrueba(null)
+                .build());
+
+        expiracionPruebaService.degradarPruebasVencidas();
+
+        Usuario recargado = usuarioRepository.findById(dueno.getId()).orElseThrow();
+        assertThat(recargado.getPlanSuscripcion()).isEqualTo(PlanSuscripcion.TRIAL);
+        org.mockito.Mockito.verifyNoInteractions(emailService);
+    }
+
     private Usuario usuarioTrialVencido(String email) {
         return Usuario.builder()
                 .email(email)

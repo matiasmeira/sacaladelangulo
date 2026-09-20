@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaR
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.reserva.dto.CancelacionTurnoFijoResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.EditarClienteTurnoFijoRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
@@ -82,6 +83,7 @@ public class TurnoFijoService {
     private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
     private final ReservaMapper reservaMapper;
     private final TurnoFijoMapper turnoFijoMapper;
     private final ApplicationEventPublisher eventPublisher;
@@ -195,6 +197,11 @@ public class TurnoFijoService {
 
         Cancha cancha = reservaService.buscarCanchaPorId(request.canchaId());
         autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+        reservaService.validarCanchaActivaParaPanel(cancha);
+        // Gate al inicio, antes de generar fechasDelPeriodo y de persistir la regla o
+        // cualquier ocurrencia: crear/renovar comparten este método, así que alcanza con
+        // este único punto para bloquear ambos caminos.
+        establecimientoOperativoGuard.validarEstablecimientoOperativoParaPanel(cancha.getEstablecimiento());
         reservaService.validarDeporteSoportado(request.deporteSeleccionado(), cancha);
 
         Usuario jugador = null;
@@ -216,7 +223,9 @@ public class TurnoFijoService {
 
         // Se bloquea una sola vez para todo el turno fijo: la cancha (y su pool) no cambia
         // entre ocurrencias, solo la fecha/hora, así que un único lock por transacción alcanza.
-        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(cancha.getEstablecimiento().getId());
+        // Incluye inactivas: mismo motivo que ReservaService.crearReserva (una lógica
+        // desactivada puede seguir con reservas futuras vigentes que hay que seguir contando).
+        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoId(cancha.getEstablecimiento().getId());
         reservaService.bloquearCanchasRelacionadas(cancha, todasLasCanchas);
 
         // Se precarga una sola vez el rango completo del período (días no laborables,

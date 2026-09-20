@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -42,6 +43,24 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             @Param("estId") Long estId,
             @Param("inicio") LocalDateTime inicio,
             @Param("fin") LocalDateTime fin,
+            @Param("ahora") LocalDateTime ahora
+    );
+
+    /**
+     * Reservas futuras (fechaHoraInicio > ahora) sobre cualquiera de las canchas indicadas.
+     * Mismo criterio de estados que findSuperpuestas (excluye CANCELADA/CANCELADA_PRERESERVA
+     * y una PENDIENTE_SENA cuya ventana de gracia ya venció), para no bloquear una
+     * desactivación por una reserva que en la práctica ya está libre. Usado por
+     * CanchaService.validarDesactivacion para recalcular, con PoolCanchaCalculator, si
+     * alguna reserva futura del grupo de pool deja de ser satisfacible al sacar la cancha.
+     */
+    @Query("SELECT r FROM Reserva r JOIN FETCH r.cancha c " +
+           "WHERE c.id IN :canchaIds " +
+           "AND r.estado NOT IN ('CANCELADA', 'CANCELADA_PRERESERVA') " +
+           "AND (r.estado != 'PENDIENTE_SENA' OR r.expiraEn IS NULL OR r.expiraEn > :ahora) " +
+           "AND r.fechaHoraInicio > :ahora")
+    List<Reserva> findFuturasPorCanchaIds(
+            @Param("canchaIds") Collection<Long> canchaIds,
             @Param("ahora") LocalDateTime ahora
     );
 

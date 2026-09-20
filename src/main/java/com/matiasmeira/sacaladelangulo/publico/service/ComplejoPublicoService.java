@@ -126,7 +126,13 @@ public class ComplejoPublicoService {
         // físicas aunque el filtro de deporte las descarte (mismo criterio que
         // DisponibilidadService.estaLibre, que tampoco filtra por deporte).
         List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(establecimientoIds);
-        Map<Long, List<Cancha>> todasPorEstablecimiento = todasLasCanchas.stream()
+        // Contexto aparte para PoolCanchaCalculator: incluye inactivas, mismo motivo que
+        // DisponibilidadService.calcularGrilla (una lógica desactivada puede seguir con
+        // reservas futuras vigentes que hay que seguir contando contra el grupo). Los
+        // candidatos que efectivamente se ofrecen como "hay disponibilidad" (canchasRelevantes,
+        // más abajo) siguen viniendo únicamente de todasLasCanchas (activas).
+        List<Cancha> todasLasCanchasParaPool = canchaRepository.findByEstablecimientoIdIn(establecimientoIds);
+        Map<Long, List<Cancha>> todasPorEstablecimiento = todasLasCanchasParaPool.stream()
                 .collect(Collectors.groupingBy(c -> c.getEstablecimiento().getId()));
 
         List<Cancha> canchasRelevantes = deporte == null
@@ -299,13 +305,13 @@ public class ComplejoPublicoService {
     }
 
     /**
-     * Detalle público de un complejo activo. 404 si el slug no existe o si el complejo
-     * está inactivo (findBySlugAndIsActiveTrue ya filtra eso, así que ambos casos llegan
-     * acá como Optional vacío).
+     * Detalle público de un complejo operativo. 404 si el slug no existe, si el complejo está
+     * inactivo, si no está verificado, o ambas cosas (findBySlugOperativo ya filtra eso, así
+     * que los cuatro casos llegan acá como Optional vacío e indistinguibles entre sí).
      */
     @Cacheable(cacheNames = ComplejoDetalleCache.CACHE_FICHA, key = "#slug")
     public ComplejoDetalleResponse obtenerDetalle(String slug) {
-        Establecimiento establecimiento = establecimientoRepository.findBySlugAndIsActiveTrue(slug)
+        Establecimiento establecimiento = establecimientoRepository.findBySlugOperativo(slug)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
 
         List<Cancha> canchas = canchaRepository
@@ -408,7 +414,7 @@ public class ComplejoPublicoService {
      * llegar al jugador anónimo.
      */
     public DisponibilidadEstablecimientoResponse obtenerDisponibilidad(String slug, LocalDate fecha, LocalDate fechaFin) {
-        Establecimiento establecimiento = establecimientoRepository.findBySlugAndIsActiveTrue(slug)
+        Establecimiento establecimiento = establecimientoRepository.findBySlugOperativo(slug)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
         return disponibilidadService.obtenerDisponibilidad(establecimiento.getId(), fecha, fechaFin, false);
     }

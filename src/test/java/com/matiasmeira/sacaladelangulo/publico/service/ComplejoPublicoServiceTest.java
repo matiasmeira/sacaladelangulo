@@ -366,6 +366,7 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of(cancha));
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of(cancha));
@@ -391,6 +392,7 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
 
@@ -417,6 +419,7 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of(feriado));
 
@@ -451,6 +454,7 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of(cancha));
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of(bloqueo));
         when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
 
@@ -476,6 +480,7 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
 
@@ -504,6 +509,7 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.findActivosPorDeporte(isNull(), any(Pageable.class))).thenReturn(List.of(est));
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L))).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of(cancha));
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdInAndFecha(List.of(1L), fecha)).thenReturn(List.of());
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of(cancha));
@@ -559,6 +565,8 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L)))
                 .thenReturn(List.of(fisicaUno, fisicaDos, compuesta));
+        when(canchaRepository.findByEstablecimientoIdIn(List.of(1L)))
+                .thenReturn(List.of(fisicaUno, fisicaDos, compuesta));
         when(reservaRepository.findSuperpuestasEnEstablecimientos(eq(List.of(1L)), any(), any(), any()))
                 .thenReturn(List.of(reservaFisicaUno, reservaFisicaDos));
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
@@ -608,6 +616,8 @@ class ComplejoPublicoServiceTest {
         when(establecimientoRepository.precargarHorarios(List.of(1L))).thenReturn(List.of(est));
         when(canchaRepository.findByEstablecimientoIdInAndIsActiveTrue(List.of(1L)))
                 .thenReturn(List.of(fisicaUno, fisicaDos, compuesta));
+        when(canchaRepository.findByEstablecimientoIdIn(List.of(1L)))
+                .thenReturn(List.of(fisicaUno, fisicaDos, compuesta));
         when(reservaRepository.findSuperpuestasEnEstablecimientos(eq(List.of(1L)), any(), any(), any()))
                 .thenReturn(List.of(reservaCompuesta));
         when(bloqueoCanchaRepository.findByEstablecimientoIdInAndRango(eq(List.of(1L)), any(), any())).thenReturn(List.of());
@@ -626,7 +636,7 @@ class ComplejoPublicoServiceTest {
         Cancha futbol = canchaConTarifa(10L, est, Set.of(Deporte.FUTBOL_5), BigDecimal.valueOf(1000), BigDecimal.valueOf(5000));
         Cancha padel = canchaConTarifa(11L, est, Set.of(Deporte.PADEL), BigDecimal.valueOf(800), BigDecimal.valueOf(3000));
 
-        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(establecimientoRepository.findBySlugOperativo("complejo-uno")).thenReturn(java.util.Optional.of(est));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L)))
                 .thenReturn(List.of(futbol, padel));
         when(feedbackRepository.calcularPromedioByEstablecimientoId(1L)).thenReturn(4.5);
@@ -662,7 +672,7 @@ class ComplejoPublicoServiceTest {
         Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
         Feedback destacado = feedbackDestacadoDeJugador("Carlos Fernández");
 
-        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(establecimientoRepository.findBySlugOperativo("complejo-uno")).thenReturn(java.util.Optional.of(est));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of());
         when(feedbackRepository.calcularPromedioByEstablecimientoId(1L)).thenReturn(5.0);
         when(feedbackRepository.contarByEstablecimientoId(1L)).thenReturn(1L);
@@ -680,7 +690,7 @@ class ComplejoPublicoServiceTest {
         Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
         Feedback destacado = feedbackDestacadoDeJugador("Carlos");
 
-        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(establecimientoRepository.findBySlugOperativo("complejo-uno")).thenReturn(java.util.Optional.of(est));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of());
         when(feedbackRepository.calcularPromedioByEstablecimientoId(1L)).thenReturn(5.0);
         when(feedbackRepository.contarByEstablecimientoId(1L)).thenReturn(1L);
@@ -697,7 +707,7 @@ class ComplejoPublicoServiceTest {
     void obtenerDetalle_SinComentarioDestacado_ComentarioDestacadoEsNulo() {
         Establecimiento est = establecimiento(1L, "complejo-uno", "Complejo Uno", true);
 
-        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(establecimientoRepository.findBySlugOperativo("complejo-uno")).thenReturn(java.util.Optional.of(est));
         when(canchaRepository.findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(1L))).thenReturn(List.of());
         when(feedbackRepository.calcularPromedioByEstablecimientoId(1L)).thenReturn(null);
         when(feedbackRepository.contarByEstablecimientoId(1L)).thenReturn(0L);
@@ -712,7 +722,7 @@ class ComplejoPublicoServiceTest {
     @Test
     @DisplayName("obtenerDetalle_SlugInexistente_LanzaEntityNotFoundException")
     void obtenerDetalle_SlugInexistente_LanzaEntityNotFoundException() {
-        when(establecimientoRepository.findBySlugAndIsActiveTrue("no-existe")).thenReturn(java.util.Optional.empty());
+        when(establecimientoRepository.findBySlugOperativo("no-existe")).thenReturn(java.util.Optional.empty());
 
         assertThrows(
                 com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
@@ -722,9 +732,9 @@ class ComplejoPublicoServiceTest {
     @Test
     @DisplayName("obtenerDetalle_ComplejoInactivo_LanzaEntityNotFoundException")
     void obtenerDetalle_ComplejoInactivo_LanzaEntityNotFoundException() {
-        // findBySlugAndIsActiveTrue ya filtra por isActive=true en el repositorio: un
+        // findBySlugOperativo ya filtra por isActive=true en el repositorio: un
         // complejo inactivo llega acá como Optional vacío, igual que un slug inexistente.
-        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-inactivo")).thenReturn(java.util.Optional.empty());
+        when(establecimientoRepository.findBySlugOperativo("complejo-inactivo")).thenReturn(java.util.Optional.empty());
 
         assertThrows(
                 com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
@@ -739,7 +749,7 @@ class ComplejoPublicoServiceTest {
         com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse respuestaEsperada =
                 new com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse(1L, fecha, fecha, List.of());
 
-        when(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-uno")).thenReturn(java.util.Optional.of(est));
+        when(establecimientoRepository.findBySlugOperativo("complejo-uno")).thenReturn(java.util.Optional.of(est));
         when(disponibilidadService.obtenerDisponibilidad(1L, fecha, fecha, false)).thenReturn(respuestaEsperada);
 
         var resultado = complejoPublicoService.obtenerDisponibilidad("complejo-uno", fecha, fecha);
@@ -752,7 +762,7 @@ class ComplejoPublicoServiceTest {
     @DisplayName("obtenerDisponibilidad_SlugInexistente_LanzaEntityNotFoundException")
     void obtenerDisponibilidad_SlugInexistente_LanzaEntityNotFoundException() {
         LocalDate fecha = LocalDate.of(2026, 8, 10);
-        when(establecimientoRepository.findBySlugAndIsActiveTrue("no-existe")).thenReturn(java.util.Optional.empty());
+        when(establecimientoRepository.findBySlugOperativo("no-existe")).thenReturn(java.util.Optional.empty());
 
         assertThrows(
                 com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,

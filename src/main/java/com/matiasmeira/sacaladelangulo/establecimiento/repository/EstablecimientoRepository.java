@@ -32,7 +32,7 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * siendo el filtro final real (ver M29 en la auditoría).
      */
     @Query("SELECT DISTINCT e FROM Establecimiento e LEFT JOIN Cancha c ON c.establecimiento.id = e.id AND c.isActive = true " +
-           "WHERE e.isActive = true " +
+           "WHERE e.isActive = true AND e.estadoVerificacion = 'VERIFICADO' " +
            "AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes) " +
            "AND e.latitud BETWEEN (:latitud - (:distanciaKm / 110.0)) AND (:latitud + (:distanciaKm / 110.0)) " +
            "AND e.longitud BETWEEN (:longitud - (:distanciaKm / (110.0 * COS(RADIANS(:latitud))))) AND (:longitud + (:distanciaKm / (110.0 * COS(RADIANS(:latitud))))) " +
@@ -46,7 +46,17 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
 
     boolean existsBySlug(String slug);
 
-    Optional<Establecimiento> findBySlugAndIsActiveTrue(String slug);
+    /**
+     * Establecimiento operativo de cara al jugador por slug: isActive Y estadoVerificacion =
+     * VERIFICADO, mismo criterio (y mismo nombre de concepto, "operativo") que
+     * EstablecimientoOperativoGuard.validarEstablecimientoOperativoParaJugador. No es un
+     * derived query name porque "AndEstadoVerificacion" además necesitaría el valor VERIFICADO
+     * como parámetro en cada call site -- eso mueve el criterio al caller y es exactamente el
+     * tipo de duplicación que se quiere evitar (ver EstablecimientoOperativoCoherenciaTest,
+     * que ata este método al guard).
+     */
+    @Query("SELECT e FROM Establecimiento e WHERE e.slug = :slug AND e.isActive = true AND e.estadoVerificacion = 'VERIFICADO'")
+    Optional<Establecimiento> findBySlugOperativo(@Param("slug") String slug);
 
     /**
      * Variante de findCercanosYPorDeporte sin filtro geográfico: alimenta el listado
@@ -57,7 +67,7 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * follow-up de zona pública).
      */
     @Query("SELECT DISTINCT e FROM Establecimiento e LEFT JOIN Cancha c ON c.establecimiento.id = e.id AND c.isActive = true " +
-           "WHERE e.isActive = true AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes)")
+           "WHERE e.isActive = true AND e.estadoVerificacion = 'VERIFICADO' AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes)")
     List<Establecimiento> findActivosPorDeporte(@Param("deporte") Deporte deporte, Pageable pageable);
 
     /**

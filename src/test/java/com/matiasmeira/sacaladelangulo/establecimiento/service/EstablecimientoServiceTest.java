@@ -8,6 +8,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.LimiteEstablecimientosExce
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.HorarioAtencionDto;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
@@ -17,6 +18,7 @@ import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -123,6 +125,42 @@ class EstablecimientoServiceTest {
                 () -> establecimientoService.crearEstablecimiento(request, dueno.getEmail()));
 
         assertEquals(true, response.requiereTelefonoVerificado());
+    }
+
+    /**
+     * EstablecimientoResponse no expone estadoVerificacion (fuera de alcance de este
+     * prompt), así que se verifica el valor con el que efectivamente se persiste.
+     */
+    @Test
+    @DisplayName("crearEstablecimiento_Exito_NaceConEstadoVerificacionPendiente")
+    void crearEstablecimiento_Exito_NaceConEstadoVerificacionPendiente() {
+        Usuario dueno = Usuario.builder()
+                .id(1L)
+                .email("dueno@test.com")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .build();
+
+        EstablecimientoRequest request = new EstablecimientoRequest(
+                "Complejo Test",
+                "Calle Falsa 123",
+                -34.6,
+                -58.4,
+                false,
+                false,
+                List.of(),
+                null
+        );
+
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(0L);
+        when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertDoesNotThrow(() -> establecimientoService.crearEstablecimiento(request, dueno.getEmail()));
+
+        ArgumentCaptor<Establecimiento> captor = ArgumentCaptor.forClass(Establecimiento.class);
+        verify(establecimientoRepository).save(captor.capture());
+        assertEquals(EstadoVerificacion.PENDIENTE, captor.getValue().getEstadoVerificacion());
     }
 
     @Test

@@ -16,11 +16,14 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
+import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
+import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -46,6 +49,7 @@ public class CanchaService {
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final RegistroAuditoriaService registroAuditoriaService;
     private final ComplejoDetalleCache complejoDetalleCache;
+    private final ReservaRepository reservaRepository;
 
     public CanchaResponse crearCancha(Long establecimientoId, CanchaRequest request, String email) {
         validarSolapamientoTarifas(request.tarifas());
@@ -89,16 +93,37 @@ public class CanchaService {
         return mapToResponse(canchaGuardada);
     }
 
+    /**
+     * @param incluirInactivas si es {@code true}, también trae canchas desactivadas (para
+     *                         que el panel las pueda reactivar, ver actualizarCancha). Uso
+     *                         exclusivo del panel: la agenda y cualquier vista pública deben
+     *                         seguir viendo únicamente canchas activas.
+     *
+     *                         Ver canchas inactivas es parte de LA GESTIÓN de canchas
+     *                         (reactivar/editar), no de operar el mostrador: exige dueño/admin,
+     *                         igual que actualizarCancha/desactivarCancha — no el criterio más
+     *                         laxo de validarLectura (PERMISOS_OPERATIVOS_DE_RESERVA), que un
+     *                         EMPLOYEE que sólo cobra o cancela turnos también cumple y no
+     *                         tiene por qué ver canchas que ni puede reactivar.
+     */
     @Transactional(readOnly = true)
-    public List<CanchaResponse> obtenerCanchasPorEstablecimiento(Long establecimientoId, String email) {
+    public List<CanchaResponse> obtenerCanchasPorEstablecimiento(Long establecimientoId, String email, boolean incluirInactivas) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        // Mismo conjunto que la agenda: se dibuja POR cancha, así que sin este listado
-        // no se renderiza aunque el empleado sólo vaya a cobrar. Alta, edición y baja
-        // de canchas siguen siendo del dueño.
-        autorizacionEmpleadoService.validarLectura(establecimiento, email,
-                AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
+        if (incluirInactivas) {
+            autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        } else {
+            // Mismo conjunto que la agenda: se dibuja POR cancha, así que sin este listado
+            // no se renderiza aunque el empleado sólo vaya a cobrar. Alta, edición y baja
+            // de canchas siguen siendo del dueño.
+            autorizacionEmpleadoService.validarLectura(establecimiento, email,
+                    AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
+        }
 
-        return canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId).stream()
+        List<Cancha> canchas = incluirInactivas
+                ? canchaRepository.findByEstablecimientoId(establecimientoId)
+                : canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId);
+
+        return canchas.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -121,6 +146,16 @@ public class CanchaService {
 
         validarPreciosPorDuracion(request.preciosPorDuracion(), request.tarifas(), duracionesPermitidas);
 
+        // isActive es reversible (ver B19/M-XX en la auditoría): null en el request deja el
+        // estado actual sin tocar, así un edit que no incluye este campo nunca reactiva ni
+        // desactiva por accidente. Se resuelve ANTES de tocar la entidad para poder comparar
+        // el estado previo contra el nuevo.
+        boolean estabaActiva = Boolean.TRUE.equals(cancha.getIsActive());
+        boolean debeQuedarActiva = request.isActive() != null ? request.isActive() : estabaActiva;
+        if (estabaActiva && !debeQuedarActiva) {
+            validarDesactivacion(cancha);
+        }
+
         cancha.setNombre(request.nombre());
         cancha.setDeportes(copiaDeportes(request.deportes()));
         cancha.setPrecioBase(request.precioBase());
@@ -130,6 +165,10 @@ public class CanchaService {
         cancha.setPermiteInicioMediaHora(request.permiteInicioMediaHora() != null ? request.permiteInicioMediaHora() : true);
         cancha.setCanchasNecesarias(calcularCanchasNecesarias(request.canchasFisicasIds(), request.cantidadCanchasNecesarias()));
         cancha.setCanchasFisicas(resolverCanchasFisicas(establecimientoId, request.canchasFisicasIds()));
+        cancha.setIsActive(debeQuedarActiva);
+        // Corre siempre, incluso si el pool no cambió: al reactivar, otra lógica pudo haberse
+        // creado con un pool parcialmente superpuesto mientras ésta estaba inactiva (el guard
+        // solo mira lógicas ACTIVAS, así que no la vio en ese momento).
         validarConfiguracionDePool(establecimientoId, canchaId, cancha.getCanchasFisicas());
 
         if (request.tarifas() != null) {
@@ -151,7 +190,8 @@ public class CanchaService {
     /**
      * Desactiva una cancha (baja lógica, isActive=false): sin este método no había forma
      * de dar de baja una cancha, solo de crearla o editarla (ver B19 en la auditoría).
-     * Misma validación de ownership que actualizarCancha.
+     * Misma validación de ownership que actualizarCancha. isActive es reversible: se puede
+     * volver a activar desde actualizarCancha.
      */
     public void desactivarCancha(Long establecimientoId, Long canchaId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
@@ -164,9 +204,116 @@ public class CanchaService {
             throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
         }
 
+        validarDesactivacion(cancha);
         cancha.setIsActive(false);
         canchaRepository.save(cancha);
         complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
+    }
+
+    /**
+     * Bloquea la desactivación si alguna reserva futura del GRUPO de pool de {@code cancha}
+     * (cierre transitivo de PoolCanchaCalculator, no solo el pool propio: ver ejemplo de
+     * F1/F2/F3-C9 en el diagnóstico) deja de tener capacidad al sacarla. No es una regla
+     * nueva: se recalcula con el mismo PoolCanchaCalculator que usa producción, sobre una
+     * copia en memoria que simula el estado post-desactivación — footprint() ya excluye las
+     * físicas inactivas de la capacidad del grupo.
+     *
+     * La simulación NO muta la entidad managed: {@code cancha} está dentro de la
+     * transacción, y flipear isActive en el objeto real quedaría un auto-flush de distancia
+     * de convertirse en un UPDATE persistido como efecto colateral de una validación. En su
+     * lugar, simularDesactivacion arma copias descartables (nunca pasan por save) y
+     * reemplazaPorSimulada resuelve, por id, qué objeto le corresponde a cada Cancha/Reserva
+     * antes de llamar a PoolCanchaCalculator — necesario porque una lógica que referencia a
+     * "cancha" como física tiene su PROPIA copia de canchasFisicas con el reemplazo hecho.
+     */
+    private void validarDesactivacion(Cancha cancha) {
+        Long establecimientoId = cancha.getEstablecimiento().getId();
+        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoId(establecimientoId);
+
+        Set<Long> canchasRelacionadas = PoolCanchaCalculator.canchasRelacionadas(cancha, todasLasCanchas);
+        LocalDateTime ahora = LocalDateTime.now();
+        List<Reserva> reservasFuturasDelGrupo = reservaRepository.findFuturasPorCanchaIds(canchasRelacionadas, ahora);
+        if (reservasFuturasDelGrupo.isEmpty()) {
+            return;
+        }
+
+        Map<Long, Cancha> simuladasPorId = simularDesactivacion(cancha, todasLasCanchas);
+        List<Cancha> todasLasCanchasSimuladas = todasLasCanchas.stream()
+                .map(c -> simuladasPorId.getOrDefault(c.getId(), c))
+                .toList();
+
+        for (Reserva reservaAValidar : reservasFuturasDelGrupo) {
+            List<Reserva> otrasSolapadas = reservasFuturasDelGrupo.stream()
+                    .filter(r -> !r.getId().equals(reservaAValidar.getId()))
+                    .filter(r -> seSuperponenEnTiempo(r, reservaAValidar))
+                    .map(r -> conCanchaSimulada(r, simuladasPorId))
+                    .toList();
+
+            Cancha candidataSimulada = simuladasPorId.getOrDefault(
+                    reservaAValidar.getCancha().getId(), reservaAValidar.getCancha());
+
+            boolean sigueDisponible = PoolCanchaCalculator.hayDisponibilidad(
+                    candidataSimulada, otrasSolapadas, todasLasCanchasSimuladas);
+            if (!sigueDisponible) {
+                throw new IllegalArgumentException(
+                        "No se puede desactivar \"" + cancha.getNombre() + "\": la reserva de \""
+                                + reservaAValidar.getCancha().getNombre() + "\" del "
+                                + reservaAValidar.getFechaHoraInicio().toLocalDate() + " de "
+                                + reservaAValidar.getFechaHoraInicio().toLocalTime() + " a "
+                                + reservaAValidar.getFechaHoraFin().toLocalTime()
+                                + " se queda sin cupo disponible. Cancelá o reprogramá esa reserva antes de desactivar la cancha.");
+            }
+        }
+    }
+
+    /**
+     * Copias descartables (id + campos que lee PoolCanchaCalculator, nada más) que
+     * representan el estado post-desactivación de {@code cancha}: ella misma inactiva, y
+     * cualquier lógica de {@code todasLasCanchas} que la tenga como física, con su
+     * canchasFisicas reconstruido para apuntar a esa copia inactiva en vez de a la original.
+     * Devuelve un mapa id->copia; una cancha ausente del mapa no cambia (se usa tal cual).
+     */
+    private Map<Long, Cancha> simularDesactivacion(Cancha cancha, List<Cancha> todasLasCanchas) {
+        Cancha copiaInactiva = Cancha.builder()
+                .id(cancha.getId())
+                .isActive(false)
+                .canchasFisicas(cancha.getCanchasFisicas())
+                .canchasNecesarias(cancha.getCanchasNecesarias())
+                .build();
+
+        Map<Long, Cancha> simuladas = new HashMap<>();
+        simuladas.put(cancha.getId(), copiaInactiva);
+
+        for (Cancha otra : todasLasCanchas) {
+            if (otra.getId().equals(cancha.getId())
+                    || otra.getCanchasFisicas() == null
+                    || otra.getCanchasFisicas().stream().noneMatch(f -> f.getId().equals(cancha.getId()))) {
+                continue;
+            }
+            Set<Cancha> fisicasSimuladas = otra.getCanchasFisicas().stream()
+                    .map(f -> f.getId().equals(cancha.getId()) ? copiaInactiva : f)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            simuladas.put(otra.getId(), Cancha.builder()
+                    .id(otra.getId())
+                    .canchasFisicas(fisicasSimuladas)
+                    .canchasNecesarias(otra.getCanchasNecesarias())
+                    .build());
+        }
+        return simuladas;
+    }
+
+    /** Reserva descartable con la misma cancha (por id) que use la simulación en curso. */
+    private Reserva conCanchaSimulada(Reserva reserva, Map<Long, Cancha> simuladasPorId) {
+        Cancha simulada = simuladasPorId.get(reserva.getCancha().getId());
+        if (simulada == null) {
+            return reserva;
+        }
+        return Reserva.builder().id(reserva.getId()).cancha(simulada)
+                .fechaHoraInicio(reserva.getFechaHoraInicio()).fechaHoraFin(reserva.getFechaHoraFin()).build();
+    }
+
+    private boolean seSuperponenEnTiempo(Reserva a, Reserva b) {
+        return a.getFechaHoraInicio().isBefore(b.getFechaHoraFin()) && a.getFechaHoraFin().isAfter(b.getFechaHoraInicio());
     }
 
 
@@ -250,12 +397,22 @@ public class CanchaService {
      * PoolCanchaCalculator.hayDisponibilidad valida la capacidad de un GRUPO de físicas
      * (cierre transitivo de pools que se intersectan) sumando las demandas de las reservas
      * que caen dentro de ese grupo. Esa suma solo es exacta si, dentro de un mismo grupo,
-     * todos los pools son idénticos entre sí: si dos lógicas activas se pisan con pools
-     * PARCIALMENTE distintos (ej. una usa [F1,F2,F3] y otra [F1,F2]), la suma sobrevende en
-     * silencio (ver diagnóstico del bug de disponibilidad entre lógicas superpuestas).
-     * Por eso este guard corre solo en altas/ediciones, nunca retroactivamente: no hay que
-     * desactivar configuraciones ya existentes, solo impedir que se sume una nueva
-     * configuración inconsistente.
+     * todos los pools son idénticos entre sí: si dos lógicas se pisan con pools PARCIALMENTE
+     * distintos (ej. una usa [F1,F2,F3] y otra [F1,F2]), la suma sobrevende en silencio (ver
+     * diagnóstico del bug de disponibilidad entre lógicas superpuestas). Por eso este guard
+     * corre solo en altas/ediciones, nunca retroactivamente: no hay que desactivar
+     * configuraciones ya existentes, solo impedir que se sume una nueva configuración
+     * inconsistente.
+     *
+     * "Otra lógica que importa" para este chequeo es activas ∪ {inactivas con al menos una
+     * reserva futura vigente} — NO sólo activas. isActive dejó de ser un proxy válido de
+     * "existe": una lógica desactivada puede seguir ocupando su grupo de físicas mientras
+     * tenga reservas futuras (es exactamente el escenario que resuelve
+     * CanchaService.validarDesactivacion). Sin esto, se podía crear/editar una lógica activa
+     * con un pool PARCIALMENTE superpuesto al de otra que estaba inactivada en ese momento
+     * pero con turnos vendidos, y esa inconsistencia sólo se descubría más tarde al intentar
+     * reactivarla — dejando al dueño sin forma de recuperar una cancha con reservas ya
+     * cobradas sin tocar la lógica nueva primero.
      */
     private void validarConfiguracionDePool(Long establecimientoId, Long canchaIdActual, Set<Cancha> canchasFisicas) {
         if (canchasFisicas.isEmpty()) {
@@ -272,22 +429,52 @@ public class CanchaService {
 
         Set<Long> idsPool = canchasFisicas.stream().map(Cancha::getId).collect(Collectors.toSet());
 
-        List<Cancha> otrasLogicasActivas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId).stream()
+        List<Cancha> candidatas = canchaRepository.findByEstablecimientoId(establecimientoId).stream()
                 .filter(c -> c.getCanchasFisicas() != null && !c.getCanchasFisicas().isEmpty())
                 .filter(c -> canchaIdActual == null || !c.getId().equals(canchaIdActual))
                 .toList();
 
-        for (Cancha otraLogica : otrasLogicasActivas) {
+        List<Cancha> inactivasQuePisanParcialmente = new ArrayList<>();
+        for (Cancha otraLogica : candidatas) {
             Set<Long> idsOtroPool = otraLogica.getCanchasFisicas().stream().map(Cancha::getId).collect(Collectors.toSet());
             boolean seIntersectan = idsPool.stream().anyMatch(idsOtroPool::contains);
             boolean sonIdenticos = idsPool.equals(idsOtroPool);
-            if (seIntersectan && !sonIdenticos) {
+            if (!seIntersectan || sonIdenticos) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(otraLogica.getIsActive())) {
                 throw new IllegalArgumentException(
                         "Esta combinación de canchas se pisa parcialmente con \"" + otraLogica.getNombre()
                                 + "\", que usa un grupo distinto de canchas físicas. Para combinar canchas que "
                                 + "comparten físicas, todas las combinaciones que se solapen tienen que usar "
                                 + "exactamente el mismo grupo de canchas físicas.");
             }
+            // Inactiva: sólo importa si todavía tiene reservas futuras vigentes (ver javadoc).
+            inactivasQuePisanParcialmente.add(otraLogica);
+        }
+
+        if (inactivasQuePisanParcialmente.isEmpty()) {
+            return;
+        }
+
+        Set<Long> idsInactivasCandidatas = inactivasQuePisanParcialmente.stream().map(Cancha::getId).collect(Collectors.toSet());
+        Map<Long, LocalDateTime> ultimaReservaFuturaPorCancha = reservaRepository
+                .findFuturasPorCanchaIds(idsInactivasCandidatas, LocalDateTime.now()).stream()
+                .collect(Collectors.toMap(r -> r.getCancha().getId(), Reserva::getFechaHoraFin, (a, b) -> a.isAfter(b) ? a : b));
+
+        for (Cancha otraLogica : inactivasQuePisanParcialmente) {
+            LocalDateTime ultimaReservaFutura = ultimaReservaFuturaPorCancha.get(otraLogica.getId());
+            if (ultimaReservaFutura == null) {
+                // Sin reservas futuras vigentes: la restricción ya caducó sola, no bloquea.
+                continue;
+            }
+            throw new IllegalArgumentException(
+                    "Esta combinación de canchas se pisa parcialmente con \"" + otraLogica.getNombre()
+                            + "\", que está desactivada pero tiene reservas vigentes hasta el "
+                            + ultimaReservaFutura.toLocalDate() + " a las " + ultimaReservaFutura.toLocalTime()
+                            + ". Esta restricción se levanta sola después de esa fecha, sin que haga falta ninguna "
+                            + "acción; hasta entonces, para combinar canchas que comparten físicas con \""
+                            + otraLogica.getNombre() + "\" hay que usar exactamente el mismo grupo de canchas físicas.");
         }
     }
 

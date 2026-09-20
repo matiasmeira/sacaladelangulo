@@ -20,6 +20,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.PoolCanchaCalculator;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.PrecioReservaCalculator;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
@@ -100,6 +101,7 @@ public class ReservaService {
     private final ReservaMapper reservaMapper;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final RegistroAuditoriaService registroAuditoriaService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
     private final ApplicationEventPublisher eventPublisher;
     private final TurnoCajaService turnoCajaService;
 
@@ -116,6 +118,8 @@ public class ReservaService {
 
         Usuario jugador = buscarUsuarioPorEmail(email);
         Cancha cancha = buscarCanchaPorId(request.canchaId());
+        validarCanchaActivaParaJugador(cancha);
+        establecimientoOperativoGuard.validarEstablecimientoOperativoParaJugador(cancha.getEstablecimiento());
 
         if (bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(cancha.getEstablecimiento().getId(), jugador.getId())) {
             log.warn("Jugador bloqueado intentó reservar. Jugador: {}, Establecimiento: {}", jugador.getId(), cancha.getEstablecimiento().getId());
@@ -138,7 +142,12 @@ public class ReservaService {
         validarDiaNoLaborable(request.fechaHoraInicio(), cancha.getEstablecimiento());
         validarHorarioAtencion(request, cancha.getEstablecimiento());
 
-        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(cancha.getEstablecimiento().getId());
+        // Incluye inactivas: una cancha LÓGICA desactivada puede seguir con reservas futuras
+        // vigentes, y PoolCanchaCalculator necesita verla para seguir contando esas reservas
+        // contra la capacidad del grupo (ver footprint/calcularGrupo y el diagnóstico de
+        // sobreventa por lógica desactivada). Las físicas inactivas ya se excluyen de la
+        // capacidad dentro de PoolCanchaCalculator, así que no hace falta filtrarlas acá.
+        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoId(cancha.getEstablecimiento().getId());
         bloquearCanchasRelacionadas(cancha, todasLasCanchas);
 
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(
@@ -190,6 +199,8 @@ public class ReservaService {
         Cancha cancha = buscarCanchaPorId(request.canchaId());
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
                 cancha.getEstablecimiento(), email, PermisoEmpleado.CREAR_RESERVA_MANUAL);
+        validarCanchaActivaParaPanel(cancha);
+        establecimientoOperativoGuard.validarEstablecimientoOperativoParaPanel(cancha.getEstablecimiento());
 
         try {
             validarDeporteSoportado(request.deporteSeleccionado(), cancha);
@@ -202,7 +213,8 @@ public class ReservaService {
             validarDiaNoLaborable(request.fechaHoraInicio(), cancha.getEstablecimiento());
             validarHorarioAtencion(request.fechaHoraInicio(), request.fechaHoraFin(), cancha.getEstablecimiento());
 
-            List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(cancha.getEstablecimiento().getId());
+            // Incluye inactivas: mismo motivo que en crearReserva.
+            List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoId(cancha.getEstablecimiento().getId());
             bloquearCanchasRelacionadas(cancha, todasLasCanchas);
 
             List<Reserva> solapadas = reservaRepository.findSuperpuestas(
@@ -253,11 +265,52 @@ public class ReservaService {
         return usuario;
     }
 
+    /**
+     * Resuelve la cancha SIN filtrar por isActive: obtenerReservasPorCanchaYFecha necesita
+     * poder leer reservas de una cancha ya desactivada (ej. para ver qué le sigue pegando
+     * antes de decidir qué hacer), así que ese filtro no puede vivir acá adentro. Los
+     * callers que SÍ crean o reasignan una reserva nueva (crearReserva, crearReservaManual,
+     * moverReservaDeCancha, TurnoFijoService.crear) validan isActive aparte, después de
+     * resolver la cancha, con validarCanchaActivaParaJugador/ParaPanel.
+     */
     Cancha buscarCanchaPorId(Long canchaId) {
         Cancha cancha = canchaRepository.findById(canchaId)
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
         log.debug("Cancha encontrada: {} - Establecimiento: {}", cancha.getId(), cancha.getEstablecimiento().getId());
         return cancha;
+    }
+
+    /**
+     * Única fuente de la condición "esta cancha no admite una reserva nueva": una cancha
+     * desactivada no debe recibir turnos nuevos, sea quien sea el que los cree (ver
+     * diagnóstico de reserva sobre cancha desactivada). Los dos callers de abajo sólo
+     * difieren en qué excepción tiran, nunca en la condición.
+     */
+    private boolean noAdmiteReservaNueva(Cancha cancha) {
+        return !Boolean.TRUE.equals(cancha.getIsActive());
+    }
+
+    /**
+     * Camino del jugador (crearReserva): "Cancha no encontrada", igual que un id inválido.
+     * A propósito no dice "está desactivada" -- un jugador probando ids no tiene por qué
+     * confirmar que una cancha existe pero fue dada de baja.
+     */
+    void validarCanchaActivaParaJugador(Cancha cancha) {
+        if (noAdmiteReservaNueva(cancha)) {
+            throw new EntityNotFoundException("Cancha no encontrada");
+        }
+    }
+
+    /**
+     * Caminos de panel (crearReservaManual, moverReservaDeCancha, TurnoFijoService.crear):
+     * el dueño/admin/empleado ya sabe qué cancha es -la ve en su propio listado-, así que acá
+     * "no encontrada" sólo lo manda a buscar un bug inexistente. Mensaje específico en su lugar.
+     */
+    void validarCanchaActivaParaPanel(Cancha cancha) {
+        if (noAdmiteReservaNueva(cancha)) {
+            throw new IllegalArgumentException(
+                    "La cancha \"" + cancha.getNombre() + "\" está desactivada. Reactivala para poder operar sobre ella.");
+        }
     }
 
     private void validarFechas(ReservaRequest request) {
@@ -754,6 +807,7 @@ public class ReservaService {
         }
 
         Cancha nuevaCancha = buscarCanchaPorId(nuevaCanchaId);
+        validarCanchaActivaParaPanel(nuevaCancha);
         if (!nuevaCancha.getEstablecimiento().getId().equals(reserva.getCancha().getEstablecimiento().getId())) {
             throw new IllegalArgumentException("La nueva cancha debe pertenecer al mismo establecimiento que la reserva original");
         }
@@ -769,7 +823,8 @@ public class ReservaService {
         validarDuracion(inicio, fin, nuevaCancha);
         validarSinBloqueos(inicio, fin, nuevaCancha);
 
-        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(nuevaCancha.getEstablecimiento().getId());
+        // Incluye inactivas: mismo motivo que en crearReserva.
+        List<Cancha> todasLasCanchas = canchaRepository.findByEstablecimientoId(nuevaCancha.getEstablecimiento().getId());
         bloquearCanchasRelacionadas(nuevaCancha, todasLasCanchas);
 
         List<Reserva> solapadas = reservaRepository.findSuperpuestas(

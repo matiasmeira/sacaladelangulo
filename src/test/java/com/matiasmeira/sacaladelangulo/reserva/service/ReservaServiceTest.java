@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.cierrecaja.model.OrigenMovimientoCaja;
 import com.matiasmeira.sacaladelangulo.cierrecaja.model.TipoMovimientoCaja;
 import com.matiasmeira.sacaladelangulo.cierrecaja.service.TurnoCajaService;
+import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.exception.JugadorBloqueadoException;
 import com.matiasmeira.sacaladelangulo.core.exception.TelefonoNoVerificadoException;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
@@ -19,6 +20,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugador
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
@@ -60,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -99,6 +102,9 @@ class ReservaServiceTest {
 
     @Mock
     private RegistroAuditoriaService registroAuditoriaService;
+
+    @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -244,7 +250,7 @@ class ReservaServiceTest {
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
 
         // Act
@@ -253,6 +259,61 @@ class ReservaServiceTest {
         // Assert
         assert response != null;
         verify(reservaRepository).save(any(Reserva.class));
+    }
+
+    /**
+     * Camino del jugador: "Cancha no encontrada", igual que un id inválido -a propósito no
+     * dice "está desactivada" para no confirmarle a alguien probando ids que la cancha existe.
+     */
+    @Test
+    @DisplayName("crearReserva_Fallo_CanchaDesactivada")
+    void crearReserva_Fallo_CanchaDesactivada() {
+        Cancha canchaInactiva = Cancha.builder()
+                .id(cancha.getId()).nombre(cancha.getNombre()).deportes(cancha.getDeportes())
+                .precioBase(cancha.getPrecioBase()).montoSena(cancha.getMontoSena())
+                .duracionesPermitidas(cancha.getDuracionesPermitidas()).permiteInicioMediaHora(cancha.getPermiteInicioMediaHora())
+                .establecimiento(establecimiento).isActive(false)
+                .tarifas(new ArrayList<>()).canchasFisicas(new java.util.LinkedHashSet<>())
+                .build();
+
+        LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
+        LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
+        ReservaRequest request = new ReservaRequest(canchaInactiva.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(canchaInactiva.getId())).thenReturn(Optional.of(canchaInactiva));
+
+        EntityNotFoundException exception = assertThrows(
+                EntityNotFoundException.class,
+                () -> reservaService.crearReserva(request, jugador.getEmail()));
+
+        assert exception.getMessage().equals("Cancha no encontrada");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    /**
+     * Verifica que crearReserva efectivamente consulta a EstablecimientoOperativoGuard con el
+     * establecimiento de la cancha, y que la excepción que ese guard tira (404 opaco, ver
+     * EstablecimientoOperativoGuardTest) frena la creación antes de guardar nada.
+     */
+    @Test
+    @DisplayName("crearReserva_Fallo_EstablecimientoInactivo")
+    void crearReserva_Fallo_EstablecimientoInactivo() {
+        LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
+        LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        doThrow(new EntityNotFoundException("Establecimiento no encontrado"))
+                .when(establecimientoOperativoGuard).validarEstablecimientoOperativoParaJugador(establecimiento);
+
+        EntityNotFoundException exception = assertThrows(
+                EntityNotFoundException.class,
+                () -> reservaService.crearReserva(request, jugador.getEmail()));
+
+        assert exception.getMessage().equals("Establecimiento no encontrado");
+        verify(reservaRepository, never()).save(any());
     }
 
     @Test
@@ -323,7 +384,7 @@ class ReservaServiceTest {
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
 
         // Act
@@ -409,7 +470,7 @@ class ReservaServiceTest {
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
 
         // Act
@@ -495,7 +556,7 @@ class ReservaServiceTest {
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
         when(canchaRepository.findById(canchaLogica.getId())).thenReturn(Optional.of(canchaLogica));
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of(reservaFisicaUno, reservaFisicaDos));
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(canchaLogica, canchaFisicaUno, canchaFisicaDos));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(canchaLogica, canchaFisicaUno, canchaFisicaDos));
 
         // Act
         IllegalArgumentException exception = assertThrows(
@@ -567,7 +628,7 @@ class ReservaServiceTest {
                 .thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any()))
                 .thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId()))
                 .thenReturn(List.of(cancha));
         when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
 
@@ -635,7 +696,7 @@ class ReservaServiceTest {
 
         when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
 
         // Act
@@ -651,6 +712,64 @@ class ReservaServiceTest {
         // reservas de mostrador que carga el propio dueño.
         verify(bloqueoJugadorRepository, never()).existsByEstablecimientoIdAndJugadorId(any(), any());
         verify(eventPublisher).publishEvent(new ReservaConfirmadaEvent(reservaGuardada.getId()));
+    }
+
+    /**
+     * Camino de panel: mensaje específico ("está desactivada, reactivala"), no "no
+     * encontrada" -el dueño ya sabe qué cancha es, la ve en su propio listado.
+     */
+    @Test
+    @DisplayName("crearReservaManual_Fallo_CanchaDesactivada")
+    void crearReservaManual_Fallo_CanchaDesactivada() {
+        Cancha canchaInactiva = Cancha.builder()
+                .id(cancha.getId()).nombre(cancha.getNombre()).deportes(cancha.getDeportes())
+                .precioBase(cancha.getPrecioBase()).montoSena(cancha.getMontoSena())
+                .duracionesPermitidas(cancha.getDuracionesPermitidas()).permiteInicioMediaHora(cancha.getPermiteInicioMediaHora())
+                .establecimiento(establecimiento).isActive(false)
+                .tarifas(new ArrayList<>()).canchasFisicas(new java.util.LinkedHashSet<>())
+                .build();
+
+        LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
+        LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
+        ReservaManualRequest request = new ReservaManualRequest(
+                canchaInactiva.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5, "Cliente Mostrador", "1122334455", false);
+
+        when(canchaRepository.findById(canchaInactiva.getId())).thenReturn(Optional.of(canchaInactiva));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.crearReservaManual(request, dueno.getEmail()));
+
+        assert exception.getMessage().contains("desactivada");
+        assert exception.getMessage().contains(cancha.getNombre());
+        verify(reservaRepository, never()).save(any());
+    }
+
+    /**
+     * Camino de panel: mensaje explícito sobre el ESTABLECIMIENTO (no reutiliza el texto de
+     * "la cancha... desactivada"), para que el dueño no salga a buscar una cancha rota
+     * cuando el problema es el establecimiento entero.
+     */
+    @Test
+    @DisplayName("crearReservaManual_Fallo_EstablecimientoInactivo")
+    void crearReservaManual_Fallo_EstablecimientoInactivo() {
+        LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
+        LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
+        ReservaManualRequest request = new ReservaManualRequest(
+                cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5, "Cliente Mostrador", "1122334455", false);
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        doThrow(new IllegalArgumentException(
+                "Este establecimiento está deshabilitado. No se pueden cargar reservas nuevas mientras esté así."))
+                .when(establecimientoOperativoGuard).validarEstablecimientoOperativoParaPanel(establecimiento);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.crearReservaManual(request, dueno.getEmail()));
+
+        assert exception.getMessage().contains("establecimiento");
+        assert exception.getMessage().contains("deshabilitado");
+        verify(reservaRepository, never()).save(any());
     }
 
     @Test
@@ -786,7 +905,7 @@ class ReservaServiceTest {
         when(canchaRepository.findById(canchaDestino.getId())).thenReturn(Optional.of(canchaDestino));
         when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any()))
                 .thenReturn(List.of(reservaOriginal));
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId()))
                 .thenReturn(List.of(cancha, canchaDestino));
         when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -797,6 +916,57 @@ class ReservaServiceTest {
         // Assert
         assert response.canchaId().equals(canchaDestino.getId());
         verify(reservaRepository).save(argThat(r -> r.getCancha().getId().equals(canchaDestino.getId())));
+    }
+
+    /**
+     * La cancha origen (reserva.getCancha()) nunca pasa por buscarCanchaPorId, así que mover
+     * una reserva FUERA de una cancha recién desactivada sigue funcionando -eso no lo toca
+     * este chequeo. Lo que se valida acá es el DESTINO: moverla HACIA una cancha inactiva es
+     * el mismo error que crear una reserva nueva ahí.
+     */
+    @Test
+    @DisplayName("moverReservaDeCancha_Fallo_NuevaCanchaDesactivada")
+    void moverReservaDeCancha_Fallo_NuevaCanchaDesactivada() {
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 11, 0);
+
+        Reserva reservaOriginal = Reserva.builder()
+                .id(32L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
+                .fechaHoraInicio(fechaInicio)
+                .fechaHoraFin(fechaFin)
+                .estado(EstadoReserva.CONFIRMADA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.valueOf(500))
+                .build();
+
+        Cancha canchaDestinoInactiva = Cancha.builder()
+                .id(302L)
+                .nombre("Cancha C")
+                .deportes(Set.of(Deporte.FUTBOL_5))
+                .precioBase(BigDecimal.valueOf(1500))
+                .montoSena(BigDecimal.valueOf(500))
+                .duracionesPermitidas(new ArrayList<>(List.of(60)))
+                .permiteInicioMediaHora(false)
+                .establecimiento(establecimiento)
+                .isActive(false)
+                .tarifas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaOriginal.getId()))
+                .thenReturn(Optional.of(reservaOriginal));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(canchaRepository.findById(canchaDestinoInactiva.getId())).thenReturn(Optional.of(canchaDestinoInactiva));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reservaService.moverReservaDeCancha(reservaOriginal.getId(), canchaDestinoInactiva.getId(), dueno.getEmail()));
+
+        assert exception.getMessage().contains("desactivada");
+        verify(reservaRepository, never()).save(any());
     }
 
     @Test
@@ -1877,6 +2047,41 @@ class ReservaServiceTest {
         assert resultado.getTotalElements() == 0;
         verify(reservaRepository).findByJugadorIdAndEstado(jugador.getId(), EstadoReserva.CANCELADA, pageable);
         verify(reservaRepository, never()).findByJugadorId(any(), any());
+    }
+
+    /**
+     * Control que importa: esta lectura NO pasa por validarCanchaActivaParaJugador/ParaPanel
+     * (no crea ni reasigna ninguna reserva), así que sigue funcionando sobre una cancha
+     * desactivada -es justamente cómo el dueño ve qué reservas le quedan antes de decidir
+     * qué hacer con ella. Si alguien "prolija" el chequeo metiéndolo dentro de
+     * buscarCanchaPorId más adelante, este test se rompe primero.
+     */
+    @Test
+    @DisplayName("obtenerReservasPorCanchaYFecha_CanchaDesactivada_SigueFuncionando")
+    void obtenerReservasPorCanchaYFecha_CanchaDesactivada_SigueFuncionando() {
+        Cancha canchaInactiva = Cancha.builder()
+                .id(cancha.getId()).nombre(cancha.getNombre()).deportes(cancha.getDeportes())
+                .precioBase(cancha.getPrecioBase()).montoSena(cancha.getMontoSena())
+                .duracionesPermitidas(cancha.getDuracionesPermitidas()).permiteInicioMediaHora(cancha.getPermiteInicioMediaHora())
+                .establecimiento(establecimiento).isActive(false)
+                .tarifas(new ArrayList<>()).canchasFisicas(new java.util.LinkedHashSet<>())
+                .build();
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Reserva> pageVacia = new PageImpl<>(List.of(), pageable, 0);
+        LocalDate fecha = LocalDate.of(2030, 1, 15);
+
+        when(canchaRepository.findById(canchaInactiva.getId())).thenReturn(Optional.of(canchaInactiva));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        List<EstadoReserva> estadosCancelados = List.of(EstadoReserva.CANCELADA, EstadoReserva.CANCELADA_PRERESERVA);
+        when(reservaRepository.findReservasEnRangoDiario(
+                eq(canchaInactiva.getId()), any(), any(), eq(estadosCancelados), eq(pageable)))
+                .thenReturn(pageVacia);
+
+        Page<ReservaResponse> resultado = assertDoesNotThrow(() -> reservaService.obtenerReservasPorCanchaYFecha(
+                canchaInactiva.getId(), fecha, false, pageable, dueno.getEmail()));
+
+        assert resultado.getTotalElements() == 0;
     }
 
     @Test

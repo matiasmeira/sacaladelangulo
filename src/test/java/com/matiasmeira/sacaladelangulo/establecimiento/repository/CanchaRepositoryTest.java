@@ -151,4 +151,60 @@ class CanchaRepositoryTest {
         assertEquals(3, logicaLeida.getCanchasFisicas().size(),
                 "El pool tiene 3 canchas fisicas; no debe duplicarse por tener 2 deportes asociados");
     }
+
+    /**
+     * findByEstablecimientoId (sin AndIsActiveTrue) es lo que usan PoolCanchaCalculator y
+     * CanchaService.validarDesactivacion para no perder de vista una cancha LÓGICA
+     * desactivada que todavía tiene reservas futuras vigentes (ver diagnóstico de
+     * sobreventa por lógica desactivada): tiene que traer también las inactivas.
+     */
+    @Test
+    @DisplayName("findByEstablecimientoId_TraeActivasEInactivas")
+    void findByEstablecimientoId_TraeActivasEInactivas() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno3@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+        Establecimiento establecimiento = entityManager.persist(Establecimiento.builder()
+                .nombre("Complejo Test 3")
+                .direccion("Calle Test 3")
+                .slug("complejo-test-3")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .isActive(true)
+                .dueno(dueno)
+                .build());
+        entityManager.persist(Cancha.builder()
+                .nombre("Cancha Activa")
+                .deportes(Set.of(Deporte.FUTBOL_5))
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(5000))
+                .montoSena(BigDecimal.valueOf(1000))
+                .establecimiento(establecimiento)
+                .build());
+        entityManager.persist(Cancha.builder()
+                .nombre("Cancha Inactiva")
+                .deportes(Set.of(Deporte.FUTBOL_5))
+                .isActive(false)
+                .precioBase(BigDecimal.valueOf(5000))
+                .montoSena(BigDecimal.valueOf(1000))
+                .establecimiento(establecimiento)
+                .build());
+        entityManager.flush();
+        entityManager.clear();
+
+        List<Cancha> incluyendoInactivas = canchaRepository.findByEstablecimientoId(establecimiento.getId());
+        List<Cancha> soloActivas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId());
+
+        assertEquals(2, incluyendoInactivas.size());
+        assertEquals(1, soloActivas.size());
+        assertTrue(soloActivas.get(0).getIsActive());
+    }
 }

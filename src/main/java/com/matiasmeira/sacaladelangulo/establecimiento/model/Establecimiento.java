@@ -94,4 +94,67 @@ public class Establecimiento {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dueno_id", nullable = false)
     private Usuario dueno;
+
+    /**
+     * Estado de la verificación manual del establecimiento (ver EstablecimientoOperativoGuard,
+     * que la combina con isActive para decidir si el establecimiento puede operar de cara al
+     * público). Nace en PENDIENTE: la obligatoriedad de los datos de contacto/CUIT se valida
+     * recién al solicitar la verificación, no acá.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_verificacion", nullable = false)
+    @lombok.Builder.Default
+    private EstadoVerificacion estadoVerificacion = EstadoVerificacion.PENDIENTE;
+
+    /**
+     * CUIT del titular o razón social, normalizado a 11 dígitos sin guiones (ver
+     * core.util.CuitUtils). Nullable: recién se exige al solicitar la verificación. NO es
+     * unique -- un mismo dueño puede tener varios complejos con el mismo CUIT.
+     */
+    @Column(length = 11)
+    private String cuit;
+
+    /**
+     * Nombre del titular o razón social del establecimiento.
+     */
+    @Column(name = "razon_social")
+    private String razonSocial;
+
+    /**
+     * Teléfono de contacto para la verificación manual (puede diferir del teléfono de la
+     * cuenta del dueño).
+     */
+    @Column(name = "telefono_contacto")
+    private String telefonoContacto;
+
+    /**
+     * URL de Instagram o Facebook del complejo, usada como parte de la verificación manual.
+     */
+    @Column(name = "url_red_social")
+    private String urlRedSocial;
+
+    /**
+     * Momento en que el dueño envió (o reenvió) la solicitud de verificación.
+     */
+    @Column(name = "fecha_solicitud_verificacion")
+    private java.time.LocalDateTime fechaSolicitudVerificacion;
+
+    /**
+     * Momento en que un admin aprobó la verificación.
+     */
+    @Column(name = "fecha_verificacion")
+    private java.time.LocalDateTime fechaVerificacion;
+
+    /**
+     * Admin que aprobó la verificación.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "verificado_por_id")
+    private Usuario verificadoPor;
+
+    /**
+     * Motivo del rechazo, cargado por el admin que rechazó la verificación.
+     */
+    @Column(name = "motivo_rechazo")
+    private String motivoRechazo;
 }

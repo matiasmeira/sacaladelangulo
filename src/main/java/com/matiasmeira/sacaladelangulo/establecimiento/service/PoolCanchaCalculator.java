@@ -92,12 +92,18 @@ public final class PoolCanchaCalculator {
     /**
      * Footprint de físicas de una cancha: su propio pool si es lógica, o ella misma si no
      * tiene canchasFisicas (es una física "suelta", o cualquier otra cancha sin pool).
+     * Cancha.canchasFisicas es un @ManyToMany que no filtra por isActive, así que una física
+     * desactivada (fuera de servicio, ver CanchaService.desactivarCancha) se descarta acá:
+     * sin este filtro, capacidadGrupo (grupo.size() en hayDisponibilidad) seguía contando una
+     * física que ya no existe operativamente y el sistema vendía un cupo inexistente.
      */
     private static Set<Long> footprint(Cancha cancha) {
         if (esPool(cancha)) {
             Set<Long> ids = new HashSet<>();
             for (Cancha fisica : cancha.getCanchasFisicas()) {
-                ids.add(fisica.getId());
+                if (Boolean.TRUE.equals(fisica.getIsActive())) {
+                    ids.add(fisica.getId());
+                }
             }
             return ids;
         }

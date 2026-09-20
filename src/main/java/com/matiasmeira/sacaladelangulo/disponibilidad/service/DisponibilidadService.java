@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadDuracion
 import com.matiasmeira.sacaladelangulo.disponibilidad.dto.DisponibilidadEstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.disponibilidad.dto.RangoOcupadoResponse;
 import com.matiasmeira.sacaladelangulo.disponibilidad.dto.SlotDisponibleResponse;
+import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
@@ -17,6 +18,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaR
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.PoolCanchaCalculator;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -29,6 +31,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,8 +62,15 @@ public class DisponibilidadService {
     private final BloqueoCanchaRepository bloqueoCanchaRepository;
     private final ReservaRepository reservaRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
 
     /**
+     * Hoy sólo la llama ComplejoPublicoService.obtenerDisponibilidad(slug,...), que ya resolvió
+     * el establecimiento vía findBySlugOperativo antes de llegar acá -- por lo que este
+     * chequeo es, para ese caller, siempre un no-op. Igual se revalida acá adentro (no sólo
+     * confiar en el caller) para que cualquier otro punto de entrada que se agregue a futuro
+     * sobre este método herede el mismo criterio sin tener que acordarse de repetirlo.
+     *
      * @param incluirOcupacionPool si es {@code true}, cada DisponibilidadCanchaResponse trae
      *                             en ocupadaPorPool los rangos donde esa cancha queda sin
      *                             cupo por consumo de pool ajeno; si es {@code false} (uso
@@ -73,18 +83,29 @@ public class DisponibilidadService {
 
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        establecimientoOperativoGuard.validarEstablecimientoOperativoParaJugador(establecimiento);
 
         return calcularGrilla(establecimientoId, fechaInicio, fechaFinResuelta, establecimiento, incluirOcupacionPool);
     }
 
     /**
-     * Punto de entrada para el panel autenticado (ver DisponibilidadController): sólo
-     * puebla ocupadaPorPool cuando el usuario autenticado tiene acceso de PANEL a ESE
-     * establecimiento (dueño, admin, o empleado con permiso operativo de agenda) —
-     * estar autenticado no alcanza, porque registrarse es gratis y el @PreAuthorize del
-     * endpoint acepta también a PLAYER, sin distinguir de qué establecimiento es cada
-     * uno. Para quien no califica (otro jugador, o el dueño de OTRO establecimiento) el
-     * campo va en null, igual que en la disponibilidad pública.
+     * Único punto de entrada real de DisponibilidadController: el @PreAuthorize del endpoint
+     * acepta PLAYER, OWNER, ADMIN y EMPLOYEE por igual, y este método es el que decide caso
+     * por caso qué ve cada uno. Puebla ocupadaPorPool sólo cuando el usuario autenticado
+     * tiene acceso de PANEL a ESE establecimiento (dueño, admin, o empleado con permiso
+     * operativo de agenda) — estar autenticado no alcanza, porque registrarse es gratis.
+     * Para quien no califica (otro jugador, o el dueño de OTRO establecimiento) el campo va
+     * en null, igual que en la disponibilidad pública.
+     *
+     * <p>El gate de establecimiento activo NO se pregunta lo mismo que incluirOcupacionPool:
+     * ese campo se puebla sólo con el subconjunto PERMISOS_OPERATIVOS_DE_RESERVA (más angosto,
+     * pensado para quien opera la agenda), mientras que el control de acceso tiene que
+     * preguntarse "¿esta persona pertenece a este establecimiento?" con CUALQUIER permiso --
+     * un EMPLOYEE que sólo tiene, por ejemplo, OPERAR_CAJA es staff legítimo aunque no vea
+     * ocupadaPorPool, y no debe recibir el 404 opaco reservado para quien no tiene ningún
+     * vínculo con el establecimiento. Se calculan por separado a propósito: si el día de
+     * mañana cambia qué permisos pueblan ocupadaPorPool, ese cambio no debe mover en
+     * silencio el control de acceso de este gate.
      */
     public DisponibilidadEstablecimientoResponse obtenerDisponibilidadParaPanel(Long establecimientoId, LocalDate fechaInicio, LocalDate fechaFin,
             String email) {
@@ -93,6 +114,13 @@ public class DisponibilidadService {
 
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+
+        boolean perteneceAEsteEstablecimiento = autorizacionEmpleadoService.tieneAccesoDePanel(
+                establecimiento, email, EnumSet.allOf(PermisoEmpleado.class));
+
+        if (!perteneceAEsteEstablecimiento) {
+            establecimientoOperativoGuard.validarEstablecimientoOperativoParaJugador(establecimiento);
+        }
 
         boolean incluirOcupacionPool = autorizacionEmpleadoService.tieneAccesoDePanel(
                 establecimiento, email, AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
@@ -104,6 +132,12 @@ public class DisponibilidadService {
             Establecimiento establecimiento, boolean incluirOcupacionPool) {
 
         List<Cancha> canchas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimientoId);
+        // Contexto aparte para PoolCanchaCalculator: incluye inactivas, porque una cancha
+        // LÓGICA desactivada puede seguir con reservas futuras vigentes que hay que seguir
+        // contando contra la capacidad del grupo (ver diagnóstico de sobreventa por lógica
+        // desactivada). "canchas" (activas) sigue siendo la única fuente de qué filas se
+        // dibujan en la grilla.
+        List<Cancha> canchasParaPool = canchaRepository.findByEstablecimientoId(establecimientoId);
         List<DiaNoLaborable> diasNoLaborables = diaNoLaborableRepository
                 .findByEstablecimientoIdAndFechaBetween(establecimientoId, fechaInicio, fechaFinResuelta);
 
@@ -115,8 +149,8 @@ public class DisponibilidadService {
         List<Reserva> reservas = reservaRepository.findSuperpuestas(establecimientoId, rangoInicio, rangoFin, ahora);
 
         List<DisponibilidadDiaResponse> dias = fechaInicio.datesUntil(fechaFinResuelta.plusDays(1))
-                .map(fecha -> calcularDisponibilidadDelDia(fecha, establecimiento, canchas, diasNoLaborables, bloqueos, reservas, ahora,
-                        incluirOcupacionPool))
+                .map(fecha -> calcularDisponibilidadDelDia(fecha, establecimiento, canchas, canchasParaPool, diasNoLaborables, bloqueos, reservas,
+                        ahora, incluirOcupacionPool))
                 .toList();
 
         return new DisponibilidadEstablecimientoResponse(establecimientoId, fechaInicio, fechaFinResuelta, dias);
@@ -135,8 +169,8 @@ public class DisponibilidadService {
     }
 
     private DisponibilidadDiaResponse calcularDisponibilidadDelDia(LocalDate fecha, Establecimiento establecimiento, List<Cancha> canchas,
-            List<DiaNoLaborable> diasNoLaborables, List<BloqueoCancha> bloqueos, List<Reserva> reservas, LocalDateTime ahora,
-            boolean incluirOcupacionPool) {
+            List<Cancha> canchasParaPool, List<DiaNoLaborable> diasNoLaborables, List<BloqueoCancha> bloqueos, List<Reserva> reservas,
+            LocalDateTime ahora, boolean incluirOcupacionPool) {
 
         Optional<DiaNoLaborable> diaNoLaborable = diasNoLaborables.stream()
                 .filter(d -> d.getFecha().equals(fecha))
@@ -162,11 +196,11 @@ public class DisponibilidadService {
         LocalDateTime ventanaFin = ventana.fin();
 
         Map<Long, List<RangoOcupadoResponse>> ocupacionPorPool = incluirOcupacionPool
-                ? calcularOcupacionPorPool(canchas, reservas, ventanaInicio, ventanaFin)
+                ? calcularOcupacionPorPool(canchas, canchasParaPool, reservas, ventanaInicio, ventanaFin)
                 : null;
 
         List<DisponibilidadCanchaResponse> canchasResponse = canchas.stream()
-                .map(cancha -> calcularDisponibilidadDeCancha(cancha, ventanaInicio, ventanaFin, canchas, bloqueos, reservas, ahora,
+                .map(cancha -> calcularDisponibilidadDeCancha(cancha, ventanaInicio, ventanaFin, canchasParaPool, bloqueos, reservas, ahora,
                         ocupacionPorPool == null ? null : ocupacionPorPool.getOrDefault(cancha.getId(), List.of())))
                 .toList();
 
@@ -248,8 +282,8 @@ public class DisponibilidadService {
      * entre cortes consecutivos y por cada cancha, y fusiona al final los intervalos
      * contiguos de una misma cancha.
      */
-    private Map<Long, List<RangoOcupadoResponse>> calcularOcupacionPorPool(List<Cancha> canchas, List<Reserva> reservas,
-            LocalDateTime ventanaInicio, LocalDateTime ventanaFin) {
+    private Map<Long, List<RangoOcupadoResponse>> calcularOcupacionPorPool(List<Cancha> canchas, List<Cancha> canchasParaPool,
+            List<Reserva> reservas, LocalDateTime ventanaInicio, LocalDateTime ventanaFin) {
 
         List<Reserva> reservasDelDia = reservas.stream()
                 .filter(r -> seSuperponen(r.getFechaHoraInicio(), r.getFechaHoraFin(), ventanaInicio, ventanaFin))
@@ -281,7 +315,7 @@ public class DisponibilidadService {
                 if (tieneReservaPropia) {
                     continue;
                 }
-                if (!PoolCanchaCalculator.hayDisponibilidad(cancha, solapadasIntervalo, canchas)) {
+                if (!PoolCanchaCalculator.hayDisponibilidad(cancha, solapadasIntervalo, canchasParaPool)) {
                     ocupacionPorCancha.get(cancha.getId()).add(new RangoOcupadoResponse(inicioIntervalo, finIntervalo));
                 }
             }

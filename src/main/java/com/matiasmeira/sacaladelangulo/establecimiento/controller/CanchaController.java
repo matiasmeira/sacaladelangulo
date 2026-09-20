@@ -35,16 +35,23 @@ public class CanchaController {
     }
 
     /**
-     * Canchas activas del establecimiento. La puede leer también un EMPLOYEE con
+     * Canchas del establecimiento. La puede leer también un EMPLOYEE con
      * CREAR_RESERVA_MANUAL: es el catálogo sobre el que se elige dónde cargar el turno
      * que ese permiso lo autoriza a crear. Alta, edición y baja siguen siendo del dueño.
+     * incluirInactivas=true trae también las desactivadas (isActive es reversible, ver
+     * CanchaService.actualizarCancha) para que el panel las pueda reactivar; por defecto
+     * (false) sólo activas, igual que antes. incluirInactivas exige dueño/admin: un EMPLOYEE
+     * que sólo cobra o cancela turnos pasa el @PreAuthorize de este endpoint pero no tiene
+     * por qué ver canchas que ni puede reactivar (ver CanchaService.obtenerCanchasPorEstablecimiento).
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<List<CanchaResponse>> obtenerCanchasPorEstablecimiento(
             @PathVariable Long establecimientoId,
+            @RequestParam(defaultValue = "false") boolean incluirInactivas,
             @AuthenticationPrincipal UserDetails userDetails) {
-        List<CanchaResponse> canchas = canchaService.obtenerCanchasPorEstablecimiento(establecimientoId, userDetails.getUsername());
+        List<CanchaResponse> canchas = canchaService.obtenerCanchasPorEstablecimiento(
+                establecimientoId, userDetails.getUsername(), incluirInactivas);
         return ResponseEntity.ok(canchas);
     }
 

@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaR
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -34,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -60,6 +62,9 @@ class DisponibilidadServiceOcupacionPorPoolTest {
 
     @Mock
     private ReservaRepository reservaRepository;
+
+    @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
 
     @InjectMocks
     private DisponibilidadService disponibilidadService;
@@ -98,6 +103,10 @@ class DisponibilidadServiceOcupacionPorPoolTest {
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(100L, fecha, fecha)).thenReturn(List.of());
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(100L), any(), any())).thenReturn(List.of());
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(100L))
+                .thenReturn(List.of(f1, f2, f3, cancha7, cancha9));
+        // Contexto de pool (incluye inactivas): en estos tests todas están activas, así que
+        // es la misma lista que la de arriba.
+        lenient().when(canchaRepository.findByEstablecimientoId(100L))
                 .thenReturn(List.of(f1, f2, f3, cancha7, cancha9));
     }
 
@@ -231,6 +240,7 @@ class DisponibilidadServiceOcupacionPorPoolTest {
     @DisplayName("Sin canchas lógicas, ocupadaPorPool es vacío en todas las canchas")
     void sinCanchasLogicas_ocupadaPorPoolVacioEnTodas() {
         when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(100L)).thenReturn(List.of(f1, f2, f3));
+        when(canchaRepository.findByEstablecimientoId(100L)).thenReturn(List.of(f1, f2, f3));
         reservasDelTest = List.of(reservaSobre(f1, LocalTime.of(17, 0), LocalTime.of(18, 0)));
 
         Map<Long, DisponibilidadCanchaResponse> canchas = obtenerCanchasPorId();

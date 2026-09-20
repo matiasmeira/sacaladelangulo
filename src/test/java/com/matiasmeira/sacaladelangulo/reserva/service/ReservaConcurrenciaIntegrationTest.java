@@ -6,6 +6,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
@@ -99,6 +100,7 @@ class ReservaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTest
                 .longitud(-58.4)
                 .requiereSena(false)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .build();
         establecimiento.setHorariosAtencion(List.of(HorarioAtencion.builder()

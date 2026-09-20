@@ -48,6 +48,13 @@ public record CanchaRequest(
 
         List<Long> canchasFisicasIds,
 
-        Integer cantidadCanchasNecesarias
+        Integer cantidadCanchasNecesarias,
+
+        /**
+         * isActive es reversible: null en el request deja el estado actual sin tocar (para
+         * no reactivar por accidente una cancha desactivada ante un edit que no toca este
+         * campo); un valor explícito lo aplica. Ver CanchaService.actualizarCancha.
+         */
+        Boolean isActive
 ) {
 }

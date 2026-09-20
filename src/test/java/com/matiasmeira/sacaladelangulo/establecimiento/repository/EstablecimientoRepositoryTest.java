@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,6 +67,7 @@ class EstablecimientoRepositoryTest {
                 .longitud(-58.3816)
                 .requiereSena(true)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .build());
 
@@ -78,6 +80,21 @@ class EstablecimientoRepositoryTest {
                 .longitud(-68.3030)
                 .requiereSena(true)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
+                .dueno(dueno)
+                .build());
+
+        // Mismas coordenadas que "cercano" (dentro del radio) pero sin verificar: no debe
+        // aparecer en el buscador aunque geográficamente calificaría.
+        entityManager.persist(Establecimiento.builder()
+                .nombre("Cercano Sin Verificar")
+                .direccion("Cerca")
+                .slug("cercano-sin-verificar")
+                .latitud(-34.6037)
+                .longitud(-58.3816)
+                .requiereSena(true)
+                .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.PENDIENTE)
                 .dueno(dueno)
                 .build());
 
@@ -120,8 +137,8 @@ class EstablecimientoRepositoryTest {
     }
 
     @Test
-    @DisplayName("findBySlugAndIsActiveTrue_NoDevuelveComplejosInactivos")
-    void findBySlugAndIsActiveTrue_NoDevuelveComplejosInactivos() {
+    @DisplayName("findBySlugOperativo_NoDevuelveComplejosInactivos")
+    void findBySlugOperativo_NoDevuelveComplejosInactivos() {
         Usuario dueno = entityManager.persist(Usuario.builder()
                 .email("dueno3@test.com")
                 .password("hash")
@@ -140,12 +157,72 @@ class EstablecimientoRepositoryTest {
                 .longitud(-58.4)
                 .requiereSena(false)
                 .isActive(false)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .build());
         entityManager.flush();
 
-        assertTrue(establecimientoRepository.findBySlugAndIsActiveTrue("complejo-inactivo").isEmpty());
-        assertTrue(establecimientoRepository.findBySlugAndIsActiveTrue("no-existe").isEmpty());
+        assertTrue(establecimientoRepository.findBySlugOperativo("complejo-inactivo").isEmpty());
+        assertTrue(establecimientoRepository.findBySlugOperativo("no-existe").isEmpty());
+    }
+
+    @Test
+    @DisplayName("findBySlugOperativo_NoDevuelveComplejosNoVerificados")
+    void findBySlugOperativo_NoDevuelveComplejosNoVerificados() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno3b@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+        entityManager.persist(Establecimiento.builder()
+                .nombre("Complejo Pendiente")
+                .direccion("Calle Dos B")
+                .slug("complejo-pendiente")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.PENDIENTE)
+                .dueno(dueno)
+                .build());
+        entityManager.flush();
+
+        assertTrue(establecimientoRepository.findBySlugOperativo("complejo-pendiente").isEmpty());
+    }
+
+    @Test
+    @DisplayName("findBySlugOperativo_DevuelveElComplejoActivoYVerificado")
+    void findBySlugOperativo_DevuelveElComplejoActivoYVerificado() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno3c@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+        Establecimiento operativo = entityManager.persist(Establecimiento.builder()
+                .nombre("Complejo Operativo")
+                .direccion("Calle Dos C")
+                .slug("complejo-operativo")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
+                .dueno(dueno)
+                .build());
+        entityManager.flush();
+
+        assertEquals(operativo.getId(), establecimientoRepository.findBySlugOperativo("complejo-operativo")
+                .orElseThrow().getId());
     }
 
     @Test
@@ -169,6 +246,7 @@ class EstablecimientoRepositoryTest {
                 .longitud(-58.4)
                 .requiereSena(false)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .build());
         entityManager.persist(Cancha.builder()
@@ -187,6 +265,18 @@ class EstablecimientoRepositoryTest {
                 .longitud(-58.4)
                 .requiereSena(false)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
+                .dueno(dueno)
+                .build());
+        entityManager.persist(Establecimiento.builder()
+                .nombre("Sin Verificar")
+                .direccion("Calle Cinco")
+                .slug("sin-verificar")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.EN_REVISION)
                 .dueno(dueno)
                 .build());
         entityManager.flush();
@@ -196,6 +286,7 @@ class EstablecimientoRepositoryTest {
 
         assertEquals(1, resultado.size());
         assertEquals(conPadel.getId(), resultado.get(0).getId());
+        // 2, no 3: "Sin Verificar" existe, está activo, pero no cuenta porque no está VERIFICADO.
         assertEquals(2, establecimientoRepository
                 .findActivosPorDeporte(null, org.springframework.data.domain.Pageable.unpaged()).size());
     }
@@ -222,6 +313,7 @@ class EstablecimientoRepositoryTest {
                     .longitud(-58.4)
                     .requiereSena(false)
                     .isActive(true)
+                    .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                     .dueno(dueno)
                     .build());
         }

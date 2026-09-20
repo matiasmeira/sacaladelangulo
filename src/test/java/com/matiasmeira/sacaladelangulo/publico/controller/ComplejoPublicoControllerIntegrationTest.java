@@ -6,6 +6,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
@@ -55,6 +56,9 @@ class ComplejoPublicoControllerIntegrationTest {
     private MockMvc mockMvc;
 
     @Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    @Autowired
     private UsuarioRepository usuarioRepository;
 
     @Autowired
@@ -83,6 +87,7 @@ class ComplejoPublicoControllerIntegrationTest {
                 .longitud(-58.3816)
                 .requiereSena(true)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .build();
         establecimiento.setHorariosAtencion(new ArrayList<>(List.of(HorarioAtencion.builder()
@@ -142,6 +147,7 @@ class ComplejoPublicoControllerIntegrationTest {
                 .longitud(-58.3816)
                 .requiereSena(false)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .build();
         establecimiento.setHorariosAtencion(new ArrayList<>(List.of(HorarioAtencion.builder()
@@ -227,6 +233,7 @@ class ComplejoPublicoControllerIntegrationTest {
                 .longitud(-58.3816)
                 .requiereSena(false)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .build();
         establecimiento = establecimientoRepository.save(establecimiento);
@@ -253,6 +260,94 @@ class ComplejoPublicoControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].slug").value("complejo-sin-horarios"));
+    }
+
+    /**
+     * El buscador/listado público ya filtraba isActive=true a nivel de query
+     * (EstablecimientoRepository.findActivosPorDeporte), pero hasta ahora sólo el detalle
+     * (obtenerDetalle_ComplejoInactivo_Devuelve404, más abajo) tenía un test que lo
+     * confirmara explícitamente -- este cubre el mismo criterio en el listado.
+     */
+    @Test
+    @DisplayName("GET /publico/complejos no devuelve establecimientos inactivos")
+    void buscarComplejos_ExcluyeEstablecimientosInactivos() throws Exception {
+        Establecimiento activo = seedComplejoActivo();
+
+        Usuario duenoInactivo = usuarioRepository.save(Usuario.builder()
+                .email("dueno-buscador-inactivo@test.com")
+                .password("hash")
+                .nombre("Dueño Inactivo")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento inactivo = Establecimiento.builder()
+                .nombre("Complejo Inactivo Buscador")
+                .direccion("Calle Inactiva 1")
+                .slug("complejo-inactivo-buscador")
+                .latitud(-34.6037)
+                .longitud(-58.3816)
+                .requiereSena(true)
+                .isActive(false)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
+                .dueno(duenoInactivo)
+                .build();
+        inactivo = establecimientoRepository.save(inactivo);
+
+        canchaRepository.save(Cancha.builder()
+                .nombre("Cancha 1")
+                .deportes(Set.of(Deporte.FUTBOL_5))
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(5000))
+                .montoSena(BigDecimal.valueOf(1000))
+                .duracionesPermitidas(List.of(60))
+                .establecimiento(inactivo)
+                .build());
+
+        mockMvc.perform(get("/api/v1/publico/complejos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.slug == '" + activo.getSlug() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.slug == 'complejo-inactivo-buscador')]").doesNotExist());
+    }
+
+    @ParameterizedTest(name = "GET /publico/complejos no devuelve establecimientos {0}")
+    @EnumSource(value = EstadoVerificacion.class, names = "VERIFICADO", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("buscarComplejos_ExcluyeEstablecimientosNoVerificados")
+    void buscarComplejos_ExcluyeEstablecimientosNoVerificados(EstadoVerificacion estadoVerificacion) throws Exception {
+        Establecimiento activo = seedComplejoActivo();
+
+        Usuario duenoNoVerificado = usuarioRepository.save(Usuario.builder()
+                .email("dueno-buscador-nv-" + estadoVerificacion + "@test.com")
+                .password("hash")
+                .nombre("Dueño No Verificado")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        String slugNoVerificado = "complejo-nv-buscador-" + estadoVerificacion.name().toLowerCase();
+        Establecimiento noVerificado = Establecimiento.builder()
+                .nombre("Complejo No Verificado Buscador")
+                .direccion("Calle No Verificada 1")
+                .slug(slugNoVerificado)
+                .latitud(-34.6037)
+                .longitud(-58.3816)
+                .requiereSena(true)
+                .isActive(true)
+                .estadoVerificacion(estadoVerificacion)
+                .dueno(duenoNoVerificado)
+                .build();
+        establecimientoRepository.save(noVerificado);
+
+        mockMvc.perform(get("/api/v1/publico/complejos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.slug == '" + activo.getSlug() + "')]").exists())
+                .andExpect(jsonPath("$.content[?(@.slug == '" + slugNoVerificado + "')]").doesNotExist());
     }
 
     @Test
@@ -294,6 +389,83 @@ class ComplejoPublicoControllerIntegrationTest {
 
         mockMvc.perform(get("/api/v1/publico/complejos/complejo-e2e"))
                 .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Establecimiento mínimo (sin horarios ni canchas, que no hacen falta para el detalle)
+     * con slug PROPIO Y ÚNICO por test -- a propósito NO reutiliza seedComplejoActivo()/
+     * "complejo-e2e" acá: la ficha se cachea por slug (ver ComplejoDetalleCache) y esa caché
+     * no es transaccional, así que reusar un slug que otro test ya haya leído con éxito
+     * arriesgaría un hit contra una respuesta de otro método.
+     */
+    private Establecimiento crearEstablecimientoConEstado(String slug, boolean isActive, EstadoVerificacion estadoVerificacion) {
+        Usuario dueno = usuarioRepository.save(Usuario.builder()
+                .email("dueno-" + slug + "@test.com")
+                .password("hash")
+                .nombre("Dueño " + slug)
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        return establecimientoRepository.save(Establecimiento.builder()
+                .nombre("Complejo " + slug)
+                .direccion("Calle " + slug)
+                .slug(slug)
+                .latitud(-34.6037)
+                .longitud(-58.3816)
+                .requiereSena(true)
+                .isActive(isActive)
+                .estadoVerificacion(estadoVerificacion)
+                .dueno(dueno)
+                .build());
+    }
+
+    @ParameterizedTest(name = "GET detalle de un complejo {0} responde 404")
+    @EnumSource(value = EstadoVerificacion.class, names = "VERIFICADO", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("obtenerDetalle_ComplejoNoVerificado_Devuelve404")
+    void obtenerDetalle_ComplejoNoVerificado_Devuelve404(EstadoVerificacion estadoVerificacion) throws Exception {
+        String slug = "complejo-nv-detalle-" + estadoVerificacion.name().toLowerCase();
+        crearEstablecimientoConEstado(slug, true, estadoVerificacion);
+
+        mockMvc.perform(get("/api/v1/publico/complejos/" + slug))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Requisito explícito del guard: un tercero no debe poder distinguir "no existe" de
+     * "existe pero está inactivo/no verificado" -- ni por status ni por body.
+     */
+    @Test
+    @DisplayName("obtenerDetalle_404_EsIndistinguibleEntreNoExisteInactivoYNoVerificado")
+    void obtenerDetalle_404_EsIndistinguibleEntreNoExisteInactivoYNoVerificado() throws Exception {
+        String bodyNoExiste = mockMvc.perform(get("/api/v1/publico/complejos/complejo-indist-no-existe"))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+
+        crearEstablecimientoConEstado("complejo-indist-inactivo", false, EstadoVerificacion.VERIFICADO);
+        String bodyInactivo = mockMvc.perform(get("/api/v1/publico/complejos/complejo-indist-inactivo"))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+
+        crearEstablecimientoConEstado("complejo-indist-no-verificado", true, EstadoVerificacion.PENDIENTE);
+        String bodyNoVerificado = mockMvc.perform(get("/api/v1/publico/complejos/complejo-indist-no-verificado"))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+
+        // Los tres tienen slugs distintos en la URL, pero el body de la respuesta (armado por
+        // EntityNotFoundException, sin eco del path) tiene que ser exactamente el mismo en
+        // los tres casos: eso es lo que hace opaco al 404.
+        assertThatBodiesSonElMismoErrorOpaco(bodyNoExiste, bodyInactivo);
+        assertThatBodiesSonElMismoErrorOpaco(bodyNoExiste, bodyNoVerificado);
+    }
+
+    private void assertThatBodiesSonElMismoErrorOpaco(String bodyA, String bodyB) throws Exception {
+        com.fasterxml.jackson.databind.JsonNode nodoA = objectMapper.readTree(bodyA);
+        com.fasterxml.jackson.databind.JsonNode nodoB = objectMapper.readTree(bodyB);
+        org.junit.jupiter.api.Assertions.assertEquals(nodoA.get("error"), nodoB.get("error"));
     }
 
     @Test

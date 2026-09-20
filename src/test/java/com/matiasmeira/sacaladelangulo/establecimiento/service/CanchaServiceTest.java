@@ -14,6 +14,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
+import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,9 @@ class CanchaServiceTest {
 
     @Mock
     private ComplejoDetalleCache complejoDetalleCache;
+
+    @Mock
+    private ReservaRepository reservaRepository;
 
     @InjectMocks
     private CanchaService canchaService;
@@ -182,6 +186,7 @@ class CanchaServiceTest {
                 true,
                 java.util.List.of(),
                 null,
+                null,
                 null
         );
     }
@@ -197,7 +202,8 @@ class CanchaServiceTest {
                 true,
                 java.util.List.of(),
                 canchasFisicasIds,
-                canchasFisicasIds.size()
+                canchasFisicasIds.size(),
+                null
         );
     }
 

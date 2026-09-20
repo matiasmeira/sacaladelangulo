@@ -50,7 +50,7 @@ import static org.mockito.Mockito.when;
  * La ficha pública se cachea por slug con TTL, así que un segundo visitante dentro de la
  * ventana no vuelve a pegarle a la base. El espía va sobre EstablecimientoRepository y no
  * sobre el servicio: cuando la caché acierta, ComplejoPublicoService#obtenerDetalle no se
- * ejecuta y por lo tanto findBySlugAndIsActiveTrue tampoco -- contar esa invocación es la
+ * ejecuta y por lo tanto findBySlugOperativo tampoco -- contar esa invocación es la
  * forma directa de distinguir un hit de un miss.
  *
  * <p>El resto de los tests cubre la otra mitad del contrato: el payload de la ficha no se
@@ -135,7 +135,7 @@ class ComplejoDetalleCacheTest {
         ComplejoDetalleResponse segunda = complejoPublicoService.obtenerDetalle(slug);
 
         assertThat(segunda.nombre()).isEqualTo("Complejo Cache Hit");
-        verify(establecimientoRepository, times(1)).findBySlugAndIsActiveTrue(slug);
+        verify(establecimientoRepository, times(1)).findBySlugOperativo(slug);
     }
 
     @Test
@@ -154,7 +154,7 @@ class ComplejoDetalleCacheTest {
                 email);
 
         assertThat(complejoPublicoService.obtenerDetalle(slug).nombre()).isEqualTo("Nombre Nuevo");
-        verify(establecimientoRepository, times(2)).findBySlugAndIsActiveTrue(slug);
+        verify(establecimientoRepository, times(2)).findBySlugOperativo(slug);
     }
 
     @Test
@@ -167,7 +167,7 @@ class ComplejoDetalleCacheTest {
         assertThatThrownBy(() -> complejoPublicoService.obtenerDetalle(slug))
                 .isInstanceOf(EntityNotFoundException.class);
 
-        verify(establecimientoRepository, times(2)).findBySlugAndIsActiveTrue(slug);
+        verify(establecimientoRepository, times(2)).findBySlugOperativo(slug);
     }
 
     @Test
@@ -417,7 +417,7 @@ class ComplejoDetalleCacheTest {
 
     private CanchaRequest canchaRequest(String nombre, String precioBase) {
         return new CanchaRequest(nombre, Set.of(Deporte.FUTBOL_5), new BigDecimal(precioBase),
-                null, List.of(60, 90), null, true, null, null, null);
+                null, List.of(60, 90), null, true, null, null, null, null);
     }
 
     private Establecimiento seedComplejoConFotos(String slug, String email) {
@@ -447,6 +447,7 @@ class ComplejoDetalleCacheTest {
                 .longitud(-58.4)
                 .requiereSena(false)
                 .isActive(true)
+                .estadoVerificacion(com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .build());
     }

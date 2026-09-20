@@ -15,6 +15,9 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaR
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
+import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -30,10 +33,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -60,6 +65,12 @@ class DisponibilidadServiceTest {
 
     @Mock
     private ReservaRepository reservaRepository;
+
+    @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
+    @Mock
+    private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @InjectMocks
     private DisponibilidadService disponibilidadService;
@@ -102,6 +113,101 @@ class DisponibilidadServiceTest {
 
         assertThrows(EntityNotFoundException.class,
                 () -> disponibilidadService.obtenerDisponibilidad(100L, fecha, null, true));
+    }
+
+    /**
+     * Camino del jugador (por id directo, sin pasar por el buscador público): revalida
+     * EstablecimientoOperativoGuard igual que si no existiera, para no distinguir "no existe"
+     * de "está deshabilitado" -- ver EstablecimientoOperativoGuard.
+     */
+    @Test
+    @DisplayName("obtenerDisponibilidad lanza EntityNotFoundException si el establecimiento está deshabilitado")
+    void lanzaExcepcionSiEstablecimientoEstaDeshabilitado() {
+        when(establecimientoRepository.findById(100L)).thenReturn(Optional.of(establecimiento));
+        org.mockito.Mockito.doThrow(new EntityNotFoundException("Establecimiento no encontrado"))
+                .when(establecimientoOperativoGuard).validarEstablecimientoOperativoParaJugador(establecimiento);
+
+        assertThrows(EntityNotFoundException.class,
+                () -> disponibilidadService.obtenerDisponibilidad(100L, fecha, null, true));
+    }
+
+    /**
+     * Único endpoint real (DisponibilidadController) llama siempre a
+     * obtenerDisponibilidadParaPanel, para PLAYER incluido: acá es donde el gate tiene que
+     * correr de verdad. Sin acceso de panel a ESTE establecimiento, un caller es
+     * indistinguible de un jugador cualquiera.
+     */
+    @Test
+    @DisplayName("obtenerDisponibilidadParaPanel lanza EntityNotFoundException si el caller NO tiene acceso de panel y el establecimiento está deshabilitado")
+    void obtenerDisponibilidadParaPanel_SinAccesoDePanel_EstablecimientoDeshabilitado_Lanza() {
+        when(establecimientoRepository.findById(100L)).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.tieneAccesoDePanel(eq(establecimiento), eq("jugador@test.com"), any()))
+                .thenReturn(false);
+        org.mockito.Mockito.doThrow(new EntityNotFoundException("Establecimiento no encontrado"))
+                .when(establecimientoOperativoGuard).validarEstablecimientoOperativoParaJugador(establecimiento);
+
+        assertThrows(EntityNotFoundException.class,
+                () -> disponibilidadService.obtenerDisponibilidadParaPanel(100L, fecha, null, "jugador@test.com"));
+    }
+
+    /**
+     * El dueño (o admin, o empleado con permiso) de ESTE establecimiento no debe perder
+     * acceso a su propia agenda por estar deshabilitado: el gate no debe correr cuando
+     * tieneAccesoDePanel da true, sin importar isActive.
+     */
+    @Test
+    @DisplayName("obtenerDisponibilidadParaPanel NO lanza si el caller SÍ tiene acceso de panel, aunque el establecimiento esté deshabilitado")
+    void obtenerDisponibilidadParaPanel_ConAccesoDePanel_EstablecimientoDeshabilitado_NoLanza() {
+        establecimiento.setIsActive(false);
+        when(establecimientoRepository.findById(100L)).thenReturn(Optional.of(establecimiento));
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(100L)).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(100L)).thenReturn(List.of(cancha));
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
+        when(autorizacionEmpleadoService.tieneAccesoDePanel(eq(establecimiento), eq("dueno@test.com"), any()))
+                .thenReturn(true);
+
+        DisponibilidadEstablecimientoResponse response = assertDoesNotThrow(
+                () -> disponibilidadService.obtenerDisponibilidadParaPanel(100L, fecha, null, "dueno@test.com"));
+
+        assertTrue(response.dias().get(0).canchas().get(0).ocupadaPorPool() != null,
+                "el dueño de su propio establecimiento sigue viendo ocupadaPorPool aunque esté deshabilitado");
+        org.mockito.Mockito.verify(establecimientoOperativoGuard, org.mockito.Mockito.never())
+                .validarEstablecimientoOperativoParaJugador(any());
+    }
+
+    /**
+     * PERMISOS_OPERATIVOS_DE_RESERVA (el set que puebla ocupadaPorPool) es un subconjunto
+     * angosto de PermisoEmpleado -- OPERAR_CAJA no está ahí. Este test prueba justamente que
+     * el gate y ocupadaPorPool se calculan por separado: el empleado pertenece al
+     * establecimiento (gate no corre) pero no ve ocupadaPorPool (permiso más angosto).
+     */
+    @Test
+    @DisplayName("obtenerDisponibilidadParaPanel NO lanza para un EMPLOYEE con permiso no-operativo, y ocupadaPorPool queda en null")
+    void obtenerDisponibilidadParaPanel_EmpleadoConPermisoNoOperativo_PerteneceAlEstablecimiento_NoLanzaYSinOcupacionPool() {
+        establecimiento.setIsActive(false);
+        when(establecimientoRepository.findById(100L)).thenReturn(Optional.of(establecimiento));
+        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(100L)).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(100L)).thenReturn(List.of(cancha));
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
+
+        when(autorizacionEmpleadoService.tieneAccesoDePanel(
+                eq(establecimiento), eq("empleado-caja@test.com"), eq(EnumSet.allOf(PermisoEmpleado.class))))
+                .thenReturn(true);
+        when(autorizacionEmpleadoService.tieneAccesoDePanel(
+                eq(establecimiento), eq("empleado-caja@test.com"), eq(AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA)))
+                .thenReturn(false);
+
+        DisponibilidadEstablecimientoResponse response = assertDoesNotThrow(
+                () -> disponibilidadService.obtenerDisponibilidadParaPanel(100L, fecha, null, "empleado-caja@test.com"));
+
+        assertTrue(response.dias().get(0).canchas().get(0).ocupadaPorPool() == null,
+                "sin permiso operativo de reserva, ocupadaPorPool sigue en null aunque pertenezca al establecimiento");
+        org.mockito.Mockito.verify(establecimientoOperativoGuard, org.mockito.Mockito.never())
+                .validarEstablecimientoOperativoParaJugador(any());
     }
 
     @Test

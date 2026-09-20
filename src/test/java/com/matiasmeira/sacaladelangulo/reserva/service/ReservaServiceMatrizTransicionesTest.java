@@ -16,6 +16,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugador
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
@@ -70,6 +71,7 @@ class ReservaServiceMatrizTransicionesTest {
     @Mock private ReservaMapper reservaMapper;
     @Mock private AutorizacionEmpleadoService autorizacionEmpleadoService;
     @Mock private RegistroAuditoriaService registroAuditoriaService;
+    @Mock private EstablecimientoOperativoGuard establecimientoOperativoGuard;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private TurnoCajaService turnoCajaService;
 

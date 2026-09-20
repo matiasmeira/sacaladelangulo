@@ -3,6 +3,7 @@ package com.matiasmeira.sacaladelangulo.publico.controller;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Servicio;
@@ -79,6 +80,7 @@ class ComplejoPublicoControllerDetalleNoTransactionalTest {
                 .longitud(-58.4)
                 .requiereSena(false)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .servicios(Set.of(Servicio.PARRILLA, Servicio.WIFI))
                 .fotos(new java.util.ArrayList<>(List.of(FotoEstablecimiento.builder()

@@ -16,6 +16,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugador
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
@@ -70,6 +71,7 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
     @Mock private ReservaMapper reservaMapper;
     @Mock private AutorizacionEmpleadoService autorizacionEmpleadoService;
     @Mock private RegistroAuditoriaService registroAuditoriaService;
+    @Mock private EstablecimientoOperativoGuard establecimientoOperativoGuard;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private TurnoCajaService turnoCajaService;
 
@@ -95,7 +97,8 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
     void setUp() {
         reservaService = new ReservaService(reservaRepository, canchaRepository, bloqueoCanchaRepository,
                 bloqueoJugadorRepository, diaNoLaborableRepository, establecimientoRepository, usuarioRepository,
-                reservaMapper, autorizacionEmpleadoService, registroAuditoriaService, eventPublisher, turnoCajaService);
+                reservaMapper, autorizacionEmpleadoService, registroAuditoriaService, establecimientoOperativoGuard,
+                eventPublisher, turnoCajaService);
 
         jugador = Usuario.builder().id(1L).email("jugador@test.com").password("x").nombre("Juan")
                 .rol(Role.PLAYER).planSuscripcion(PlanSuscripcion.FREE).isActive(true)
@@ -127,7 +130,7 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
         lenient().when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
         lenient().when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
         lenient().when(canchaRepository.findById(canchaDestino.getId())).thenReturn(Optional.of(canchaDestino));
-        lenient().when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
+        lenient().when(canchaRepository.findByEstablecimientoId(establecimiento.getId()))
                 .thenReturn(List.of(cancha, canchaDestino));
         lenient().when(bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(any(), any())).thenReturn(false);
         lenient().when(reservaRepository.save(any(Reserva.class))).thenAnswer(inv -> {

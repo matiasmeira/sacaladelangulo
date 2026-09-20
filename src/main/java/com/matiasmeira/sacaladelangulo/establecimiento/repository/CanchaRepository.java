@@ -40,6 +40,27 @@ public interface CanchaRepository extends JpaRepository<Cancha, Long> {
     List<Cancha> findByEstablecimientoIdInAndIsActiveTrue(List<Long> establecimientoIds);
 
     /**
+     * Variante SIN filtrar por isActive: trae también canchas inactivas. Dos usos:
+     * (1) CanchaService.obtenerCanchasPorEstablecimiento cuando el panel pide incluirlas
+     * (para poder reactivarlas, ya que isActive es reversible).
+     * (2) el contexto "todasLasCanchasDelEstablecimiento" que reciben
+     * PoolCanchaCalculator.hayDisponibilidad/canchasRelacionadas en ReservaService,
+     * TurnoFijoService, DisponibilidadService y CanchaService.validarDesactivacion: una
+     * cancha LÓGICA desactivada puede seguir teniendo reservas futuras vigentes, y
+     * PoolCanchaCalculator necesita verla (con su pool de físicas) para seguir contándolas
+     * contra la capacidad del grupo — si se la excluyera acá, esas reservas dejarían de
+     * sumar a usoActual y el grupo quedaría con cupo de más (sobreventa). Las físicas
+     * inactivas ya se excluyen de la capacidad dentro de PoolCanchaCalculator.footprint,
+     * así que no hace falta filtrarlas en esta query.
+     */
+    @EntityGraph(attributePaths = {"canchasFisicas", "deportes"})
+    List<Cancha> findByEstablecimientoId(Long establecimientoId);
+
+    /** Variante en lote de {@link #findByEstablecimientoId}, mismo motivo que su par *AndIsActiveTrue. */
+    @EntityGraph(attributePaths = {"deportes"})
+    List<Cancha> findByEstablecimientoIdIn(List<Long> establecimientoIds);
+
+    /**
      * Trae, para el lote de establecimientos indicado, sus canchas activas con deportes y
      * tarifas ya inicializados en la misma consulta (@EntityGraph): alimenta las
      * derivaciones públicas (deportes/precioDesde/senaDesde por complejo, ver

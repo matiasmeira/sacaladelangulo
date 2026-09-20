@@ -203,6 +203,9 @@ public class BloqueoCanchaService {
         );
     }
 
+    // A diferencia de ReservaService.buscarCanchaPorId, acá no hace falta validar isActive:
+    // sólo dueño/admin llegan a este método (crearBloqueo/listarPorCancha), y un bloqueo
+    // sobre una cancha ya inactiva es redundante, no peligroso -no le da una reserva a nadie-.
     private Cancha buscarCanchaDelEstablecimiento(Long establecimientoId, Long canchaId) {
         Cancha cancha = canchaRepository.findById(canchaId)
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));

@@ -13,6 +13,8 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaReposito
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,23 +31,22 @@ import java.util.List;
 import java.util.Set;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * GET .../establecimientos/{id}/disponibilidad puebla ocupadaPorPool sólo para quien
- * tiene acceso de PANEL a ESE establecimiento (dueño, admin, o empleado con permiso
- * operativo de agenda) — estar autenticado no alcanza, porque el @PreAuthorize del
- * endpoint acepta también a PLAYER y registrarse no cuesta nada. Para cualquier otro caso
- * el campo va en null, igual que en la disponibilidad pública (ver
- * ComplejoPublicoControllerIntegrationTest.obtenerDisponibilidad_SinAuth_Devuelve200SinPii,
- * que cubre el caso anónimo).
+ * Análoga a DisponibilidadControllerEstablecimientoInactivoIntegrationTest pero para la otra
+ * mitad del criterio de EstablecimientoOperativoGuard: estadoVerificacion. El camino del
+ * panel (dueño y empleado viendo la agenda de SU PROPIO establecimiento) sigue funcionando a
+ * propósito aunque el establecimiento todavía no esté verificado: obtenerDisponibilidadParaPanel
+ * sólo consulta al guard cuando quien pregunta NO pertenece al establecimiento.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb-disponibilidad-panel;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.url=jdbc:h2:mem:testdb-disponibilidad-no-verificado;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
@@ -55,8 +56,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.config.import=",
         "spring.flyway.enabled=false"
 })
-@DisplayName("GET /api/v1/establecimientos/{id}/disponibilidad - ocupadaPorPool sólo con acceso de panel a ESE establecimiento")
-class DisponibilidadControllerIntegrationTest {
+@DisplayName("GET /api/v1/establecimientos/{id}/disponibilidad - establecimiento no verificado")
+class DisponibilidadControllerEstablecimientoNoVerificadoIntegrationTest {
 
     private static final LocalDate FECHA = LocalDate.of(2026, 8, 10); // lunes
 
@@ -84,7 +85,7 @@ class DisponibilidadControllerIntegrationTest {
                 .build());
     }
 
-    private Establecimiento crearEstablecimientoConCancha(String slug, Usuario dueno) {
+    private Establecimiento crearEstablecimientoConCancha(String slug, Usuario dueno, EstadoVerificacion estadoVerificacion) {
         Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
                 .nombre("Complejo " + slug)
                 .direccion("Calle Test 123")
@@ -93,7 +94,7 @@ class DisponibilidadControllerIntegrationTest {
                 .longitud(-58.3816)
                 .requiereSena(true)
                 .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
+                .estadoVerificacion(estadoVerificacion)
                 .dueno(dueno)
                 .build());
         establecimiento.setHorariosAtencion(new ArrayList<>(List.of(HorarioAtencion.builder()
@@ -117,12 +118,29 @@ class DisponibilidadControllerIntegrationTest {
         return establecimiento;
     }
 
+    @ParameterizedTest(name = "PLAYER pide disponibilidad por id de un establecimiento {0} -> 404 opaco")
+    @EnumSource(value = EstadoVerificacion.class, names = "VERIFICADO", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("jugador_EstablecimientoNoVerificado_Devuelve404")
+    void jugador_EstablecimientoNoVerificado_Devuelve404(EstadoVerificacion estadoVerificacion) throws Exception {
+        String emailJugador = "jugador-nv-" + estadoVerificacion + "@test.com";
+        Usuario dueno = crearUsuario("dueno-nv-a-" + estadoVerificacion + "@test.com", Role.OWNER);
+        Establecimiento establecimiento = crearEstablecimientoConCancha(
+                "complejo-nv-a-" + estadoVerificacion.name().toLowerCase(), dueno, estadoVerificacion);
+        crearUsuario(emailJugador, Role.PLAYER);
+
+        mockMvc.perform(get("/api/v1/establecimientos/" + establecimiento.getId() + "/disponibilidad")
+                        .with(user(emailJugador).roles("PLAYER"))
+                        .param("fecha", FECHA.toString()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+    }
+
     @Test
-    @WithMockUser(username = "dueno-panel-a@test.com", roles = "OWNER")
-    @DisplayName("dueño del establecimiento -> ocupadaPorPool poblado (lista, no null)")
-    void dueno_ocupadaPorPoolPoblado() throws Exception {
-        Usuario dueno = crearUsuario("dueno-panel-a@test.com", Role.OWNER);
-        Establecimiento establecimiento = crearEstablecimientoConCancha("complejo-panel-a", dueno);
+    @WithMockUser(username = "dueno-nv-b@test.com", roles = "OWNER")
+    @DisplayName("OWNER pide disponibilidad de SU establecimiento PENDIENTE -> 200 (no se rompe el panel)")
+    void dueno_SuEstablecimientoPendiente_Devuelve200() throws Exception {
+        Usuario dueno = crearUsuario("dueno-nv-b@test.com", Role.OWNER);
+        Establecimiento establecimiento = crearEstablecimientoConCancha("complejo-nv-b", dueno, EstadoVerificacion.PENDIENTE);
 
         mockMvc.perform(get("/api/v1/establecimientos/" + establecimiento.getId() + "/disponibilidad")
                         .param("fecha", FECHA.toString()))
@@ -130,52 +148,29 @@ class DisponibilidadControllerIntegrationTest {
                 .andExpect(jsonPath("$.dias[0].canchas[0].ocupadaPorPool").isArray());
     }
 
+    /**
+     * Mismo razonamiento que la contraparte "inactivo": PERMISOS_OPERATIVOS_DE_RESERVA (el
+     * set que puebla ocupadaPorPool) es más angosto que "es staff de este establecimiento".
+     * OPERAR_CAJA no está ahí, pero igual es staff legítimo y no debe recibir el 404 opaco.
+     */
     @Test
-    @WithMockUser(username = "empleado-panel@test.com", roles = "EMPLOYEE")
-    @DisplayName("empleado con permiso de lectura de agenda sobre ese establecimiento -> ocupadaPorPool poblado")
-    void empleadoConPermiso_ocupadaPorPoolPoblado() throws Exception {
-        Usuario dueno = crearUsuario("dueno-panel-b@test.com", Role.OWNER);
-        Establecimiento establecimiento = crearEstablecimientoConCancha("complejo-panel-b", dueno);
+    @WithMockUser(username = "empleado-caja-nv@test.com", roles = "EMPLOYEE")
+    @DisplayName("EMPLOYEE con permiso no-operativo (OPERAR_CAJA) accede a la agenda de SU establecimiento PENDIENTE -> 200")
+    void empleadoSoloConPermisoDeCaja_SuEstablecimientoPendiente_Devuelve200() throws Exception {
+        Usuario dueno = crearUsuario("dueno-nv-c@test.com", Role.OWNER);
+        Establecimiento establecimiento = crearEstablecimientoConCancha("complejo-nv-c", dueno, EstadoVerificacion.PENDIENTE);
 
         usuarioRepository.save(Usuario.builder()
-                .email("empleado-panel@test.com")
+                .email("empleado-caja-nv@test.com")
                 .password("hash")
-                .nombre("Empleado Test")
+                .nombre("Empleado Caja")
                 .rol(Role.EMPLOYEE)
                 .establecimiento(establecimiento)
-                .permisos(Set.of(PermisoEmpleado.FINALIZAR_RESERVA))
+                .permisos(Set.of(PermisoEmpleado.OPERAR_CAJA))
                 .isActive(true)
                 .emailVerified(true)
                 .telefonoVerificado(true)
                 .build());
-
-        mockMvc.perform(get("/api/v1/establecimientos/" + establecimiento.getId() + "/disponibilidad")
-                        .param("fecha", FECHA.toString()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.dias[0].canchas[0].ocupadaPorPool").isArray());
-    }
-
-    @Test
-    @WithMockUser(username = "jugador-panel@test.com", roles = "PLAYER")
-    @DisplayName("jugador autenticado sin acceso de panel -> ocupadaPorPool en null")
-    void jugadorAutenticado_ocupadaPorPoolNull() throws Exception {
-        Usuario dueno = crearUsuario("dueno-panel-c@test.com", Role.OWNER);
-        Establecimiento establecimiento = crearEstablecimientoConCancha("complejo-panel-c", dueno);
-        crearUsuario("jugador-panel@test.com", Role.PLAYER);
-
-        mockMvc.perform(get("/api/v1/establecimientos/" + establecimiento.getId() + "/disponibilidad")
-                        .param("fecha", FECHA.toString()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.dias[0].canchas[0].ocupadaPorPool").value(nullValue()));
-    }
-
-    @Test
-    @WithMockUser(username = "dueno-panel-d@test.com", roles = "OWNER")
-    @DisplayName("dueño de OTRO establecimiento -> ocupadaPorPool en null")
-    void duenoDeOtroEstablecimiento_ocupadaPorPoolNull() throws Exception {
-        crearUsuario("dueno-panel-d@test.com", Role.OWNER);
-        Usuario duenoReal = crearUsuario("dueno-panel-e@test.com", Role.OWNER);
-        Establecimiento establecimiento = crearEstablecimientoConCancha("complejo-panel-e", duenoReal);
 
         mockMvc.perform(get("/api/v1/establecimientos/" + establecimiento.getId() + "/disponibilidad")
                         .param("fecha", FECHA.toString()))

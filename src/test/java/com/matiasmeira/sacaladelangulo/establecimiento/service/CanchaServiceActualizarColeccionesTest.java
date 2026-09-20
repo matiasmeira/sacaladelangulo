@@ -115,7 +115,7 @@ class CanchaServiceActualizarColeccionesTest {
 
         CanchaResponse actualizada = canchaService.actualizarCancha(establecimiento.getId(), canchaId,
                 new CanchaRequest("Cancha 1", Set.of(Deporte.PADEL), new BigDecimal("10000"),
-                        null, new ArrayList<>(List.of(60)), null, true, null, null, null),
+                        null, new ArrayList<>(List.of(60)), null, true, null, null, null, null),
                 email);
 
         assertThat(actualizada.deportes()).containsExactly(Deporte.PADEL);
@@ -128,14 +128,14 @@ class CanchaServiceActualizarColeccionesTest {
      * dentro de su propia transacción.
      */
     private Map<String, List<Integer>> duracionesPersistidas(Establecimiento establecimiento, String email) {
-        return canchaService.obtenerCanchasPorEstablecimiento(establecimiento.getId(), email).stream()
+        return canchaService.obtenerCanchasPorEstablecimiento(establecimiento.getId(), email, false).stream()
                 .collect(Collectors.toMap(CanchaResponse::nombre, CanchaResponse::duracionesPermitidas));
     }
 
     private CanchaRequest request(String nombre, List<Integer> duraciones) {
         return new CanchaRequest(nombre, new HashSet<>(Set.of(Deporte.FUTBOL_5)), new BigDecimal("10000"),
                 null, duraciones == null ? null : new ArrayList<>(duraciones),
-                null, true, null, null, null);
+                null, true, null, null, null, null);
     }
 
     private Establecimiento seedComplejo(String slug, String email) {

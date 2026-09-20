@@ -12,6 +12,9 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
+import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
+import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
+import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -60,6 +64,9 @@ class CanchaServiceValidacionPoolTest {
 
     @Mock
     private ComplejoDetalleCache complejoDetalleCache;
+
+    @Mock
+    private ReservaRepository reservaRepository;
 
     @InjectMocks
     private CanchaService canchaService;
@@ -103,6 +110,12 @@ class CanchaServiceValidacionPoolTest {
                 .precioBase(BigDecimal.TEN).montoSena(BigDecimal.ZERO).isActive(true).build();
     }
 
+    private Cancha logicaInactiva(long id, String nombre, Set<Cancha> pool, int canchasNecesarias) {
+        return Cancha.builder().id(id).nombre(nombre).establecimiento(establecimiento)
+                .canchasFisicas(pool).canchasNecesarias(canchasNecesarias)
+                .precioBase(BigDecimal.TEN).montoSena(BigDecimal.ZERO).isActive(false).build();
+    }
+
     private void mockFisicasExistentes(Cancha... fisicas) {
         Map<Long, Cancha> porId = new HashMap<>();
         for (Cancha f : fisicas) {
@@ -118,14 +131,19 @@ class CanchaServiceValidacionPoolTest {
         });
     }
 
+    /**
+     * "Todas las canchas del establecimiento" que ve validarConfiguracionDePool: desde que
+     * otrasLogicas es activas ∪ {inactivas con reserva futura vigente}, ya no alcanza con
+     * mirar sólo activas (ver CanchaService.validarConfiguracionDePool).
+     */
     private void mockCanchasActivasDelEstablecimiento(Cancha... canchas) {
-        lenient().when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId()))
+        lenient().when(canchaRepository.findByEstablecimientoId(establecimiento.getId()))
                 .thenReturn(List.of(canchas));
     }
 
     private CanchaRequest requestLogica(String nombre, List<Long> canchasFisicasIds, int cantidadCanchasNecesarias) {
         return new CanchaRequest(nombre, new HashSet<>(Set.of(Deporte.FUTBOL_5)), BigDecimal.valueOf(10000),
-                BigDecimal.ZERO, null, null, true, null, canchasFisicasIds, cantidadCanchasNecesarias);
+                BigDecimal.ZERO, null, null, true, null, canchasFisicasIds, cantidadCanchasNecesarias, null);
     }
 
     @Test
@@ -167,5 +185,53 @@ class CanchaServiceValidacionPoolTest {
         assertThatThrownBy(() -> canchaService.crearCancha(
                 establecimiento.getId(), requestLogica("Combo grande", List.of(1L, 5L), 2), dueno.getEmail()))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /**
+     * El escenario del diagnóstico: C9=[F1,F2,F3] está inactiva pero todavía tiene una
+     * reserva futura vigente. Antes de este fix, el guard sólo miraba lógicas activas y
+     * dejaba crear C7=[F1,F2] sin avisar nada, descubriendo el choque recién al reactivar
+     * C9 (ver CanchaServiceReactivacionPoolGapDiagnosticoTest). Ahora se bloquea acá mismo,
+     * en el momento en que se intenta crear la configuración inconsistente.
+     */
+    @Test
+    @DisplayName("crearLogicaConPoolQueIntersectaParcialmente_OtraInactivaConReservaFutura_Rechaza")
+    void crearLogicaConPoolQueIntersectaParcialmente_OtraInactivaConReservaFutura_Rechaza() {
+        Cancha f1 = fisica(1), f2 = fisica(2), f3 = fisica(3);
+        Cancha c9 = logicaInactiva(9, "Cancha de 9", Set.of(f1, f2, f3), 3);
+        mockFisicasExistentes(f1, f2);
+        mockCanchasActivasDelEstablecimiento(f1, f2, f3, c9);
+
+        LocalDateTime ultimaReserva = LocalDateTime.now().plusDays(5).withHour(21).withMinute(0).withSecond(0).withNano(0);
+        Reserva reservaFuturaC9 = Reserva.builder().id(900L).cancha(c9).estado(EstadoReserva.CONFIRMADA)
+                .fechaHoraInicio(ultimaReserva.minusHours(1)).fechaHoraFin(ultimaReserva)
+                .precioTotal(BigDecimal.TEN).senaPagada(BigDecimal.ZERO).build();
+        when(reservaRepository.findFuturasPorCanchaIds(any(), any())).thenReturn(List.of(reservaFuturaC9));
+
+        assertThatThrownBy(() -> canchaService.crearCancha(
+                establecimiento.getId(), requestLogica("Cancha de 7", List.of(1L, 2L), 2), dueno.getEmail()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Cancha de 9")
+                .hasMessageContaining(ultimaReserva.toLocalDate().toString());
+    }
+
+    /**
+     * Misma configuración que el test anterior, pero C9 ya no tiene ninguna reserva futura:
+     * la restricción caducó sola (ver el mensaje de error en el otro test, que avisa esto de
+     * antemano) y crear C7 debe permitirse sin objeciones.
+     */
+    @Test
+    @DisplayName("crearLogicaConPoolQueIntersectaParcialmente_OtraInactivaSinReservaFutura_Permite")
+    void crearLogicaConPoolQueIntersectaParcialmente_OtraInactivaSinReservaFutura_Permite() {
+        Cancha f1 = fisica(1), f2 = fisica(2), f3 = fisica(3);
+        Cancha c9 = logicaInactiva(9, "Cancha de 9", Set.of(f1, f2, f3), 3);
+        mockFisicasExistentes(f1, f2);
+        mockCanchasActivasDelEstablecimiento(f1, f2, f3, c9);
+        when(reservaRepository.findFuturasPorCanchaIds(any(), any())).thenReturn(List.of());
+
+        var response = canchaService.crearCancha(
+                establecimiento.getId(), requestLogica("Cancha de 7", List.of(1L, 2L), 2), dueno.getEmail());
+
+        assertThat(response.canchasFisicasIds()).containsExactlyInAnyOrder(1L, 2L);
     }
 }

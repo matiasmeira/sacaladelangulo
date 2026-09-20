@@ -17,6 +17,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugador
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.reserva.dto.EditarClienteTurnoFijoRequest;
@@ -129,6 +130,9 @@ class TurnoFijoServiceTest {
     @Mock
     private TurnoFijoRepository turnoFijoRepository;
 
+    @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
     /**
      * Instancia REAL (no @InjectMocks): TurnoFijoService la usa por inyección para no
      * duplicar los validadores compartidos (ver comentario de clase).
@@ -216,12 +220,13 @@ class TurnoFijoServiceTest {
         reservaService = new ReservaService(
                 reservaRepository, canchaRepository, bloqueoCanchaRepository, bloqueoJugadorRepository,
                 diaNoLaborableRepository, establecimientoRepository, usuarioRepository, reservaMapper,
-                autorizacionEmpleadoService, registroAuditoriaService, eventPublisher, turnoCajaService);
+                autorizacionEmpleadoService, registroAuditoriaService, establecimientoOperativoGuard, eventPublisher,
+                turnoCajaService);
         turnoFijoMapper = new TurnoFijoMapper(reservaMapper);
         turnoFijoService = new TurnoFijoService(
                 turnoFijoRepository, reservaRepository, canchaRepository, bloqueoCanchaRepository,
                 diaNoLaborableRepository, establecimientoRepository, usuarioRepository, autorizacionEmpleadoService,
-                reservaMapper, turnoFijoMapper, eventPublisher, reservaService);
+                establecimientoOperativoGuard, reservaMapper, turnoFijoMapper, eventPublisher, reservaService);
 
         turnoFijoActivo = TurnoFijo.builder()
                 .id(TURNO_FIJO_ID)
@@ -333,7 +338,7 @@ class TurnoFijoServiceTest {
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -372,6 +377,83 @@ class TurnoFijoServiceTest {
         assertThat(respuesta.telefonoClienteManual()).isEqualTo("11 5555-4444");
     }
 
+    /**
+     * Camino de panel: mensaje específico ("está desactivada, reactivala"), igual que
+     * crearReservaManual/moverReservaDeCancha -misma condición compartida en ReservaService,
+     * distinto caller.
+     */
+    @Test
+    @DisplayName("crear_Fallo_CanchaDesactivada")
+    void crear_Fallo_CanchaDesactivada() {
+        Cancha canchaInactiva = Cancha.builder()
+                .id(cancha.getId()).nombre(cancha.getNombre()).deportes(cancha.getDeportes())
+                .precioBase(cancha.getPrecioBase()).montoSena(cancha.getMontoSena())
+                .duracionesPermitidas(cancha.getDuracionesPermitidas()).permiteInicioMediaHora(cancha.getPermiteInicioMediaHora())
+                .establecimiento(establecimiento).isActive(false)
+                .tarifas(new ArrayList<>()).canchasFisicas(new java.util.LinkedHashSet<>())
+                .build();
+
+        ReservaSemanalRequest request = new ReservaSemanalRequest(
+                canchaInactiva.getId(),
+                LocalDate.of(2030, 1, 8),
+                LocalDate.of(2030, 1, 29),
+                DayOfWeek.TUESDAY,
+                LocalTime.of(20, 0),
+                LocalTime.of(21, 0),
+                Deporte.FUTBOL_5,
+                null,
+                "Grupo del Colo",
+                "11 5555-4444");
+
+        when(canchaRepository.findById(canchaInactiva.getId())).thenReturn(Optional.of(canchaInactiva));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> turnoFijoService.crear(request, dueno.getEmail()));
+
+        assertThat(exception.getMessage()).contains("desactivada");
+        verify(turnoFijoRepository, never()).save(any());
+    }
+
+    /**
+     * El gate va al inicio de crearInterno (antes de generar fechasDelPeriodo y de
+     * persistir la regla o cualquier ocurrencia): ni siquiera se llega a construir la
+     * primera Reserva. Cubre también renovar(), que delega en el mismo método interno.
+     */
+    @Test
+    @DisplayName("crear_Fallo_EstablecimientoInactivo_NoPersisteNiLaReglaNiOcurrencias")
+    void crear_Fallo_EstablecimientoInactivo_NoPersisteNiLaReglaNiOcurrencias() {
+        ReservaSemanalRequest request = new ReservaSemanalRequest(
+                cancha.getId(),
+                LocalDate.of(2030, 1, 8),
+                LocalDate.of(2030, 1, 29),
+                DayOfWeek.TUESDAY,
+                LocalTime.of(20, 0),
+                LocalTime.of(21, 0),
+                Deporte.FUTBOL_5,
+                null,
+                "Grupo del Colo",
+                "11 5555-4444");
+
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        doThrow(new IllegalArgumentException(
+                "Este establecimiento está deshabilitado. No se pueden cargar reservas nuevas mientras esté así."))
+                .when(establecimientoOperativoGuard).validarEstablecimientoOperativoParaPanel(establecimiento);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> turnoFijoService.crear(request, dueno.getEmail()));
+
+        assertThat(exception.getMessage()).contains("establecimiento").contains("deshabilitado");
+        verify(turnoFijoRepository, never()).save(any());
+        verify(reservaRepository, never()).saveAll(any());
+        // Ni siquiera llega a precargar el período: prueba que el gate corta antes de
+        // cualquier trabajo de armado, no solo antes del guardado final.
+        verify(diaNoLaborableRepository, never()).findByEstablecimientoIdAndFechaBetween(any(), any(), any());
+    }
+
     @Test
     @DisplayName("crear_Exito_GeneraUnaReservaConfirmadaPorFecha")
     void crear_Exito_GeneraUnaReservaConfirmadaPorFecha() {
@@ -390,7 +472,7 @@ class TurnoFijoServiceTest {
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -421,7 +503,7 @@ class TurnoFijoServiceTest {
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> {
             List<Reserva> reservas = invocation.getArgument(0);
             long id = 500L;
@@ -471,7 +553,7 @@ class TurnoFijoServiceTest {
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         TurnoFijoResponse respuesta = assertDoesNotThrow(
@@ -537,7 +619,7 @@ class TurnoFijoServiceTest {
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of(bloqueo));
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
 
         // Act
         IllegalArgumentException exception = assertThrows(
@@ -606,7 +688,7 @@ class TurnoFijoServiceTest {
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of(diaNoLaborable));
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
 
         // Act & Assert: todo-o-nada, no debe guardarse nada aunque el 08 era válido
         IllegalArgumentException exception = assertThrows(
@@ -962,7 +1044,7 @@ class TurnoFijoServiceTest {
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO);
@@ -1004,7 +1086,7 @@ class TurnoFijoServiceTest {
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO);
@@ -1042,7 +1124,7 @@ class TurnoFijoServiceTest {
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
         when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
         when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
-        when(canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
         when(reservaRepository.saveAll(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO);

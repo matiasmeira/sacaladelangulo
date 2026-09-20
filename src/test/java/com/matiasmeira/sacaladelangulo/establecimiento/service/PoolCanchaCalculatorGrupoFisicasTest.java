@@ -178,4 +178,37 @@ class PoolCanchaCalculatorGrupoFisicasTest {
 
         assertThat(disponible).isTrue();
     }
+
+    // ---- Caso 7: una física desactivada no debe contar para la capacidad del grupo ----
+
+    @Test
+    void poolDeTresConUnaFisicaInactiva_capacidadBajaADos_reservaDeLasTresNoEntra() {
+        Cancha f1 = fisica(1), f2 = fisica(2);
+        Cancha f3 = fisica(3);
+        f3.setIsActive(false);
+        Cancha c9 = logica(9, "C9", Set.of(f1, f2, f3), 3);
+        List<Cancha> todas = List.of(f1, f2, f3, c9);
+
+        // canchasNecesarias=3 pero solo hay 2 físicas activas: no hay capacidad para venderla.
+        boolean disponible = PoolCanchaCalculator.hayDisponibilidad(c9, List.of(), todas);
+
+        assertThat(disponible).isFalse();
+    }
+
+    @Test
+    void poolDeTresConUnaFisicaInactiva_lasDosActivasSiguenDisponiblesEnParalelo() {
+        Cancha f1 = fisica(1), f2 = fisica(2);
+        Cancha f3 = fisica(3);
+        f3.setIsActive(false);
+        Cancha c9 = logica(9, "C9", Set.of(f1, f2, f3), 3);
+        List<Cancha> todas = List.of(f1, f2, f3, c9);
+
+        // Con f3 fuera de juego, el grupo real es {f1, f2}: reservar f1 y f2 en paralelo
+        // (2 de 2) sigue siendo válido, aunque nadie pueda vender c9 completa.
+        boolean f1Disponible = PoolCanchaCalculator.hayDisponibilidad(f1, List.of(), todas);
+        boolean f2DisponibleConF1Ocupada = PoolCanchaCalculator.hayDisponibilidad(f2, List.of(reservaSobre(f1)), todas);
+
+        assertThat(f1Disponible).isTrue();
+        assertThat(f2DisponibleConF1Ocupada).isTrue();
+    }
 }

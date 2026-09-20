@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.auth.service.JwtService;
 import com.matiasmeira.sacaladelangulo.auth.service.UsuarioUserDetailsMapper;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRequest;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Servicio;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
@@ -170,6 +171,7 @@ class EstablecimientoControllerServiciosIntegrationTest {
                 .longitud(-58.4)
                 .requiereSena(false)
                 .isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .servicios(new HashSet<>(servicios))
                 .build());

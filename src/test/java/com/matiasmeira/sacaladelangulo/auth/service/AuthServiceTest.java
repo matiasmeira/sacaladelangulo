@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -221,6 +222,28 @@ class AuthServiceTest {
         );
         verify(usuarioRepository, never()).existsByEmail(anyString());
         verify(usuarioRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("registerOwner_Exito_CreaUsuarioConFechaFinPruebaNula")
+    void registerOwner_Exito_CreaUsuarioConFechaFinPruebaNula() {
+        RegisterRequest request = new RegisterRequest("dueno@test.com", "Password123", "Carlos");
+        when(usuarioRepository.existsByEmail("dueno@test.com")).thenReturn(false);
+        when(passwordEncoder.encode("Password123")).thenReturn("hash");
+        when(usuarioRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(jwtService.generateToken(any())).thenReturn("jwt-token");
+
+        authService.registerOwner(request);
+
+        org.mockito.ArgumentCaptor<Usuario> captor = org.mockito.ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).saveAndFlush(captor.capture());
+        Usuario creado = captor.getValue();
+
+        // El trial arranca recién cuando un admin verifica el primer establecimiento (ver
+        // AdminEstablecimientoVerificacionService.iniciarPruebaAlVerificar), no acá.
+        assertNull(creado.getFechaFinPrueba());
+        assertEquals(PlanSuscripcion.TRIAL, creado.getPlanSuscripcion());
+        assertEquals(Role.OWNER, creado.getRol());
     }
 
     @Test

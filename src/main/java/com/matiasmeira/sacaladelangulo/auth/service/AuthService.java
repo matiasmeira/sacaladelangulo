@@ -24,7 +24,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
@@ -65,6 +64,11 @@ public class AuthService {
             throw new IllegalArgumentException("El email ya está registrado");
         }
 
+        // fechaFinPrueba queda null a propósito: el trial arranca recién cuando un admin
+        // verifica el primer establecimiento del dueño (ver
+        // AdminEstablecimientoVerificacionService.iniciarPruebaAlVerificar), no al
+        // registrarse -- un dueño no debería perder días de prueba mientras junta los datos
+        // de verificación o espera que un admin lo revise.
         Usuario usuario = Usuario.builder()
                 .email(email)
                 .password(passwordEncoder.encode(request.password()))
@@ -75,7 +79,6 @@ public class AuthService {
                 .isActive(true)
                 .emailVerified(false)
                 .telefonoVerificado(false)
-                .fechaFinPrueba(LocalDateTime.now().plusMonths(1))
                 .build();
 
         try {

@@ -2,6 +2,8 @@ package com.matiasmeira.sacaladelangulo.establecimiento.repository;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -93,4 +95,23 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
     @EntityGraph(attributePaths = {"horariosAtencion"})
     @Query("SELECT e FROM Establecimiento e WHERE e.id IN :ids")
     List<Establecimiento> precargarHorarios(@Param("ids") List<Long> ids);
+
+    /**
+     * Listado paginado para el panel de admin de verificación manual
+     * (AdminEstablecimientoController), acotado a un estado puntual (ej. EN_REVISION).
+     * EntityGraph sobre "dueno" para no pagar un SELECT extra por fila al armar
+     * AdminEstablecimientoResponse (nombre + email del dueño), mismo criterio que
+     * precargarFotos/precargarHorarios.
+     */
+    @EntityGraph(attributePaths = {"dueno"})
+    Page<Establecimiento> findByEstadoVerificacion(EstadoVerificacion estadoVerificacion, Pageable pageable);
+
+    /**
+     * Variante de findByEstadoVerificacion sin filtro, para cuando el admin no elige un
+     * estado puntual (ver AdminEstablecimientoController). "findAllBy" es el nombre derivado
+     * que Spring Data reconoce para "todos", necesario para poder seguir sumándole el
+     * EntityGraph (JpaRepository.findAll(Pageable) no admite anotarse).
+     */
+    @EntityGraph(attributePaths = {"dueno"})
+    Page<Establecimiento> findAllBy(Pageable pageable);
 }

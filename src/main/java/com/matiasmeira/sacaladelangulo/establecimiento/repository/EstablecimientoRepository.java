@@ -25,6 +25,16 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
     long countByDuenoIdAndIsActiveTrue(Long duenoId);
 
     /**
+     * Cuenta TODOS los establecimientos del dueño, estén habilitados o no: usado por el
+     * límite de 3 establecimientos por dueño (ver EstablecimientoService#crearEstablecimiento).
+     * A propósito no filtra por isActive -- un establecimiento deshabilitado sigue ocupando
+     * un lugar (sigue teniendo canchas, reservas, turnos fijos y slug reservado), así que
+     * deshabilitarlo no libera cupo. Si el límite mirara solo los activos, deshabilitar y
+     * rehabilitar establecimientos dejaría el tope de 3 en la práctica sin efecto.
+     */
+    long countByDuenoId(Long duenoId);
+
+    /**
      * Pre-filtro por bounding box de latitud/longitud (comparación numérica simple, sí
      * indexable) antes de calcular Haversine exacto: sin esto, la fórmula trigonométrica
      * corre contra todas las filas activas de la tabla en cada búsqueda (endpoint público,

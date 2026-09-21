@@ -57,5 +57,13 @@ public enum AccionAuditoria {
     // ACTUALIZAR_PERMISOS_EMPLEADO/DESACTIVAR_EMPLEADO (acciones de un tercero sobre el
     // establecimiento de otro).
     VERIFICAR_ESTABLECIMIENTO,
-    RECHAZAR_ESTABLECIMIENTO
+    RECHAZAR_ESTABLECIMIENTO,
+
+    // Acciones del propio dueño sobre el ciclo de vida de su establecimiento (ver
+    // EstablecimientoVerificacionService/EstablecimientoEstadoService): a diferencia de
+    // VERIFICAR_ESTABLECIMIENTO/RECHAZAR_ESTABLECIMIENTO de arriba, acá el actor siempre es
+    // el dueño mismo, nunca un tercero.
+    SOLICITAR_VERIFICACION_ESTABLECIMIENTO,
+    HABILITAR_ESTABLECIMIENTO,
+    DESHABILITAR_ESTABLECIMIENTO
 }

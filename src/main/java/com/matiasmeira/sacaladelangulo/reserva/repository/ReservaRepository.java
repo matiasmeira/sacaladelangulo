@@ -237,6 +237,17 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
            "AND r.estado IN ('CONFIRMADA', 'PENDIENTE_SENA') AND r.fechaHoraInicio > :ahora")
     long countReservasFuturasActivas(@Param("estId") Long estId, @Param("ahora") LocalDateTime ahora);
 
+    /**
+     * Cuenta las reservas futuras CONFIRMADA (seña pagada) de un establecimiento, sin
+     * importar si está habilitado o no. Usado por EstablecimientoEstadoService al
+     * deshabilitar: nada se cancela, así que el dueño necesita saber cuántos compromisos
+     * vigentes con jugadores sigue teniendo. A diferencia de countReservasFuturasActivas no
+     * incluye PENDIENTE_SENA: esa seña todavía no se pagó, no es un compromiso firme.
+     */
+    @Query("SELECT COUNT(r) FROM Reserva r WHERE r.cancha.establecimiento.id = :estId " +
+           "AND r.estado = 'CONFIRMADA' AND r.fechaHoraInicio > :ahora")
+    long countReservasFuturasConfirmadas(@Param("estId") Long estId, @Param("ahora") LocalDateTime ahora);
+
     // ===== Reportes agregados (panel del dueño) =====
     // Solo cuentan reservas FINALIZADA: es el único estado que representa dinero/turno
     // efectivamente cerrado (decisión de negocio explícita, ver spec de reportes).

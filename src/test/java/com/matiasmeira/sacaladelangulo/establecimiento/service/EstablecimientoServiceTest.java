@@ -87,7 +87,7 @@ class EstablecimientoServiceTest {
         );
 
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(0L);
+        when(establecimientoRepository.countByDuenoId(dueno.getId())).thenReturn(0L);
         when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         EstablecimientoResponse response = assertDoesNotThrow(
@@ -118,7 +118,7 @@ class EstablecimientoServiceTest {
         );
 
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(0L);
+        when(establecimientoRepository.countByDuenoId(dueno.getId())).thenReturn(0L);
         when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         EstablecimientoResponse response = assertDoesNotThrow(
@@ -153,7 +153,7 @@ class EstablecimientoServiceTest {
         );
 
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(0L);
+        when(establecimientoRepository.countByDuenoId(dueno.getId())).thenReturn(0L);
         when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertDoesNotThrow(() -> establecimientoService.crearEstablecimiento(request, dueno.getEmail()));
@@ -229,7 +229,7 @@ class EstablecimientoServiceTest {
         );
 
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(2L);
+        when(establecimientoRepository.countByDuenoId(dueno.getId())).thenReturn(2L);
         when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertDoesNotThrow(() -> establecimientoService.crearEstablecimiento(request, dueno.getEmail()));
@@ -258,7 +258,7 @@ class EstablecimientoServiceTest {
         );
 
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
-        when(establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId())).thenReturn(3L);
+        when(establecimientoRepository.countByDuenoId(dueno.getId())).thenReturn(3L);
 
         assertThrows(
                 LimiteEstablecimientosException.class,

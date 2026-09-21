@@ -313,7 +313,20 @@ public class ComplejoPublicoService {
     public ComplejoDetalleResponse obtenerDetalle(String slug) {
         Establecimiento establecimiento = establecimientoRepository.findBySlugOperativo(slug)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        return construirDetalle(establecimiento);
+    }
 
+    /**
+     * Arma el mismo ComplejoDetalleResponse que obtenerDetalle(slug), pero a partir de un
+     * Establecimiento que el caller ya resolvió por su cuenta -- SIN pasar por la caché
+     * pública (key = slug) ni por findBySlugOperativo. Existe para
+     * EstablecimientoPrevisualizacionService: la previsualización del dueño/admin tiene que
+     * funcionar en cualquier estado de verificación y con isActive=false, algo que
+     * findBySlugOperativo nunca devuelve, y no debería compartir entrada de caché con la
+     * ficha pública (invalidarla desde ahí desalojaría una vista que ni siquiera está
+     * cacheada). No se toca findBySlugOperativo ni el criterio de la zona pública.
+     */
+    public ComplejoDetalleResponse construirDetalle(Establecimiento establecimiento) {
         List<Cancha> canchas = canchaRepository
                 .findActivasConDeportesYTarifasByEstablecimientoIdIn(List.of(establecimiento.getId()));
 

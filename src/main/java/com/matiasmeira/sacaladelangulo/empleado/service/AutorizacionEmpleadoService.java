@@ -126,4 +126,30 @@ public class AutorizacionEmpleadoService {
         }
         return usuarioAutenticado;
     }
+
+    /**
+     * Resuelve el usuario autenticado y valida que sea el dueño REAL del establecimiento,
+     * sin excepción para ADMIN (a diferencia de validarPropietarioOAdmin). Un ADMIN que sea
+     * dueño de su propio establecimiento SÍ pasa este chequeo -- es suyo, no se está colando
+     * en uno ajeno -- lo que este método impide es que un ADMIN actúe sobre el
+     * establecimiento de OTRO usando su rol como llave maestra. Usado donde dejar pasar a
+     * cualquier ADMIN sería la propia feature que se quiere evitar -- p. ej. solicitar la
+     * verificación manual o cambiar el estado habilitado/deshabilitado de un establecimiento
+     * ajeno.
+     *
+     * <p>No filtra explícitamente Usuario.deletedAt: no hace falta, porque un usuario dado
+     * de baja (o inhabilitado) nunca llega a este punto -- JwtAuthenticationFilter ya
+     * resuelve el UserDetails en cada request vía UsuarioUserDetailsMapper.map, que calcula
+     * enabled = isActive && deletedAt == null, y descarta la autenticación si es false antes
+     * de que el request llegue al controller/service (mismo comportamiento, sin chequeo
+     * propio, que ya tiene validarPropietarioOAdmin).
+     */
+    public Usuario validarPropietario(Establecimiento establecimiento, String email) {
+        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        if (!establecimiento.getDueno().getId().equals(usuarioAutenticado.getId())) {
+            throw new AccessDeniedException("No autorizado en este establecimiento");
+        }
+        return usuarioAutenticado;
+    }
 }

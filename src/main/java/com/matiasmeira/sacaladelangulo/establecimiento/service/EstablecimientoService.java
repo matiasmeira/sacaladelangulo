@@ -46,11 +46,21 @@ public class EstablecimientoService {
     private final SlugGenerator slugGenerator;
     private final ComplejoDetalleCache complejoDetalleCache;
 
+    /**
+     * El límite cuenta TODOS los establecimientos del dueño (countByDuenoId), estén
+     * habilitados o no -- no countByDuenoIdAndIsActiveTrue. El tope de 3 acota cuánto ocupa
+     * un dueño del sistema, no cuánto muestra: un establecimiento deshabilitado sigue
+     * teniendo canchas, reservas, turnos fijos y slug reservado, así que si deshabilitar
+     * liberara cupo, el tope se convierte en infinito rotando cuáles se muestran. Esto
+     * cambia el comportamiento previo para un dueño en el borde del límite: antes de este
+     * cambio, deshabilitar un establecimiento sí liberaba un cupo para crear otro; ahora ya
+     * no.
+     */
     public EstablecimientoResponse crearEstablecimiento(EstablecimientoRequest request, String email) {
         Usuario dueno = buscarUsuarioPorEmail(email);
 
-        if (establecimientoRepository.countByDuenoIdAndIsActiveTrue(dueno.getId()) >= LIMITE_ESTABLECIMIENTOS_ACTIVOS) {
-            throw new LimiteEstablecimientosException("Ya alcanzaste el máximo de 3 establecimientos activos.");
+        if (establecimientoRepository.countByDuenoId(dueno.getId()) >= LIMITE_ESTABLECIMIENTOS_ACTIVOS) {
+            throw new LimiteEstablecimientosException("Ya alcanzaste el máximo de 3 establecimientos.");
         }
 
         boolean requiereSenaForzada = esPlanLimitado(dueno.getPlanSuscripcion());
@@ -224,7 +234,13 @@ public class EstablecimientoService {
                 Set.copyOf(establecimiento.getServicios()),
                 promedioCalificacion,
                 cantidadCalificaciones,
-                comentarioDestacado
+                comentarioDestacado,
+                establecimiento.getEstadoVerificacion(),
+                establecimiento.getCuit(),
+                establecimiento.getRazonSocial(),
+                establecimiento.getTelefonoContacto(),
+                establecimiento.getUrlRedSocial(),
+                establecimiento.getMotivoRechazo()
         );
     }
 

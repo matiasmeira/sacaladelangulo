@@ -19,6 +19,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -89,16 +90,14 @@ class DispositivoCajaServiceTest {
         lenient().when(rateLimiterService.tryConsume(anyString(), anyInt(), anyLong())).thenReturn(true);
 
         dueno = Usuario.builder().id(2L).email("dueno@test.com").rol(Role.OWNER).build();
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
                 .direccion("Calle Test 123")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
     }
 
     @Test

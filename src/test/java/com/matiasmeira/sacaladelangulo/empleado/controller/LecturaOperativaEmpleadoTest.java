@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.Establecimient
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoTurnoFijo;
 import com.matiasmeira.sacaladelangulo.reserva.model.TurnoFijo;
 import com.matiasmeira.sacaladelangulo.reserva.repository.TurnoFijoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,16 +90,14 @@ class LecturaOperativaEmpleadoTest {
                 .telefonoVerificado(true)
                 .build());
 
-        return establecimientoRepository.save(Establecimiento.builder()
+        return establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + sufijo)
                 .direccion("Calle 123")
                 .slug("complejo-lectura-" + sufijo)
                 .latitud(-34.5)
                 .longitud(-58.7)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
     }
 
     private String sembrarEmpleado(Establecimiento local, String nombre, Set<PermisoEmpleado> permisos) {

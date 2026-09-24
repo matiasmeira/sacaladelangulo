@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.buffet.model.EstadoVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,16 +50,14 @@ class VentaRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        return entityManager.persist(Establecimiento.builder()
+        return entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + slug)
                 .direccion("Calle Test 123")
                 .slug(slug)
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
     }
 
     private Venta persistirVenta(EstadoVenta estado, LocalDateTime fechaHora, BigDecimal total) {

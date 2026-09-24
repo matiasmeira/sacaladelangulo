@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepositor
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,16 +61,14 @@ class ProductoBuffetServiceTest {
                 .rol(Role.OWNER)
                 .build();
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
                 .direccion("Calle Test 123")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
     }
 
     @Test
@@ -287,16 +286,14 @@ class ProductoBuffetServiceTest {
     @DisplayName("eliminarProducto_Fallo_ProductoNoPerteneceAlEstablecimiento")
     void eliminarProducto_Fallo_ProductoNoPerteneceAlEstablecimiento() {
         // Arrange
-        Establecimiento otroEstablecimiento = Establecimiento.builder()
+        Establecimiento otroEstablecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(99L)
                 .nombre("Otro")
                 .direccion("Otra calle")
                 .latitud(-1.0)
                 .longitud(-1.0)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
 
         ProductoBuffet producto = ProductoBuffet.builder()
                 .id(1L)

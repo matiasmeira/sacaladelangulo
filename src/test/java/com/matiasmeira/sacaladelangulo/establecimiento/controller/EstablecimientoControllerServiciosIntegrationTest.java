@@ -7,10 +7,10 @@ import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.auth.service.JwtService;
 import com.matiasmeira.sacaladelangulo.auth.service.UsuarioUserDetailsMapper;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRequest;
-import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Servicio;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -163,18 +163,15 @@ class EstablecimientoControllerServiciosIntegrationTest {
     }
 
     private Establecimiento crearEstablecimiento(Usuario dueno, String slug, Set<Servicio> servicios) {
-        return establecimientoRepository.save(Establecimiento.builder()
+        return establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Test")
                 .direccion("Calle Falsa 123")
                 .slug(slug)
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
-                .servicios(new HashSet<>(servicios))
-                .build());
+                .servicios(new HashSet<>(servicios))));
     }
 
     private String tokenPara(Usuario usuario) {

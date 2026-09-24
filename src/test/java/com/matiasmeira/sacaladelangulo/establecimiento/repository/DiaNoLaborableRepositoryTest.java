@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.DiaNoLaborable;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,16 +33,14 @@ class DiaNoLaborableRepositoryTest {
     private DiaNoLaborableRepository diaNoLaborableRepository;
 
     private Establecimiento establecimiento(Usuario dueno, String slug) {
-        return entityManager.persist(Establecimiento.builder()
+        return entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + slug)
                 .direccion("Calle " + slug)
                 .slug(slug)
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
     }
 
     @Test

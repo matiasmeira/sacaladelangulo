@@ -5,8 +5,8 @@ import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
-import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,44 +59,35 @@ class EstablecimientoRepositoryTest {
                 .build());
 
         // Obelisco, CABA
-        Establecimiento cercano = entityManager.persist(Establecimiento.builder()
+        Establecimiento cercano = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Cercano")
                 .direccion("Cerca")
                 .slug("cercano")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(true)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         // Ushuaia, a ~2500km de CABA: bien fuera del radio de búsqueda
-        entityManager.persist(Establecimiento.builder()
+        entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Lejano")
                 .direccion("Lejos")
                 .slug("lejano")
                 .latitud(-54.8019)
                 .longitud(-68.3030)
                 .requiereSena(true)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         // Mismas coordenadas que "cercano" (dentro del radio) pero sin verificar: no debe
         // aparecer en el buscador aunque geográficamente calificaría.
-        entityManager.persist(Establecimiento.builder()
+        entityManager.persist(Establecimientos.establecimientoPendiente(b -> b
                 .nombre("Cercano Sin Verificar")
                 .direccion("Cerca")
                 .slug("cercano-sin-verificar")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(true)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.PENDIENTE)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         entityManager.flush();
 
@@ -120,16 +111,14 @@ class EstablecimientoRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        entityManager.persist(Establecimiento.builder()
+        entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Uno")
                 .direccion("Calle Uno")
                 .slug("complejo-uno")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         entityManager.flush();
 
         assertTrue(establecimientoRepository.existsBySlug("complejo-uno"));
@@ -149,17 +138,14 @@ class EstablecimientoRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        entityManager.persist(Establecimiento.builder()
+        entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
                 .nombre("Complejo Inactivo")
                 .direccion("Calle Dos")
                 .slug("complejo-inactivo")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(false)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         entityManager.flush();
 
         assertTrue(establecimientoRepository.findBySlugOperativo("complejo-inactivo").isEmpty());
@@ -179,17 +165,14 @@ class EstablecimientoRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        entityManager.persist(Establecimiento.builder()
+        entityManager.persist(Establecimientos.establecimientoPendiente(b -> b
                 .nombre("Complejo Pendiente")
                 .direccion("Calle Dos B")
                 .slug("complejo-pendiente")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.PENDIENTE)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         entityManager.flush();
 
         assertTrue(establecimientoRepository.findBySlugOperativo("complejo-pendiente").isEmpty());
@@ -208,17 +191,14 @@ class EstablecimientoRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        Establecimiento operativo = entityManager.persist(Establecimiento.builder()
+        Establecimiento operativo = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Operativo")
                 .direccion("Calle Dos C")
                 .slug("complejo-operativo")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         entityManager.flush();
 
         assertEquals(operativo.getId(), establecimientoRepository.findBySlugOperativo("complejo-operativo")
@@ -238,17 +218,14 @@ class EstablecimientoRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        Establecimiento conPadel = entityManager.persist(Establecimiento.builder()
+        Establecimiento conPadel = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Con Padel")
                 .direccion("Calle Tres")
                 .slug("con-padel")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         entityManager.persist(Cancha.builder()
                 .nombre("Cancha 1")
                 .deportes(java.util.Set.of(Deporte.PADEL))
@@ -257,28 +234,22 @@ class EstablecimientoRepositoryTest {
                 .montoSena(java.math.BigDecimal.valueOf(200))
                 .establecimiento(conPadel)
                 .build());
-        entityManager.persist(Establecimiento.builder()
+        entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Sin Padel")
                 .direccion("Calle Cuatro")
                 .slug("sin-padel")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build());
-        entityManager.persist(Establecimiento.builder()
+                .dueno(dueno)));
+        entityManager.persist(Establecimientos.establecimientoEnRevision(b -> b
                 .nombre("Sin Verificar")
                 .direccion("Calle Cinco")
                 .slug("sin-verificar")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.EN_REVISION)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         entityManager.flush();
 
         List<Establecimiento> resultado = establecimientoRepository
@@ -305,17 +276,15 @@ class EstablecimientoRepositoryTest {
                 .telefonoVerificado(false)
                 .build());
         for (int i = 0; i < 3; i++) {
-            entityManager.persist(Establecimiento.builder()
-                    .nombre("Complejo Cap " + i)
-                    .direccion("Calle " + i)
-                    .slug("complejo-cap-" + i)
+            int indice = i;
+            entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
+                    .nombre("Complejo Cap " + indice)
+                    .direccion("Calle " + indice)
+                    .slug("complejo-cap-" + indice)
                     .latitud(-34.6)
                     .longitud(-58.4)
                     .requiereSena(false)
-                    .isActive(true)
-                    .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                    .dueno(dueno)
-                    .build());
+                    .dueno(dueno)));
         }
         entityManager.flush();
 

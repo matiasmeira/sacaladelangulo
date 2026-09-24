@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.PoliticaCancelacionRe
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,13 +58,12 @@ class PoliticaCancelacionServiceTest {
                 .rol(Role.OWNER)
                 .build();
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Complejo Test")
                 .horasCancelacionAntesPartido(24)
                 .minutosGraciaCancelacion(30)
-                .dueno(dueno)
-                .build();
+                .dueno(dueno));
     }
 
     @Test

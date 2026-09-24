@@ -9,6 +9,7 @@ import com.matiasmeira.sacaladelangulo.core.imagekit.ImageKitService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -99,17 +100,15 @@ class FotoEstablecimientoServiceFronterasTransaccionalesTest {
     }
 
     private Establecimiento seedEstablecimiento(Usuario dueno, String slug, List<FotoEstablecimiento> fotos) {
-        return establecimientoRepository.save(Establecimiento.builder()
+        return establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + slug)
                 .direccion("Calle 1")
                 .slug(slug)
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(false)
-                .isActive(true)
                 .dueno(dueno)
-                .fotos(new ArrayList<>(fotos))
-                .build());
+                .fotos(new ArrayList<>(fotos))));
     }
 
     @Test

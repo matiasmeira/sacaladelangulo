@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -136,10 +137,8 @@ class AdminEstablecimientoVerificacionServiceTest {
     void verificar_EstablecimientoYaVerificado_RechazaLaTransicionYNoTocaNada() {
         Usuario dueno = Usuario.builder().id(1L).email("dueno@test.com").rol(Role.OWNER)
                 .planSuscripcion(PlanSuscripcion.TRIAL).build();
-        Establecimiento establecimiento = Establecimiento.builder()
-                .id(13L).nombre("Complejo").dueno(dueno)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .build();
+        Establecimiento establecimiento = Establecimientos.establecimientoOperativo(b -> b
+                .id(13L).nombre("Complejo").dueno(dueno));
         when(establecimientoRepository.findById(13L)).thenReturn(Optional.of(establecimiento));
 
         assertThatThrownBy(() -> service.verificar(13L, EMAIL_ADMIN))
@@ -155,11 +154,9 @@ class AdminEstablecimientoVerificacionServiceTest {
     @Test
     @DisplayName("verificar_EstablecimientoPendiente_RechazaLaTransicion")
     void verificar_EstablecimientoPendiente_RechazaLaTransicion() {
-        Establecimiento establecimiento = Establecimiento.builder()
+        Establecimiento establecimiento = Establecimientos.establecimientoPendiente(b -> b
                 .id(14L).nombre("Complejo")
-                .dueno(Usuario.builder().id(1L).build())
-                .estadoVerificacion(EstadoVerificacion.PENDIENTE)
-                .build();
+                .dueno(Usuario.builder().id(1L).build()));
         when(establecimientoRepository.findById(14L)).thenReturn(Optional.of(establecimiento));
 
         assertThatThrownBy(() -> service.verificar(14L, EMAIL_ADMIN))
@@ -201,11 +198,9 @@ class AdminEstablecimientoVerificacionServiceTest {
     @Test
     @DisplayName("rechazar_EstablecimientoPendiente_RechazaLaTransicion")
     void rechazar_EstablecimientoPendiente_RechazaLaTransicion() {
-        Establecimiento establecimiento = Establecimiento.builder()
+        Establecimiento establecimiento = Establecimientos.establecimientoPendiente(b -> b
                 .id(16L).nombre("Complejo")
-                .dueno(Usuario.builder().id(1L).build())
-                .estadoVerificacion(EstadoVerificacion.PENDIENTE)
-                .build();
+                .dueno(Usuario.builder().id(1L).build()));
         when(establecimientoRepository.findById(16L)).thenReturn(Optional.of(establecimiento));
 
         assertThatThrownBy(() -> service.rechazar(16L, "motivo", EMAIL_ADMIN))
@@ -247,11 +242,9 @@ class AdminEstablecimientoVerificacionServiceTest {
     }
 
     private Establecimiento establecimientoEnRevision(Long id, Usuario dueno) {
-        return Establecimiento.builder()
+        return Establecimientos.establecimientoEnRevision(b -> b
                 .id(id)
                 .nombre("Complejo " + id)
-                .dueno(dueno)
-                .estadoVerificacion(EstadoVerificacion.EN_REVISION)
-                .build();
+                .dueno(dueno));
     }
 }

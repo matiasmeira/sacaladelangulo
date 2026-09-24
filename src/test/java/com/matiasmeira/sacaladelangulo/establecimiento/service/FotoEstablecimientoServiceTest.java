@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -84,12 +85,11 @@ class FotoEstablecimientoServiceTest {
                 transactionManager);
 
         dueno = Usuario.builder().id(1L).email(EMAIL_DUENO).rol(Role.OWNER).build();
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(ESTABLECIMIENTO_ID)
                 .nombre("Complejo Test")
                 .dueno(dueno)
-                .fotos(new ArrayList<>())
-                .build();
+                .fotos(new ArrayList<>()));
 
         when(establecimientoRepository.findById(ESTABLECIMIENTO_ID)).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(any(), anyString())).thenReturn(dueno);

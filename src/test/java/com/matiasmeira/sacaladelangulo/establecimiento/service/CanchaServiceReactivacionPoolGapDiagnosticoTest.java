@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaReposito
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -77,8 +78,8 @@ class CanchaServiceReactivacionPoolGapDiagnosticoTest {
     @BeforeEach
     void setUp() {
         dueno = Usuario.builder().id(2L).email("dueno@test.com").rol(Role.OWNER).planSuscripcion(PlanSuscripcion.PREMIUM).build();
-        establecimiento = Establecimiento.builder().id(10L).nombre("Complejo Test").direccion("Calle 123")
-                .latitud(-34.6).longitud(-58.4).dueno(dueno).requiereSena(true).isActive(true).build();
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b.id(10L).nombre("Complejo Test").direccion("Calle 123")
+                .latitud(-34.6).longitud(-58.4).dueno(dueno).requiereSena(true));
 
         lenient().when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         lenient().when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);

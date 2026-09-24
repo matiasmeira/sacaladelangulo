@@ -15,6 +15,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaReposito
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -81,16 +82,14 @@ class CanchaServiceTest {
                 .planSuscripcion(PlanSuscripcion.PREMIUM)
                 .build();
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
                 .direccion("Calle Test 123")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
 
         cancha = Cancha.builder()
                 .id(100L)
@@ -133,16 +132,14 @@ class CanchaServiceTest {
     @Test
     @DisplayName("desactivarCancha_Fallo_CanchaNoPerteneceAlEstablecimiento")
     void desactivarCancha_Fallo_CanchaNoPerteneceAlEstablecimiento() {
-        Establecimiento otroEstablecimiento = Establecimiento.builder()
+        Establecimiento otroEstablecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(99L)
                 .nombre("Otro")
                 .direccion("Otra calle")
                 .latitud(-1.0)
                 .longitud(-1.0)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
 
         Cancha canchaDeOtroEstablecimiento = Cancha.builder()
                 .id(200L)
@@ -274,16 +271,14 @@ class CanchaServiceTest {
     @Test
     @DisplayName("crearCancha_Fallo_CanchaFisicaPerteneceAOtroEstablecimiento")
     void crearCancha_Fallo_CanchaFisicaPerteneceAOtroEstablecimiento() {
-        Establecimiento otroEstablecimiento = Establecimiento.builder()
+        Establecimiento otroEstablecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(99L)
                 .nombre("Otro")
                 .direccion("Otra calle")
                 .latitud(-1.0)
                 .longitud(-1.0)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
         Cancha fisicaDeOtroEstablecimiento = Cancha.builder()
                 .id(201L).nombre("Ajena").establecimiento(otroEstablecimiento).isActive(true).build();
 

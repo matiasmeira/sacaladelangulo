@@ -9,6 +9,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.support.AbstractPostgresIntegrationTest;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -80,19 +81,17 @@ class FotoEstablecimientoReordenIntegrationTest extends AbstractPostgresIntegrat
                 .unsubscribeToken("tok-" + System.nanoTime())
                 .build());
 
-        establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Club Fotos")
                 .direccion("Calle Falsa 789")
                 .slug("club-fotos")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
                 .dueno(dueno)
                 .fotos(new ArrayList<>(List.of(
                         FotoEstablecimiento.builder().url(URL_A).fileId(FILE_ID_A).build(),
-                        FotoEstablecimiento.builder().url(URL_B).fileId(FILE_ID_B).build())))
-                .build());
+                        FotoEstablecimiento.builder().url(URL_B).fileId(FILE_ID_B).build())))));
     }
 
     @Test

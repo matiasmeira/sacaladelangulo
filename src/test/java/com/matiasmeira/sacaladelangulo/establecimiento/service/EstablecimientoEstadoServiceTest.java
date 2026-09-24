@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,13 +59,12 @@ class EstablecimientoEstadoServiceTest {
     }
 
     private Establecimiento establecimiento(boolean activo, EstadoVerificacion estado) {
-        return Establecimiento.builder()
+        return Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Complejo Test")
                 .isActive(activo)
                 .estadoVerificacion(estado)
-                .dueno(dueno())
-                .build();
+                .dueno(dueno()));
     }
 
     @Test

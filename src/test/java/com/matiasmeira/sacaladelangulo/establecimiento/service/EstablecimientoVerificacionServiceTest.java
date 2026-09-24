@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.SolicitarVerificacion
 import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,13 +55,12 @@ class EstablecimientoVerificacionServiceTest {
     }
 
     private Establecimiento establecimiento(EstadoVerificacion estado) {
-        return Establecimiento.builder()
+        return Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Complejo Test")
                 .estadoVerificacion(estado)
                 .motivoRechazo(estado == EstadoVerificacion.RECHAZADO ? "Faltan fotos" : null)
-                .dueno(dueno())
-                .build();
+                .dueno(dueno()));
     }
 
     private SolicitarVerificacionRequest requestValido() {

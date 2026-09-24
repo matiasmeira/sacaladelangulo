@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.Establecimient
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.support.AbstractPostgresIntegrationTest;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -75,16 +76,14 @@ class ReservaExclusionConstraintIntegrationTest extends AbstractPostgresIntegrat
                 .unsubscribeToken("tok-dueno-exclusion")
                 .build());
 
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Club Exclusión")
                 .direccion("Calle Falsa 456")
                 .slug("club-exclusion")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         cancha = canchaRepository.save(Cancha.builder()
                 .nombre("Cancha Única")

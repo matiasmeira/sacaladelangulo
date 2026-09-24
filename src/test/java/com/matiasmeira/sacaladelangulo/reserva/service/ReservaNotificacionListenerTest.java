@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,11 +65,10 @@ class ReservaNotificacionListenerTest {
                 .rol(Role.OWNER)
                 .build();
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
-                .dueno(dueno)
-                .build();
+                .dueno(dueno));
 
         cancha = Cancha.builder()
                 .id(100L)
@@ -353,11 +353,10 @@ class ReservaNotificacionListenerTest {
                 .rol(Role.OWNER)
                 .deletedAt(LocalDateTime.now())
                 .build();
-        Establecimiento establecimientoConDuenoEliminado = Establecimiento.builder()
+        Establecimiento establecimientoConDuenoEliminado = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
-                .dueno(duenoEliminado)
-                .build();
+                .dueno(duenoEliminado));
         Cancha canchaConDuenoEliminado = Cancha.builder()
                 .id(100L)
                 .nombre("Cancha A")
@@ -403,11 +402,10 @@ class ReservaNotificacionListenerTest {
                 .rol(Role.OWNER)
                 .deletedAt(LocalDateTime.now())
                 .build();
-        Establecimiento establecimientoConDuenoEliminado = Establecimiento.builder()
+        Establecimiento establecimientoConDuenoEliminado = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
-                .dueno(duenoEliminado)
-                .build();
+                .dueno(duenoEliminado));
         Cancha canchaConDuenoEliminado = Cancha.builder()
                 .id(100L)
                 .nombre("Cancha A")

@@ -15,6 +15,7 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -100,17 +101,15 @@ class ReservaControllerEstablecimientoNoVerificadoIntegrationTest {
 
     /** Horario de atención los 7 días de la semana, para no depender de qué día es "hoy". */
     private Establecimiento crearEstablecimientoConCancha(String slug, Usuario dueno, EstadoVerificacion estadoVerificacion) {
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + slug)
                 .direccion("Calle Test 123")
                 .slug(slug)
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(true)
-                .isActive(true)
                 .estadoVerificacion(estadoVerificacion)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         Establecimiento establecimientoFinal = establecimiento;
         List<HorarioAtencion> horarios = Arrays.stream(DayOfWeek.values())

@@ -31,6 +31,7 @@ import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -163,16 +164,14 @@ class ReservaServiceTest {
                 .telefonoVerificado(false)
                 .build();
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
                 .direccion("Calle Test 123")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
 
         establecimiento.setHorariosAtencion(List.of(
                 HorarioAtencion.builder()
@@ -987,16 +986,14 @@ class ReservaServiceTest {
                 .senaPagada(BigDecimal.valueOf(500))
                 .build();
 
-        Establecimiento otroEstablecimiento = Establecimiento.builder()
+        Establecimiento otroEstablecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(20L)
                 .nombre("Otro Establecimiento")
                 .direccion("Otra calle")
                 .latitud(-1.0)
                 .longitud(-1.0)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
 
         Cancha canchaDeOtroEstablecimiento = Cancha.builder()
                 .id(301L)

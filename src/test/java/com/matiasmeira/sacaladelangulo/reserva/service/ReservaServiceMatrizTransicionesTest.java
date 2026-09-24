@@ -22,6 +22,7 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -95,8 +96,8 @@ class ReservaServiceMatrizTransicionesTest {
                 .rol(Role.EMPLOYEE).isActive(true).emailVerified(true).telefonoVerificado(false)
                 .permisos(Set.of()).build();
 
-        establecimiento = Establecimiento.builder().id(10L).nombre("Club").direccion("Calle 1")
-                .latitud(0.0).longitud(0.0).dueno(dueno).requiereSena(false).isActive(true).build();
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b.id(10L).nombre("Club").direccion("Calle 1")
+                .latitud(0.0).longitud(0.0).dueno(dueno).requiereSena(false));
 
         cancha = Cancha.builder().id(100L).nombre("Cancha 1").establecimiento(establecimiento)
                 .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO).isActive(true).build();

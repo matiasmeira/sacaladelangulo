@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoTurnoFijo;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.TurnoFijo;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,16 +63,14 @@ class ReservaRepositoryTest {
                 .telefonoVerificado(false)
                 .build());
 
-        Establecimiento establecimiento = entityManager.persist(Establecimiento.builder()
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Politica")
                 .direccion("Calle Politica 123")
                 .slug("complejo-politica")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         Cancha cancha = entityManager.persist(Cancha.builder()
                 .nombre("Cancha 1")
@@ -128,16 +127,14 @@ class ReservaRepositoryTest {
                 .telefonoVerificado(false)
                 .build());
 
-        Establecimiento establecimiento = entityManager.persist(Establecimiento.builder()
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Turno Fijo")
                 .direccion("Calle Fija 456")
                 .slug("complejo-turno-fijo")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         Cancha cancha = entityManager.persist(Cancha.builder()
                 .nombre("Cancha 1")

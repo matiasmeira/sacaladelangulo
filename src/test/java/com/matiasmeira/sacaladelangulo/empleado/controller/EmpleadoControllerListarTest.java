@@ -8,6 +8,7 @@ import com.matiasmeira.sacaladelangulo.auth.service.JwtService;
 import com.matiasmeira.sacaladelangulo.auth.service.UsuarioUserDetailsMapper;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -82,15 +83,14 @@ class EmpleadoControllerListarTest {
                 .telefonoVerificado(true)
                 .build());
 
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Cancha Test")
                 .direccion("Calle Falsa 123")
                 .slug("cancha-test-empleados")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         Usuario empleado = usuarioRepository.save(Usuario.builder()
                 .email("empleado@empleado-listar-test.com")

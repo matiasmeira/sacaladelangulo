@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -84,16 +85,14 @@ class ModoCajaFlujoCompletoTest {
                 .telefonoVerificado(true)
                 .build());
 
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Modo Caja")
                 .direccion("Calle Falsa 123")
                 .slug("complejo-modo-caja-" + sufijo)
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         // Alta de empleado por HTTP y no llamando al service: es el camino real y deja
         // que la transacción del request abarque el insert del usuario y el de su
@@ -167,16 +166,14 @@ class ModoCajaFlujoCompletoTest {
                 .emailVerified(true)
                 .telefonoVerificado(true)
                 .build());
-        Establecimiento ajeno = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento ajeno = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Ajeno")
                 .direccion("Otra Calle 456")
                 .slug("complejo-ajeno-modo-caja")
                 .latitud(-34.7)
                 .longitud(-58.5)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(otroDueno)
-                .build());
+                .dueno(otroDueno)));
 
         MvcResult emparejamiento = mockMvc.perform(
                         post("/api/v1/establecimientos/" + ajeno.getId() + "/caja/dispositivos/activar-local")

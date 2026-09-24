@@ -41,8 +41,8 @@ public class AdminEstablecimientoVerificacionService {
     @Transactional(readOnly = true)
     public Page<AdminEstablecimientoResponse> listar(EstadoVerificacion filtro, Pageable pageable) {
         Page<Establecimiento> pagina = filtro == null
-                ? establecimientoRepository.findAllBy(pageable)
-                : establecimientoRepository.findByEstadoVerificacion(filtro, pageable);
+                ? establecimientoRepository.findAllByDeletedAtIsNull(pageable)
+                : establecimientoRepository.findByEstadoVerificacionAndDeletedAtIsNull(filtro, pageable);
         return pagina.map(this::mapResponse);
     }
 
@@ -124,9 +124,19 @@ public class AdminEstablecimientoVerificacionService {
         }
     }
 
+    /**
+     * Un establecimiento eliminado tampoco se puede verificar/rechazar puntualmente, aunque
+     * alguien tenga su id a mano (link viejo, tarea pendiente desde antes de la baja): igual
+     * que no aparece en ninguna cola, tampoco debería poder resolverse su verificación --
+     * ambas cosas son "no está más, a los efectos de este flujo".
+     */
     private Establecimiento buscarPorId(Long id) {
-        return establecimientoRepository.findById(id)
+        Establecimiento establecimiento = establecimientoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        if (establecimiento.getDeletedAt() != null) {
+            throw new EntityNotFoundException("Establecimiento no encontrado");
+        }
+        return establecimiento;
     }
 
     private Usuario buscarPorEmail(String email) {

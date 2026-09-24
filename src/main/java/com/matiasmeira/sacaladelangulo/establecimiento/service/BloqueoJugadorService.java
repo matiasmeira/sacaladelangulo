@@ -31,11 +31,13 @@ public class BloqueoJugadorService {
     private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
 
     @Transactional
     public BloqueoJugadorResponse crearBloqueo(Long establecimientoId, BloqueoJugadorRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         Usuario jugador = usuarioRepository.findById(request.jugadorId())
                 .orElseThrow(() -> new EntityNotFoundException("Jugador no encontrado"));

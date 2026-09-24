@@ -248,6 +248,18 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
            "AND r.estado = 'CONFIRMADA' AND r.fechaHoraInicio > :ahora")
     long countReservasFuturasConfirmadas(@Param("estId") Long estId, @Param("ahora") LocalDateTime ahora);
 
+    /**
+     * Cantidad y fecha más lejana de reservas futuras CONFIRMADA de un establecimiento, en
+     * una sola consulta: usado por EstablecimientoEliminacionService para armar el mensaje de
+     * error de la precondición "sin reservas futuras confirmadas" (cuántas, hasta cuándo) sin
+     * pagar dos round-trips. Mismo criterio de estado que countReservasFuturasConfirmadas.
+     * Un COUNT/MAX sin GROUP BY siempre devuelve exactamente una fila (con MAX en null si el
+     * COUNT da 0), igual que historicoAgregadoDeJugador más abajo.
+     */
+    @Query("SELECT COUNT(r), MAX(r.fechaHoraInicio) FROM Reserva r WHERE r.cancha.establecimiento.id = :estId " +
+           "AND r.estado = 'CONFIRMADA' AND r.fechaHoraInicio > :ahora")
+    List<Object[]> resumenReservasFuturasConfirmadas(@Param("estId") Long estId, @Param("ahora") LocalDateTime ahora);
+
     // ===== Reportes agregados (panel del dueño) =====
     // Solo cuentan reservas FINALIZADA: es el único estado que representa dinero/turno
     // efectivamente cerrado (decisión de negocio explícita, ver spec de reportes).

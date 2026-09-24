@@ -213,13 +213,13 @@ class AdminEstablecimientoVerificacionServiceTest {
     @DisplayName("listar_ConFiltro_UsaFindByEstadoVerificacion")
     void listar_ConFiltro_UsaFindByEstadoVerificacion() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(establecimientoRepository.findByEstadoVerificacion(EstadoVerificacion.EN_REVISION, pageable))
+        when(establecimientoRepository.findByEstadoVerificacionAndDeletedAtIsNull(EstadoVerificacion.EN_REVISION, pageable))
                 .thenReturn(new PageImpl<>(List.of()));
 
         service.listar(EstadoVerificacion.EN_REVISION, pageable);
 
-        verify(establecimientoRepository).findByEstadoVerificacion(EstadoVerificacion.EN_REVISION, pageable);
-        verify(establecimientoRepository, never()).findAllBy(any());
+        verify(establecimientoRepository).findByEstadoVerificacionAndDeletedAtIsNull(EstadoVerificacion.EN_REVISION, pageable);
+        verify(establecimientoRepository, never()).findAllByDeletedAtIsNull(any());
     }
 
     @Test
@@ -228,7 +228,7 @@ class AdminEstablecimientoVerificacionServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
         Usuario dueno = Usuario.builder().id(1L).nombre("Carlos Dueño").email("dueno@test.com").build();
         Establecimiento establecimiento = establecimientoEnRevision(1L, dueno);
-        when(establecimientoRepository.findAllBy(pageable)).thenReturn(new PageImpl<>(List.of(establecimiento)));
+        when(establecimientoRepository.findAllByDeletedAtIsNull(pageable)).thenReturn(new PageImpl<>(List.of(establecimiento)));
 
         Page<AdminEstablecimientoResponse> resultado = service.listar(null, pageable);
 
@@ -238,7 +238,21 @@ class AdminEstablecimientoVerificacionServiceTest {
         assertThat(fila.duenoNombre()).isEqualTo("Carlos Dueño");
         assertThat(fila.duenoEmail()).isEqualTo("dueno@test.com");
         assertThat(fila.estadoVerificacion()).isEqualTo(EstadoVerificacion.EN_REVISION);
-        verify(establecimientoRepository, never()).findByEstadoVerificacion(any(), any());
+        verify(establecimientoRepository, never()).findByEstadoVerificacionAndDeletedAtIsNull(any(), any());
+    }
+
+    @Test
+    @DisplayName("buscarPorId_EstablecimientoEliminado_VerificarLanzaEntityNotFound")
+    void buscarPorId_EstablecimientoEliminado_VerificarLanzaEntityNotFound() {
+        Establecimiento eliminado = Establecimientos.establecimientoEliminado(b -> b
+                .id(21L).nombre("Complejo Eliminado")
+                .estadoVerificacion(EstadoVerificacion.EN_REVISION)
+                .dueno(Usuario.builder().id(1L).build()));
+        when(establecimientoRepository.findById(21L)).thenReturn(Optional.of(eliminado));
+
+        assertThatThrownBy(() -> service.verificar(21L, EMAIL_ADMIN))
+                .isInstanceOf(com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class);
+        verify(establecimientoRepository, never()).save(any());
     }
 
     private Establecimiento establecimientoEnRevision(Long id, Usuario dueno) {

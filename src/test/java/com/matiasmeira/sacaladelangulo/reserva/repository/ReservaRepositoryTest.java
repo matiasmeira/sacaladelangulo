@@ -95,6 +95,96 @@ class ReservaRepositoryTest {
         assertEquals(2, resultado);
     }
 
+    /**
+     * Usada por EstablecimientoEliminacionService para la precondición "sin reservas futuras
+     * confirmadas": tiene que contar sólo CONFIRMADA futura y devolver, en la misma fila, la
+     * fecha más lejana -- excluyendo canceladas (futuras o no) y confirmadas ya pasadas, que
+     * no bloquean la eliminación.
+     */
+    @Test
+    @DisplayName("resumenReservasFuturasConfirmadas_CuentaSoloConfirmadaFutura_ExcluyeCanceladasYPasadas")
+    void resumenReservasFuturasConfirmadas_CuentaSoloConfirmadaFutura_ExcluyeCanceladasYPasadas() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-elim-resumen@test.com")
+                .password("hash")
+                .nombre("Dueno")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Complejo Resumen")
+                .direccion("Calle Resumen 123")
+                .slug("complejo-resumen")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+
+        Cancha cancha = entityManager.persist(Cancha.builder()
+                .nombre("Cancha 1")
+                .deportes(Set.of(Deporte.PADEL))
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(1000))
+                .montoSena(BigDecimal.valueOf(200))
+                .establecimiento(establecimiento)
+                .build());
+
+        LocalDateTime ahora = LocalDateTime.now();
+        LocalDateTime masLejana = ahora.plusDays(10);
+
+        entityManager.persist(reservaDe(cancha, EstadoReserva.CONFIRMADA, ahora.plusDays(2)));
+        entityManager.persist(reservaDe(cancha, EstadoReserva.CONFIRMADA, masLejana));
+        // No deben contar: cancelada futura, confirmada ya pasada, pendiente de seña futura.
+        entityManager.persist(reservaDe(cancha, EstadoReserva.CANCELADA, ahora.plusDays(5)));
+        entityManager.persist(reservaDe(cancha, EstadoReserva.CONFIRMADA, ahora.minusDays(1)));
+        entityManager.persist(reservaDe(cancha, EstadoReserva.PENDIENTE_SENA, ahora.plusDays(1)));
+        entityManager.flush();
+
+        List<Object[]> resultado = reservaRepository.resumenReservasFuturasConfirmadas(establecimiento.getId(), ahora);
+
+        assertEquals(1, resultado.size());
+        assertEquals(2L, resultado.get(0)[0]);
+        // Truncado a segundos: H2 redondea los nanosegundos del TIMESTAMP al releer, y la
+        // precisión de sub-segundo no es lo que este test verifica.
+        assertEquals(masLejana.truncatedTo(java.time.temporal.ChronoUnit.SECONDS),
+                ((LocalDateTime) resultado.get(0)[1]).truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+    }
+
+    @Test
+    @DisplayName("resumenReservasFuturasConfirmadas_SinReservas_DevuelveCeroYFechaNula")
+    void resumenReservasFuturasConfirmadas_SinReservas_DevuelveCeroYFechaNula() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-elim-resumen-vacio@test.com")
+                .password("hash")
+                .nombre("Dueno")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Complejo Vacio")
+                .direccion("Calle Vacio 123")
+                .slug("complejo-resumen-vacio")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+        entityManager.flush();
+
+        List<Object[]> resultado = reservaRepository.resumenReservasFuturasConfirmadas(establecimiento.getId(), LocalDateTime.now());
+
+        assertEquals(1, resultado.size());
+        assertEquals(0L, resultado.get(0)[0]);
+        org.junit.jupiter.api.Assertions.assertNull(resultado.get(0)[1]);
+    }
+
     private Reserva reservaDe(Cancha cancha, EstadoReserva estado, LocalDateTime fechaHoraInicio) {
         return Reserva.builder()
                 .cancha(cancha)

@@ -47,19 +47,25 @@ public class EstablecimientoService {
     private final ComplejoDetalleCache complejoDetalleCache;
 
     /**
-     * El límite cuenta TODOS los establecimientos del dueño (countByDuenoId), estén
-     * habilitados o no -- no countByDuenoIdAndIsActiveTrue. El tope de 3 acota cuánto ocupa
-     * un dueño del sistema, no cuánto muestra: un establecimiento deshabilitado sigue
-     * teniendo canchas, reservas, turnos fijos y slug reservado, así que si deshabilitar
-     * liberara cupo, el tope se convierte en infinito rotando cuáles se muestran. Esto
-     * cambia el comportamiento previo para un dueño en el borde del límite: antes de este
-     * cambio, deshabilitar un establecimiento sí liberaba un cupo para crear otro; ahora ya
-     * no.
+     * El límite cuenta los establecimientos del dueño que NO están eliminados
+     * (countByDuenoIdAndDeletedAtIsNull), estén habilitados o no -- no
+     * countByDuenoIdAndIsActiveTrue. El tope de 3 acota cuánto ocupa un dueño del sistema, no
+     * cuánto muestra: un establecimiento deshabilitado sigue teniendo canchas, reservas,
+     * turnos fijos y slug reservado, así que si deshabilitar liberara cupo, el tope se
+     * convierte en infinito rotando cuáles se muestran. Deshabilitar (isActive=false) NO
+     * libera cupo por eso mismo.
+     *
+     * <p>Eliminar (deletedAt != null, ver EstablecimientoEliminacionService) SÍ libera cupo:
+     * a diferencia de deshabilitar, es irreversible (sin endpoint de restauración) y el
+     * slug queda liberado para un complejo nuevo -- el dueño efectivamente dejó de ocupar
+     * ese lugar. Antes de que existiera deletedAt, un dueño que llegaba al tope de 3 no
+     * tenía ninguna salida (ver el comentario que decía esto en versiones anteriores de este
+     * javadoc); ahora sí la tiene, eliminando alguno de los que ya no usa.
      */
     public EstablecimientoResponse crearEstablecimiento(EstablecimientoRequest request, String email) {
         Usuario dueno = buscarUsuarioPorEmail(email);
 
-        if (establecimientoRepository.countByDuenoId(dueno.getId()) >= LIMITE_ESTABLECIMIENTOS_ACTIVOS) {
+        if (establecimientoRepository.countByDuenoIdAndDeletedAtIsNull(dueno.getId()) >= LIMITE_ESTABLECIMIENTOS_ACTIVOS) {
             throw new LimiteEstablecimientosException("Ya alcanzaste el máximo de 3 establecimientos.");
         }
 

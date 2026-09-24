@@ -18,6 +18,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.TestPropertySource;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -30,13 +31,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * tres queries públicas de EstablecimientoRepository (SQL/JPQL, deciden qué aparece en el
  * buscador y en el detalle por slug -- findActivosPorDeporte, findCercanosYPorDeporte,
  * findBySlugOperativo). Con una sola condición (isActive) la duplicación era tolerable; con
- * dos (isActive + estadoVerificacion) ya no lo es: nada impide que alguien sume una condición
- * nueva al guard sin acordarse de las queries (o al revés), y el síntoma sería el peor
- * posible -- un establecimiento que aparece en el buscador pero devuelve 404 al entrar, o
- * viceversa. Este test no prueba ninguna de las dos capas en particular: prueba que están de
- * acuerdo, para las 4 combinaciones de EstadoVerificacion x 2 de isActive. Si el día de mañana
- * se agrega un quinto estado de verificación, @MethodSource lo cubre solo porque itera
- * EstadoVerificacion.values() en vez de casos escritos a mano.
+ * tres (isActive + estadoVerificacion + deletedAt) ya no lo es: nada impide que alguien sume
+ * una condición nueva al guard sin acordarse de las queries (o al revés), y el síntoma sería
+ * el peor posible -- un establecimiento que aparece en el buscador pero devuelve 404 al
+ * entrar, o viceversa. Este test no prueba ninguna de las dos capas en particular: prueba que
+ * están de acuerdo, para las 4 (EstadoVerificacion) x 2 (isActive) x 2 (deletedAt) = 16
+ * combinaciones. Si el día de mañana se agrega un quinto estado de verificación,
+ * @MethodSource lo cubre solo porque itera EstadoVerificacion.values() en vez de casos
+ * escritos a mano.
  */
 @DataJpaTest
 @TestPropertySource(properties = {
@@ -57,15 +59,16 @@ class EstablecimientoOperativoCoherenciaTest {
     private static final AtomicInteger SECUENCIA = new AtomicInteger();
 
     /**
-     * Cartesiano completo EstadoVerificacion x {true, false} para isActive, generado a partir
-     * del enum (no una lista de casos a mano): un valor nuevo de EstadoVerificacion queda
-     * cubierto sin tocar este método.
+     * Cartesiano completo EstadoVerificacion x {true, false} para isActive x {true, false}
+     * para "está eliminado", generado a partir del enum (no una lista de casos a mano): un
+     * valor nuevo de EstadoVerificacion queda cubierto sin tocar este método.
      */
     static Stream<Arguments> combinaciones() {
         return Stream.of(EstadoVerificacion.values())
-                .flatMap(estado -> Stream.of(
-                        Arguments.of(estado, true),
-                        Arguments.of(estado, false)));
+                .flatMap(estado -> Stream.of(true, false)
+                        .flatMap(activo -> Stream.of(
+                                Arguments.of(estado, activo, true),
+                                Arguments.of(estado, activo, false))));
     }
 
     private boolean elGuardLoDejaPasar(Establecimiento establecimiento) {
@@ -77,10 +80,10 @@ class EstablecimientoOperativoCoherenciaTest {
         }
     }
 
-    @ParameterizedTest(name = "isActive={1}, estadoVerificacion={0}: buscador, detalle por slug y geo-búsqueda coinciden con el guard")
+    @ParameterizedTest(name = "isActive={1}, estadoVerificacion={0}, eliminado={2}: buscador, detalle por slug y geo-búsqueda coinciden con el guard")
     @MethodSource("combinaciones")
     @DisplayName("ElGuardYLasTresQueriesPublicasCoincidenParaTodaCombinacion")
-    void elGuardYLasTresQueriesPublicasCoincidenParaTodaCombinacion(EstadoVerificacion estadoVerificacion, boolean isActive) {
+    void elGuardYLasTresQueriesPublicasCoincidenParaTodaCombinacion(EstadoVerificacion estadoVerificacion, boolean isActive, boolean eliminado) {
         int n = SECUENCIA.incrementAndGet();
 
         Usuario dueno = entityManager.persist(Usuario.builder()
@@ -107,6 +110,7 @@ class EstablecimientoOperativoCoherenciaTest {
                 .requiereSena(false)
                 .isActive(isActive)
                 .estadoVerificacion(estadoVerificacion)
+                .deletedAt(eliminado ? LocalDateTime.now() : null)
                 .dueno(dueno)
                 .build());
         entityManager.flush();
@@ -124,12 +128,10 @@ class EstablecimientoOperativoCoherenciaTest {
 
         boolean apareceEnDetallePorSlug = establecimientoRepository.findBySlugOperativo(slug).isPresent();
 
-        assertEquals(esperado, apareceEnBuscadorSinUbicacion,
-                "findActivosPorDeporte divergió del guard para isActive=" + isActive + ", estadoVerificacion=" + estadoVerificacion);
-        assertEquals(esperado, apareceEnBuscadorCercano,
-                "findCercanosYPorDeporte divergió del guard para isActive=" + isActive + ", estadoVerificacion=" + estadoVerificacion);
-        assertEquals(esperado, apareceEnDetallePorSlug,
-                "findBySlugOperativo divergió del guard para isActive=" + isActive + ", estadoVerificacion=" + estadoVerificacion);
+        String contexto = "isActive=" + isActive + ", estadoVerificacion=" + estadoVerificacion + ", eliminado=" + eliminado;
+        assertEquals(esperado, apareceEnBuscadorSinUbicacion, "findActivosPorDeporte divergió del guard para " + contexto);
+        assertEquals(esperado, apareceEnBuscadorCercano, "findCercanosYPorDeporte divergió del guard para " + contexto);
+        assertEquals(esperado, apareceEnDetallePorSlug, "findBySlugOperativo divergió del guard para " + contexto);
     }
 
     /**

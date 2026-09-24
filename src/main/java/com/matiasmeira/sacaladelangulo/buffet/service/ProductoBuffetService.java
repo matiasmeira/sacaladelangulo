@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,11 +31,13 @@ public class ProductoBuffetService {
     private final ProductoBuffetRepository productoBuffetRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
     private final ProductoBuffetMapper productoBuffetMapper;
 
     public ProductoBuffetResponse crearProducto(Long establecimientoId, ProductoBuffetRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         ProductoBuffet producto = ProductoBuffet.builder()
                 .nombre(request.nombre())

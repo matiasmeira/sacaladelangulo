@@ -65,6 +65,9 @@ class BloqueoCanchaServiceTest {
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
+    @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
     @InjectMocks
     private BloqueoCanchaService bloqueoCanchaService;
 
@@ -231,6 +234,25 @@ class BloqueoCanchaServiceTest {
                 org.springframework.security.access.AccessDeniedException.class,
                 () -> bloqueoCanchaService.crearBloqueo(establecimiento.getId(), cancha5A.getId(), request, otroDueno.getEmail())
         );
+        verify(bloqueoCanchaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crearBloqueo_Fallo_EstablecimientoDeshabilitado")
+    void crearBloqueo_Fallo_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(20L).dueno(dueno));
+        Cancha canchaDelDeshabilitado = Cancha.builder().id(200L).nombre("Cancha A").establecimiento(deshabilitado).isActive(true).build();
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 12, 0);
+        BloqueoCanchaRequest request = new BloqueoCanchaRequest(fechaInicio, fechaFin, "Mantenimiento");
+
+        when(canchaRepository.findById(canchaDelDeshabilitado.getId())).thenReturn(Optional.of(canchaDelDeshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> bloqueoCanchaService.crearBloqueo(deshabilitado.getId(), canchaDelDeshabilitado.getId(), request, dueno.getEmail()));
         verify(bloqueoCanchaRepository, never()).save(any());
     }
 

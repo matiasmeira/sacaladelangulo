@@ -61,6 +61,9 @@ class CanchaServiceValidacionPoolTest {
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
+    @Mock
     private RegistroAuditoriaService registroAuditoriaService;
 
     @Mock

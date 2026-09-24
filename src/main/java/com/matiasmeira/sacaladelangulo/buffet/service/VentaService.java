@@ -22,6 +22,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -49,6 +50,7 @@ public class VentaService {
     private final ReservaRepository reservaRepository;
     private final VentaMapper ventaMapper;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
     private final RegistroAuditoriaService registroAuditoriaService;
     private final TurnoCajaService turnoCajaService;
 
@@ -69,6 +71,7 @@ public class VentaService {
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
                 establecimiento, email, PermisoEmpleado.REGISTRAR_VENTA_BUFFET);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         try {
             Reserva reserva = resolverReserva(request.reservaId(), establecimiento.getId());

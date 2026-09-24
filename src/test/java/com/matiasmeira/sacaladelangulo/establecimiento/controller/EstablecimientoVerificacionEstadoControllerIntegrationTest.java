@@ -537,7 +537,7 @@ class EstablecimientoVerificacionEstadoControllerIntegrationTest {
                         .content("{\"activo\": false}"))
                 .andExpect(status().isOk());
 
-        assertThat(establecimientoRepository.countByDuenoId(dueno.getId())).isEqualTo(3);
+        assertThat(establecimientoRepository.countByDuenoIdAndDeletedAtIsNull(dueno.getId())).isEqualTo(3);
 
         mockMvc.perform(post("/api/v1/establecimientos")
                         .with(user(dueno.getEmail()).roles("OWNER"))

@@ -89,6 +89,22 @@ public final class Establecimientos {
         return construir(EstadoVerificacion.VERIFICADO, false, personalizacion);
     }
 
+    /**
+     * Eliminado (deletedAt seteado): bajo el invariante de EstablecimientoEliminacionService,
+     * siempre nace también deshabilitado (isActive=false) -- no existe la combinación
+     * "eliminado pero activo". El slug NO se renombra acá con el sufijo "-eliminado-{id}": la
+     * factory no conoce el id hasta después de construir, y a la mayoría de los tests les es
+     * indiferente; los que prueban puntualmente el renombrado de slug lo arman a mano.
+     */
+    public static Establecimiento establecimientoEliminado() {
+        return establecimientoEliminado(UnaryOperator.identity());
+    }
+
+    public static Establecimiento establecimientoEliminado(UnaryOperator<Establecimiento.EstablecimientoBuilder> personalizacion) {
+        return construir(EstadoVerificacion.VERIFICADO, false,
+                b -> personalizacion.apply(b).deletedAt(java.time.LocalDateTime.now()));
+    }
+
     private static Establecimiento construir(EstadoVerificacion estadoVerificacion, boolean activo,
                                               UnaryOperator<Establecimiento.EstablecimientoBuilder> personalizacion) {
         int n = SECUENCIA.incrementAndGet();

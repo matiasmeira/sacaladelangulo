@@ -43,6 +43,9 @@ class DiaNoLaborableServiceTest {
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
+    @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
     @InjectMocks
     private DiaNoLaborableService diaNoLaborableService;
 
@@ -109,6 +112,22 @@ class DiaNoLaborableServiceTest {
                 IllegalArgumentException.class,
                 () -> diaNoLaborableService.crear(establecimiento.getId(), request, dueno.getEmail())
         );
+        verify(diaNoLaborableRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crear_Fallo_EstablecimientoDeshabilitado")
+    void crear_Fallo_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(20L).dueno(dueno));
+        DiaNoLaborableRequest request = new DiaNoLaborableRequest(LocalDate.of(2030, 12, 25), "Navidad");
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> diaNoLaborableService.crear(deshabilitado.getId(), request, dueno.getEmail()));
         verify(diaNoLaborableRepository, never()).save(any());
     }
 

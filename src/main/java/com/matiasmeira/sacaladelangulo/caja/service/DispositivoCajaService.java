@@ -20,6 +20,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +63,7 @@ public class DispositivoCajaService {
     private final CodigoEmparejamientoCajaRepository codigoEmparejamientoCajaRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
     private final RateLimiterService rateLimiterService;
     private final RegistroAuditoriaService registroAuditoriaService;
 
@@ -77,6 +79,7 @@ public class DispositivoCajaService {
     public ActivarLocalResponse activarLocal(Long establecimientoId, String email, ActivarLocalRequest request, HttpServletResponse response) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         String tokenCrudo = generarSecretoAlto();
         DispositivoCaja dispositivo = DispositivoCaja.builder()
@@ -99,6 +102,7 @@ public class DispositivoCajaService {
     public EmparejarResponse emparejar(Long establecimientoId, String email, EmparejarRequest request) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         String codigoCrudo = generarSecretoAlto();
         LocalDateTime expiraEn = LocalDateTime.now().plus(Duration.ofMillis(codigoEmparejamientoTtlMillis));

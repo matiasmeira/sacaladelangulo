@@ -30,6 +30,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -61,6 +62,7 @@ public class TurnoCajaService {
     private final EstablecimientoRepository establecimientoRepository;
     private final DispositivoCajaRepository dispositivoCajaRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
     private final RegistroAuditoriaService registroAuditoriaService;
     private final TurnoCajaMapper turnoCajaMapper;
     private final MovimientoCajaMapper movimientoCajaMapper;
@@ -75,6 +77,7 @@ public class TurnoCajaService {
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
                 establecimiento, email, PermisoEmpleado.OPERAR_CAJA);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         try {
             if (request.fondoInicial() == null || request.fondoInicial().signum() < 0) {

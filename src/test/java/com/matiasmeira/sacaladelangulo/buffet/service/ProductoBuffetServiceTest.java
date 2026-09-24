@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.buffet.repository.ProductoBuffetRepositor
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,6 +46,9 @@ class ProductoBuffetServiceTest {
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
+    @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
     private ProductoBuffetService productoBuffetService;
 
     private Usuario dueno;
@@ -53,7 +57,8 @@ class ProductoBuffetServiceTest {
     @BeforeEach
     void setUp() {
         productoBuffetService = new ProductoBuffetService(
-                productoBuffetRepository, establecimientoRepository, autorizacionEmpleadoService, new ProductoBuffetMapper());
+                productoBuffetRepository, establecimientoRepository, autorizacionEmpleadoService,
+                establecimientoOperativoGuard, new ProductoBuffetMapper());
 
         dueno = Usuario.builder()
                 .id(2L)
@@ -117,6 +122,22 @@ class ProductoBuffetServiceTest {
                 org.springframework.security.access.AccessDeniedException.class,
                 () -> productoBuffetService.crearProducto(establecimiento.getId(), request, otroDueno.getEmail())
         );
+        verify(productoBuffetRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crearProducto_Fallo_EstablecimientoDeshabilitado")
+    void crearProducto_Fallo_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(20L).dueno(dueno));
+        ProductoBuffetRequest request = new ProductoBuffetRequest("Agua mineral", "500ml", BigDecimal.valueOf(1500), 20, null);
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> productoBuffetService.crearProducto(deshabilitado.getId(), request, dueno.getEmail()));
         verify(productoBuffetRepository, never()).save(any());
     }
 
@@ -233,6 +254,28 @@ class ProductoBuffetServiceTest {
 
         // Assert
         assertEquals(-5, response.stock());
+    }
+
+    @Test
+    @DisplayName("ajustarStock_Exito_EstablecimientoDeshabilitado_SigueFuncionando")
+    void ajustarStock_Exito_EstablecimientoDeshabilitado_SigueFuncionando() {
+        // Ajustar stock de un producto ya existente es administrar lo existente, no crear
+        // uno nuevo: no pasa por el guard nuevo (ajustarStock sólo usa validarPropietarioOAdmin).
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(20L).dueno(dueno));
+        ProductoBuffet producto = ProductoBuffet.builder()
+                .id(1L).nombre("Agua mineral").precio(BigDecimal.valueOf(1500)).stock(20)
+                .establecimiento(deshabilitado).build();
+        AjustarStockRequest request = new AjustarStockRequest(10);
+
+        when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProductoBuffetResponse response = assertDoesNotThrow(() -> productoBuffetService.ajustarStock(
+                deshabilitado.getId(), producto.getId(), request, dueno.getEmail()));
+
+        assertEquals(30, response.stock());
+        org.mockito.Mockito.verifyNoInteractions(establecimientoOperativoGuard);
     }
 
     @Test

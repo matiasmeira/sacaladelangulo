@@ -6,12 +6,14 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
@@ -292,5 +294,152 @@ class EstablecimientoRepositoryTest {
                 .findActivosPorDeporte(null, org.springframework.data.domain.PageRequest.of(0, 2));
 
         assertEquals(2, resultado.size());
+    }
+
+    // ---------- deletedAt (baja lógica de establecimientos) ----------
+
+    private Usuario duenoEliminacion(String email) {
+        return entityManager.persist(Usuario.builder()
+                .email(email)
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+    }
+
+    @Test
+    @DisplayName("findBySlugOperativo_NoDevuelveComplejoEliminado")
+    void findBySlugOperativo_NoDevuelveComplejoEliminado() {
+        Usuario dueno = duenoEliminacion("dueno-elim-slug@test.com");
+        entityManager.persist(Establecimientos.establecimientoEliminado(b -> b
+                .nombre("Complejo Eliminado")
+                .direccion("Calle Eliminado")
+                .slug("complejo-eliminado-slug-test")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+        entityManager.flush();
+
+        assertTrue(establecimientoRepository.findBySlugOperativo("complejo-eliminado-slug-test").isEmpty());
+    }
+
+    @Test
+    @DisplayName("findActivosPorDeporte_y_findCercanosYPorDeporte_NoDevuelvenComplejoEliminado")
+    void findActivosPorDeporte_y_findCercanosYPorDeporte_NoDevuelvenComplejoEliminado() {
+        Usuario dueno = duenoEliminacion("dueno-elim-buscador@test.com");
+        entityManager.persist(Establecimientos.establecimientoEliminado(b -> b
+                .nombre("Complejo Eliminado Buscador")
+                .direccion("Calle Eliminado")
+                .slug("complejo-eliminado-buscador")
+                .latitud(-34.6037)
+                .longitud(-58.3816)
+                .requiereSena(false)
+                .dueno(dueno)));
+        entityManager.flush();
+
+        assertTrue(establecimientoRepository.findActivosPorDeporte(null, Pageable.unpaged()).isEmpty());
+        assertTrue(establecimientoRepository.findCercanosYPorDeporte(-34.6037, -58.3816, 10.0, null).isEmpty());
+    }
+
+    @Test
+    @DisplayName("findByDuenoIdAndIsActiveTrue_NoDevuelveComplejoEliminado")
+    void findByDuenoIdAndIsActiveTrue_NoDevuelveComplejoEliminado() {
+        Usuario dueno = duenoEliminacion("dueno-elim-panel@test.com");
+        entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
+                .nombre("Complejo Vivo")
+                .direccion("Calle Vivo")
+                .slug("complejo-vivo-panel")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+        // Nace inactivo (isActive=false, ver invariante) y con deletedAt: sin esto, un
+        // establecimiento eliminado "de verdad" (isActive=false) ya quedaría afuera por el
+        // propio nombre del método (AndIsActiveTrue) -- este test aísla igual el aporte de
+        // deletedAt seteando explícitamente isActive=true, un estado que en producción no
+        // debería darse (ver EstablecimientoEliminacionService), para probar que el filtro no
+        // depende sólo de ese invariante.
+        entityManager.persist(Establecimientos.establecimientoEliminado(b -> b
+                .nombre("Complejo Eliminado Panel")
+                .direccion("Calle Eliminado")
+                .slug("complejo-eliminado-panel")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .isActive(true)
+                .dueno(dueno)));
+        entityManager.flush();
+
+        List<Establecimiento> misEstablecimientos = establecimientoRepository.findByDuenoIdAndIsActiveTrue(dueno.getId());
+
+        assertEquals(1, misEstablecimientos.size());
+        assertEquals("Complejo Vivo", misEstablecimientos.get(0).getNombre());
+    }
+
+    @Test
+    @DisplayName("countByDuenoIdAndDeletedAtIsNull_ExcluyeEliminadosPeroCuentaDeshabilitados")
+    void countByDuenoIdAndDeletedAtIsNull_ExcluyeEliminadosPeroCuentaDeshabilitados() {
+        Usuario dueno = duenoEliminacion("dueno-elim-limite@test.com");
+        entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
+                .nombre("Activo").direccion("Calle").slug("limite-activo").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).dueno(dueno)));
+        entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Deshabilitado").direccion("Calle").slug("limite-deshabilitado").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).dueno(dueno)));
+        entityManager.persist(Establecimientos.establecimientoEliminado(b -> b
+                .nombre("Eliminado").direccion("Calle").slug("limite-eliminado").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).dueno(dueno)));
+        entityManager.flush();
+
+        // Deshabilitar no libera cupo (cuenta 2: activo + deshabilitado); eliminar sí
+        // (el eliminado no entra en la cuenta).
+        assertEquals(2, establecimientoRepository.countByDuenoIdAndDeletedAtIsNull(dueno.getId()));
+    }
+
+    @Test
+    @DisplayName("findByEstadoVerificacionAndDeletedAtIsNull_y_findAllByDeletedAtIsNull_ExcluyenEliminadoDeLaColaDeAdmin")
+    void findByEstadoVerificacionAndDeletedAtIsNull_y_findAllByDeletedAtIsNull_ExcluyenEliminadoDeLaColaDeAdmin() {
+        Usuario dueno = duenoEliminacion("dueno-elim-admin@test.com");
+        entityManager.persist(Establecimientos.establecimientoEnRevision(b -> b
+                .nombre("En Revision").direccion("Calle").slug("admin-en-revision").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).dueno(dueno)));
+        // Eliminado, pero todavía EN_REVISION al momento de la baja: aunque el admin nunca
+        // llegó a resolverla, un establecimiento eliminado no debe aparecer en ninguna cola.
+        entityManager.persist(Establecimientos.establecimientoEliminado(b -> b
+                .nombre("Eliminado En Revision").direccion("Calle").slug("admin-eliminado-en-revision")
+                .latitud(-34.6).longitud(-58.4).requiereSena(false)
+                .estadoVerificacion(EstadoVerificacion.EN_REVISION).dueno(dueno)));
+        entityManager.flush();
+
+        assertEquals(1, establecimientoRepository
+                .findByEstadoVerificacionAndDeletedAtIsNull(EstadoVerificacion.EN_REVISION, Pageable.unpaged())
+                .getTotalElements());
+        assertEquals(1, establecimientoRepository.findAllByDeletedAtIsNull(Pageable.unpaged()).getTotalElements());
+    }
+
+    @Test
+    @DisplayName("existsBySlug_VeElSlugRenombradoDeUnEliminadoComoOcupado_YElNombreOriginalQuedaLibre")
+    void existsBySlug_VeElSlugRenombradoDeUnEliminadoComoOcupado_YElNombreOriginalQuedaLibre() {
+        Usuario dueno = duenoEliminacion("dueno-elim-slug-liberado@test.com");
+        Establecimiento eliminado = entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Mi Complejo").direccion("Calle").slug("mi-complejo").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).dueno(dueno)));
+
+        // Mismo patrón que EstablecimientoEliminacionService: renombra y marca deletedAt.
+        eliminado.setSlug(eliminado.getSlug() + "-eliminado-" + eliminado.getId());
+        eliminado.setDeletedAt(java.time.LocalDateTime.now());
+        entityManager.persistAndFlush(eliminado);
+
+        // El slug renombrado sigue "ocupado" (la fila existe, sin cascada) -- SlugGenerator
+        // no debería poder reasignarlo a otro alta.
+        assertTrue(establecimientoRepository.existsBySlug("mi-complejo-eliminado-" + eliminado.getId()));
+        // El nombre ORIGINAL queda libre: el dueño puede recrear un complejo con el mismo
+        // nombre sin romper el UNIQUE de slug.
+        assertFalse(establecimientoRepository.existsBySlug("mi-complejo"));
     }
 }

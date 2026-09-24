@@ -8,6 +8,7 @@ import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.email.EmailService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,16 +95,14 @@ class ExpiracionPruebaServiceIntegrationTest {
     @DisplayName("degradarPruebasVencidas_DuenoConEstablecimientoActivo_NoLoDesactiva")
     void degradarPruebasVencidas_DuenoConEstablecimientoActivo_NoLoDesactiva() {
         Usuario dueno = usuarioRepository.save(usuarioTrialVencido("dueno-con-complejo@test.com"));
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Test")
                 .direccion("Calle 1")
                 .slug("complejo-expiracion-test")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         expiracionPruebaService.degradarPruebasVencidas();
 

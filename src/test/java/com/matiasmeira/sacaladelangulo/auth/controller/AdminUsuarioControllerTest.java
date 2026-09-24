@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.auth.service.JwtService;
 import com.matiasmeira.sacaladelangulo.auth.service.UsuarioUserDetailsMapper;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -163,15 +164,14 @@ class AdminUsuarioControllerTest {
                 .telefonoVerificado(false)
                 .build());
 
-        establecimientoRepository.save(Establecimiento.builder()
+        establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Activo")
                 .direccion("Calle Falsa 123")
                 .slug("complejo-activo-admin-test")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .dueno(owner)
-                .build());
+                .dueno(owner)));
 
         mockMvc.perform(delete("/api/v1/admin/usuarios/" + owner.getId())
                         .header("Authorization", "Bearer " + tokenPara(admin)))
@@ -201,15 +201,14 @@ class AdminUsuarioControllerTest {
                 .telefonoVerificado(false)
                 .build());
 
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Forzado")
                 .direccion("Calle Falsa 456")
                 .slug("complejo-forzado-admin-test")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .dueno(owner)
-                .build());
+                .dueno(owner)));
 
         mockMvc.perform(delete("/api/v1/admin/usuarios/" + owner.getId() + "?forzar=true")
                         .header("Authorization", "Bearer " + tokenPara(admin)))

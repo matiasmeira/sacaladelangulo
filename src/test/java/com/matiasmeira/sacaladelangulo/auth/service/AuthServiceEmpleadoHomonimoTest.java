@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.ratelimit.RateLimiterService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -138,16 +139,14 @@ class AuthServiceEmpleadoHomonimoTest {
                 .telefonoVerificado(false)
                 .build());
 
-        return entityManager.persist(Establecimiento.builder()
+        return entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Test")
                 .direccion("Calle Falsa 123")
                 .slug("complejo-test")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(true)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
     }
 
     private Usuario empleado(String nombre, String email, Establecimiento establecimiento, boolean activo) {

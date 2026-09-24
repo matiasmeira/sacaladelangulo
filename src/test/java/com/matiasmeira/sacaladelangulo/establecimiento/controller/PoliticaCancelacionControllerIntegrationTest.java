@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,18 +56,16 @@ class PoliticaCancelacionControllerIntegrationTest {
                 .telefonoVerificado(true)
                 .build());
 
-        return establecimientoRepository.save(Establecimiento.builder()
+        return establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + sufijo)
                 .direccion("Calle 123")
                 .slug("complejo-politica-" + sufijo)
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
                 .horasCancelacionAntesPartido(24)
                 .minutosGraciaCancelacion(30)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
     }
 
     private String duenoDe(Establecimiento establecimiento) {

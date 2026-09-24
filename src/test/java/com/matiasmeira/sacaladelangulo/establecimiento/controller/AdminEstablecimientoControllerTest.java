@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoPublicoService;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -377,16 +378,14 @@ class AdminEstablecimientoControllerTest {
     }
 
     private Establecimiento crearEstablecimiento(String slug, Usuario dueno, EstadoVerificacion estado) {
-        return establecimientoRepository.save(Establecimiento.builder()
+        return establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + slug)
                 .direccion("Calle Falsa 123")
                 .slug(slug)
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
                 .estadoVerificacion(estado)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
     }
 }

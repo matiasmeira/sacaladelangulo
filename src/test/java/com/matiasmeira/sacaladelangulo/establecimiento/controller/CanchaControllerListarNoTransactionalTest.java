@@ -8,6 +8,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -84,16 +85,14 @@ class CanchaControllerListarNoTransactionalTest {
                 .telefonoVerificado(true)
                 .build());
 
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Canchas Test")
                 .direccion("Calle Falsa 789")
                 .slug("complejo-canchas-listar")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(true)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         canchaRepository.save(Cancha.builder()
                 .nombre("Cancha 1")

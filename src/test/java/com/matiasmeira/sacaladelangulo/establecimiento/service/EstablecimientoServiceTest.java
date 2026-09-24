@@ -15,6 +15,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -173,7 +174,7 @@ class EstablecimientoServiceTest {
                 .planSuscripcion(PlanSuscripcion.PREMIUM)
                 .build();
 
-        Establecimiento existente = Establecimiento.builder()
+        Establecimiento existente = Establecimientos.establecimientoOperativo(b -> b
                 .id(11L)
                 .nombre("Nombre")
                 .direccion("Direccion")
@@ -181,10 +182,8 @@ class EstablecimientoServiceTest {
                 .longitud(-58.4)
                 .requiereSena(false)
                 .requiereTelefonoVerificado(false)
-                .isActive(true)
                 .dueno(dueno)
-                .horariosAtencion(new ArrayList<>())
-                .build();
+                .horariosAtencion(new ArrayList<>()));
 
         EstablecimientoRequest request = new EstablecimientoRequest(
                 "Nombre",
@@ -342,14 +341,13 @@ class EstablecimientoServiceTest {
                 .planSuscripcion(PlanSuscripcion.PREMIUM)
                 .build();
 
-        Establecimiento existente = Establecimiento.builder()
+        Establecimiento existente = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Viejo Nombre")
                 .direccion("Vieja Direccion")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
                 .dueno(dueno)
                 .horariosAtencion(new ArrayList<>(List.of(
                         HorarioAtencion.builder()
@@ -357,8 +355,7 @@ class EstablecimientoServiceTest {
                                 .horaApertura(LocalTime.of(8, 0))
                                 .horaCierre(LocalTime.of(20, 0))
                                 .build()
-                )))
-                .build();
+                ))));
 
         EstablecimientoRequest request = new EstablecimientoRequest(
                 "Nuevo Nombre",

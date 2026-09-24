@@ -16,6 +16,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaReposito
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoPublicoService;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -114,7 +115,7 @@ class EstablecimientoVerificacionEstadoControllerIntegrationTest {
 
     private Establecimiento crearEstablecimiento(Usuario dueno, boolean activo, EstadoVerificacion estado) {
         String sufijo = "e" + CONTADOR.incrementAndGet();
-        return establecimientoRepository.save(Establecimiento.builder()
+        return establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + sufijo)
                 .direccion("Calle Falsa 123")
                 .slug("complejo-" + sufijo)
@@ -123,8 +124,7 @@ class EstablecimientoVerificacionEstadoControllerIntegrationTest {
                 .requiereSena(false)
                 .isActive(activo)
                 .estadoVerificacion(estado)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
     }
 
     private Cancha crearCancha(Establecimiento establecimiento) {

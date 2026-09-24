@@ -6,6 +6,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,16 +47,14 @@ class BloqueoCanchaRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        Establecimiento establecimiento = entityManager.persist(Establecimiento.builder()
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Test")
                 .direccion("Calle Test")
                 .slug("complejo-test")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         Cancha cancha = entityManager.persist(Cancha.builder()
                 .nombre("Cancha 1")
                 .isActive(true)

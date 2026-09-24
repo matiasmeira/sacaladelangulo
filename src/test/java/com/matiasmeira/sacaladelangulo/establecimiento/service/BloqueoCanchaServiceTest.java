@@ -18,6 +18,7 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -99,16 +100,14 @@ class BloqueoCanchaServiceTest {
                 .telefonoVerificado(false)
                 .build();
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
                 .direccion("Calle Test 123")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
 
         cancha5A = Cancha.builder()
                 .id(100L)

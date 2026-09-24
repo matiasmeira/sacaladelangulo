@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,16 +51,14 @@ class CanchaRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        Establecimiento establecimiento = entityManager.persist(Establecimiento.builder()
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Test")
                 .direccion("Calle Test")
                 .slug("complejo-test")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         Cancha cancha = entityManager.persist(Cancha.builder()
                 .nombre("Cancha 1")
                 .deportes(Set.of(Deporte.FUTBOL_5))
@@ -100,16 +99,14 @@ class CanchaRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        Establecimiento establecimiento = entityManager.persist(Establecimiento.builder()
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Test 2")
                 .direccion("Calle Test 2")
                 .slug("complejo-test-2")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         // El @EntityGraph de findByEstablecimientoIdAndIsActiveTrue trae "canchasFisicas" y
         // "deportes" en la misma consulta. Con canchasFisicas como bag (List), Hibernate 6
@@ -171,16 +168,14 @@ class CanchaRepositoryTest {
                 .emailVerified(true)
                 .telefonoVerificado(false)
                 .build());
-        Establecimiento establecimiento = entityManager.persist(Establecimiento.builder()
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Test 3")
                 .direccion("Calle Test 3")
                 .slug("complejo-test-3")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         entityManager.persist(Cancha.builder()
                 .nombre("Cancha Activa")
                 .deportes(Set.of(Deporte.FUTBOL_5))

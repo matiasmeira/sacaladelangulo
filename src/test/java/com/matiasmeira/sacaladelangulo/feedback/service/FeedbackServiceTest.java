@@ -17,6 +17,7 @@ import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,7 +80,7 @@ class FeedbackServiceTest {
         jugador = Usuario.builder().id(2L).email("jugador@test.com").rol(Role.PLAYER).nombre("Juan").build();
         otroJugador = Usuario.builder().id(3L).email("otro@test.com").rol(Role.PLAYER).nombre("Pedro").build();
 
-        establecimiento = Establecimiento.builder().id(100L).dueno(dueno).build();
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b.id(100L).dueno(dueno));
         cancha = Cancha.builder().id(50L).establecimiento(establecimiento).build();
         reserva = Reserva.builder()
                 .id(500L)

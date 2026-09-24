@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -86,17 +87,15 @@ class DisponibilidadControllerEstablecimientoNoVerificadoIntegrationTest {
     }
 
     private Establecimiento crearEstablecimientoConCancha(String slug, Usuario dueno, EstadoVerificacion estadoVerificacion) {
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + slug)
                 .direccion("Calle Test 123")
                 .slug(slug)
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(true)
-                .isActive(true)
                 .estadoVerificacion(estadoVerificacion)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         establecimiento.setHorariosAtencion(new ArrayList<>(List.of(HorarioAtencion.builder()
                 .diaSemana(DayOfWeek.MONDAY)
                 .horaApertura(LocalTime.of(9, 0))

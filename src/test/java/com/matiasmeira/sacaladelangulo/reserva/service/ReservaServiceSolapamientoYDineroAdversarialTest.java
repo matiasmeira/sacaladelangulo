@@ -23,6 +23,7 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -108,8 +109,8 @@ class ReservaServiceSolapamientoYDineroAdversarialTest {
                 .rol(Role.OWNER).planSuscripcion(PlanSuscripcion.PREMIUM).isActive(true)
                 .emailVerified(true).telefonoVerificado(false).build();
 
-        establecimiento = Establecimiento.builder().id(10L).nombre("Club").direccion("Calle 1")
-                .latitud(0.0).longitud(0.0).dueno(dueno).requiereSena(false).isActive(true).build();
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b.id(10L).nombre("Club").direccion("Calle 1")
+                .latitud(0.0).longitud(0.0).dueno(dueno).requiereSena(false));
         establecimiento.setHorariosAtencion(List.of(HorarioAtencion.builder()
                 .diaSemana(DayOfWeek.TUESDAY).horaApertura(LocalTime.of(8, 0)).horaCierre(LocalTime.of(23, 0))
                 .establecimiento(establecimiento).build()));

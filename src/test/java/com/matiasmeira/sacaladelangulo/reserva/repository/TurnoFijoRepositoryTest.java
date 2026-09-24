@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoTurnoFijo;
 import com.matiasmeira.sacaladelangulo.reserva.model.TurnoFijo;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,11 +45,10 @@ class TurnoFijoRepositoryTest {
                 .build();
         em.persist(dueno);
 
-        Establecimiento est = Establecimiento.builder()
+        Establecimiento est = Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo").direccion("Calle Falsa 123").slug("complejo")
                 .latitud(-34.6).longitud(-58.4).requiereSena(true)
-                .dueno(dueno).isActive(true)
-                .build();
+                .dueno(dueno));
         em.persist(est);
 
         Cancha cancha = Cancha.builder()

@@ -6,7 +6,6 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
-import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
@@ -15,6 +14,7 @@ import com.matiasmeira.sacaladelangulo.reserva.dto.EditarClienteTurnoFijoRequest
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaSemanalRequest;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import com.matiasmeira.sacaladelangulo.reserva.repository.TurnoFijoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -102,7 +102,9 @@ class TurnoFijoControllerEstablecimientoInactivoIntegrationTest {
 
     /** Horario de atención los 7 días de la semana, para no depender de qué día es "hoy". */
     private Establecimiento crearEstablecimientoConCancha(String slug, Usuario dueno, boolean establecimientoActivo) {
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        // Este test suite aísla la dimensión isActive: siempre VERIFICADO para que
+        // el gate que se ejercite acá sea el de "deshabilitado", no el de verificación.
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + slug)
                 .direccion("Calle Test 123")
                 .slug(slug)
@@ -110,11 +112,7 @@ class TurnoFijoControllerEstablecimientoInactivoIntegrationTest {
                 .longitud(-58.3816)
                 .requiereSena(true)
                 .isActive(establecimientoActivo)
-                // Este test suite aísla la dimensión isActive: siempre VERIFICADO para que
-                // el gate que se ejercite acá sea el de "deshabilitado", no el de verificación.
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
 
         Establecimiento establecimientoFinal = establecimiento;
         List<HorarioAtencion> horarios = Arrays.stream(DayOfWeek.values())

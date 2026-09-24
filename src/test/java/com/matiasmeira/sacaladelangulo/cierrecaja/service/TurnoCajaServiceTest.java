@@ -26,6 +26,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -95,11 +96,10 @@ class TurnoCajaServiceTest {
                 .rol(Role.OWNER)
                 .build();
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
-                .dueno(dueno)
-                .build();
+                .dueno(dueno));
     }
 
     private TurnoCaja turnoAbierto(BigDecimal fondoInicial) {

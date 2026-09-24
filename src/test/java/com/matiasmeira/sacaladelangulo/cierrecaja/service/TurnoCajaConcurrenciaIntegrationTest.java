@@ -18,6 +18,7 @@ import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.support.AbstractPostgresIntegrationTest;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -81,16 +82,14 @@ class TurnoCajaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTe
                 .unsubscribeToken("tok-" + System.nanoTime())
                 .build());
 
-        establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Club Caja")
                 .direccion("Calle Falsa 456")
                 .slug("club-caja")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
     }
 
     @Test
@@ -171,16 +170,14 @@ class TurnoCajaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTe
         // Producto de OTRO establecimiento: buscarProductoDelEstablecimiento lo rechaza,
         // pero recién después de que el producto válido ya sufrió el descuento de stock
         // dentro del mismo for (ver VentaService.registrarVenta).
-        Establecimiento otroEstablecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento otroEstablecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Otro club")
                 .direccion("Otra calle")
                 .slug("otro-club")
                 .latitud(-1.0)
                 .longitud(-1.0)
                 .requiereSena(false)
-                .isActive(true)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         ProductoBuffet productoAjeno = productoBuffetRepository.save(ProductoBuffet.builder()
                 .nombre("Gaseosa ajena")
                 .precio(BigDecimal.valueOf(700))

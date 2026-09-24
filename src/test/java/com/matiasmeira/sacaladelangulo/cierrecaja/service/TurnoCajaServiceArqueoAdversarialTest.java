@@ -20,6 +20,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,7 +65,7 @@ class TurnoCajaServiceArqueoAdversarialTest {
                 new TurnoCajaMapper(new MovimientoCajaMapper()), new MovimientoCajaMapper());
 
         dueno = Usuario.builder().id(2L).email("dueno@test.com").nombre("Dueño Test").rol(Role.OWNER).build();
-        establecimiento = Establecimiento.builder().id(10L).nombre("Establecimiento Test").dueno(dueno).build();
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b.id(10L).nombre("Establecimiento Test").dueno(dueno));
     }
 
     private TurnoCaja turnoAbierto(BigDecimal fondoInicial) {

@@ -5,6 +5,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -22,7 +23,7 @@ class PerfilMapperTest {
     @Test
     @DisplayName("mapToResponse_Empleado_IncluyeEstablecimientoIdYPermisos")
     void mapToResponse_Empleado_IncluyeEstablecimientoIdYPermisos() {
-        Establecimiento establecimiento = Establecimiento.builder().id(7L).build();
+        Establecimiento establecimiento = Establecimientos.establecimientoOperativo(b -> b.id(7L));
         Usuario empleado = Usuario.builder()
                 .id(1L)
                 .email("empleado@test.com")

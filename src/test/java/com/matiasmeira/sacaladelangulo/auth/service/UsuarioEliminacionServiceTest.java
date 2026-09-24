@@ -16,6 +16,7 @@ import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import com.matiasmeira.sacaladelangulo.reserva.service.ReservaCanceladaEvent;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -188,7 +189,7 @@ class UsuarioEliminacionServiceTest {
         when(usuarioRepository.findByEmail("jugador@test.com")).thenReturn(Optional.of(jugador));
         when(passwordEncoder.matches("Password123", "hash-viejo")).thenReturn(true);
         when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L))
-                .thenReturn(List.of(Establecimiento.builder().id(10L).build()));
+                .thenReturn(List.of(Establecimientos.establecimientoOperativo(b -> b.id(10L))));
 
         EstablecimientosActivosException ex = assertThrows(EstablecimientosActivosException.class,
                 () -> usuarioEliminacionService.autoeliminar("jugador@test.com", "Password123"));
@@ -293,7 +294,7 @@ class UsuarioEliminacionServiceTest {
         when(usuarioRepository.findByEmail("admin@test.com")).thenReturn(Optional.of(admin));
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(jugador));
         when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L))
-                .thenReturn(List.of(Establecimiento.builder().id(10L).build()));
+                .thenReturn(List.of(Establecimientos.establecimientoOperativo(b -> b.id(10L))));
 
         assertThrows(EstablecimientosActivosException.class,
                 () -> usuarioEliminacionService.eliminarComoAdmin("admin@test.com", 1L, false));
@@ -310,7 +311,8 @@ class UsuarioEliminacionServiceTest {
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(jugador));
         when(passwordEncoder.encode(anyString())).thenReturn("hash-random");
         when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L)).thenReturn(
-                List.of(Establecimiento.builder().id(10L).build(), Establecimiento.builder().id(11L).build()));
+                List.of(Establecimientos.establecimientoOperativo(b -> b.id(10L)),
+                        Establecimientos.establecimientoOperativo(b -> b.id(11L))));
         when(reservaRepository.findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(eq(1L), any(), any())).thenReturn(List.of());
 
         usuarioEliminacionService.eliminarComoAdmin("admin@test.com", 1L, true);

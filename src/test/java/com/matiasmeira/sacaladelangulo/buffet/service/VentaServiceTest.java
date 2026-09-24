@@ -25,6 +25,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.Establecimient
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -99,16 +100,14 @@ class VentaServiceTest {
         // hiciera el dueño real. Los tests que necesiten otro comportamiento lo overridean.
         lenient().when(autorizacionEmpleadoService.validarAccion(any(), any(), any())).thenReturn(dueno);
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
                 .direccion("Calle Test 123")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
 
         agua = ProductoBuffet.builder()
                 .id(1L)
@@ -303,16 +302,14 @@ class VentaServiceTest {
     @DisplayName("registrarVenta_Fallo_ProductoNoPerteneceAlEstablecimiento")
     void registrarVenta_Fallo_ProductoNoPerteneceAlEstablecimiento() {
         // Arrange
-        Establecimiento otroEstablecimiento = Establecimiento.builder()
+        Establecimiento otroEstablecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(99L)
                 .nombre("Otro")
                 .direccion("Otra calle")
                 .latitud(-1.0)
                 .longitud(-1.0)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
 
         ProductoBuffet productoDeOtroEstablecimiento = ProductoBuffet.builder()
                 .id(5L)
@@ -341,16 +338,14 @@ class VentaServiceTest {
     @DisplayName("registrarVenta_Fallo_ReservaNoPerteneceAlEstablecimiento")
     void registrarVenta_Fallo_ReservaNoPerteneceAlEstablecimiento() {
         // Arrange
-        Establecimiento otroEstablecimiento = Establecimiento.builder()
+        Establecimiento otroEstablecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(99L)
                 .nombre("Otro")
                 .direccion("Otra calle")
                 .latitud(-1.0)
                 .longitud(-1.0)
                 .dueno(dueno)
-                .requiereSena(true)
-                .isActive(true)
-                .build();
+                .requiereSena(true));
 
         Cancha canchaDeOtroEstablecimiento = Cancha.builder()
                 .id(50L)

@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.gastos.dto.GastoMapper;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoRequest;
 import com.matiasmeira.sacaladelangulo.gastos.model.CategoriaGasto;
 import com.matiasmeira.sacaladelangulo.gastos.repository.GastoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,7 +63,7 @@ class GastoServiceAdversarialTest {
                 new GastoMapper(), turnoCajaService, registroAuditoriaService);
 
         dueno = Usuario.builder().id(2L).email("dueno@test.com").nombre("Dueño Test").rol(Role.OWNER).build();
-        establecimiento = Establecimiento.builder().id(10L).nombre("Establecimiento Test").dueno(dueno).build();
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b.id(10L).nombre("Establecimiento Test").dueno(dueno));
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);

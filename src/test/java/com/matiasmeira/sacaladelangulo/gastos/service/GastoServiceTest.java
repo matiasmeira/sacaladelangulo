@@ -18,6 +18,7 @@ import com.matiasmeira.sacaladelangulo.gastos.dto.GastoResponse;
 import com.matiasmeira.sacaladelangulo.gastos.model.CategoriaGasto;
 import com.matiasmeira.sacaladelangulo.gastos.model.Gasto;
 import com.matiasmeira.sacaladelangulo.gastos.repository.GastoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -88,11 +89,10 @@ class GastoServiceTest {
                 .rol(Role.EMPLOYEE)
                 .build();
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(10L)
                 .nombre("Establecimiento Test")
-                .dueno(dueno)
-                .build();
+                .dueno(dueno));
     }
 
     @Test

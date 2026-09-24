@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborable
 import com.matiasmeira.sacaladelangulo.reportes.dto.OcupacionReporteResponse;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaOcupacionProjection;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,15 +69,14 @@ class ReporteOcupacionServiceTest {
         Long establecimientoId = 10L;
         LocalDate lunes = proximoLunes();
 
-        Establecimiento establecimiento = Establecimiento.builder()
+        Establecimiento establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(establecimientoId)
                 .dueno(Usuario.builder().id(1L).build())
                 .horariosAtencion(List.of(HorarioAtencion.builder()
                         .diaSemana(DayOfWeek.MONDAY)
                         .horaApertura(LocalTime.of(8, 0))
                         .horaCierre(LocalTime.of(22, 0))
-                        .build()))
-                .build();
+                        .build())));
 
         when(reporteAutorizacionService.validarDuenoDelEstablecimiento(establecimientoId, "dueno@test.com"))
                 .thenReturn(establecimiento);

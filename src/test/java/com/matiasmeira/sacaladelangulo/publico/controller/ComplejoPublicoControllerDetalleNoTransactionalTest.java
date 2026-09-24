@@ -3,11 +3,10 @@ package com.matiasmeira.sacaladelangulo.publico.controller;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
-import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
-import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.FotoEstablecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Servicio;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,22 +71,19 @@ class ComplejoPublicoControllerDetalleNoTransactionalTest {
                 .telefonoVerificado(true)
                 .build());
 
-        establecimientoRepository.save(Establecimiento.builder()
+        establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Detalle Test")
                 .direccion("Calle Falsa 456")
                 .slug("complejo-detalle-no-tx")
                 .latitud(-34.6)
                 .longitud(-58.4)
                 .requiereSena(false)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
                 .dueno(dueno)
                 .servicios(Set.of(Servicio.PARRILLA, Servicio.WIFI))
                 .fotos(new java.util.ArrayList<>(List.of(FotoEstablecimiento.builder()
                         .url("https://cdn.example.com/foto1.jpg")
                         .fileId("file_seed_1")
-                        .build())))
-                .build());
+                        .build())))));
 
         mockMvc.perform(get("/api/v1/publico/complejos/complejo-detalle-no-tx"))
                 .andExpect(status().isOk())

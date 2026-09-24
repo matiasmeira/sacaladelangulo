@@ -19,6 +19,7 @@ import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.publico.dto.ComplejoCardResponse;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -75,16 +76,14 @@ class ComplejoPublicoServiceTest {
     private ComplejoPublicoService complejoPublicoService;
 
     private Establecimiento establecimiento(Long id, String slug, String nombre, boolean requiereSena) {
-        return Establecimiento.builder()
+        return Establecimientos.establecimientoOperativo(b -> b
                 .id(id)
                 .nombre(nombre)
                 .direccion("Direccion " + id)
                 .slug(slug)
                 .latitud(-34.6)
                 .longitud(-58.4)
-                .requiereSena(requiereSena)
-                .isActive(true)
-                .build();
+                .requiereSena(requiereSena));
     }
 
     private Cancha canchaConTarifa(Long id, Establecimiento est, Set<Deporte> deportes, BigDecimal montoSena, BigDecimal precioTarifa) {
@@ -223,12 +222,12 @@ class ComplejoPublicoServiceTest {
     @Test
     @DisplayName("buscarComplejos_ConUbicacion_OrdenaPorDistanciaAscendente")
     void buscarComplejos_ConUbicacion_OrdenaPorDistanciaAscendente() {
-        Establecimiento lejano = Establecimiento.builder()
+        Establecimiento lejano = Establecimientos.establecimientoOperativo(b -> b
                 .id(1L).nombre("Lejano").direccion("D1").slug("lejano")
-                .latitud(-54.8019).longitud(-68.3030).requiereSena(false).isActive(true).build();
-        Establecimiento cercano = Establecimiento.builder()
+                .latitud(-54.8019).longitud(-68.3030).requiereSena(false));
+        Establecimiento cercano = Establecimientos.establecimientoOperativo(b -> b
                 .id(2L).nombre("Cercano").direccion("D2").slug("cercano")
-                .latitud(-34.6037).longitud(-58.3816).requiereSena(false).isActive(true).build();
+                .latitud(-34.6037).longitud(-58.3816).requiereSena(false));
 
         when(establecimientoRepository.findCercanosYPorDeporte(-34.6037, -58.3816, 10.0, null))
                 .thenReturn(List.of(lejano, cercano));
@@ -300,12 +299,12 @@ class ComplejoPublicoServiceTest {
         // establecimientos exactamente en el punto de búsqueda (distanciaKm = 0 para
         // ambos), devueltos en orden "zzz" primero para probar que el desempate es por
         // slug y no por el orden de la lista de la base.
-        Establecimiento zzz = Establecimiento.builder()
+        Establecimiento zzz = Establecimientos.establecimientoOperativo(b -> b
                 .id(1L).nombre("Zzz").direccion("D1").slug("zzz-complejo")
-                .latitud(-34.6037).longitud(-58.3816).requiereSena(false).isActive(true).build();
-        Establecimiento aaa = Establecimiento.builder()
+                .latitud(-34.6037).longitud(-58.3816).requiereSena(false));
+        Establecimiento aaa = Establecimientos.establecimientoOperativo(b -> b
                 .id(2L).nombre("Aaa").direccion("D2").slug("aaa-complejo")
-                .latitud(-34.6037).longitud(-58.3816).requiereSena(false).isActive(true).build();
+                .latitud(-34.6037).longitud(-58.3816).requiereSena(false));
 
         when(establecimientoRepository.findCercanosYPorDeporte(-34.6037, -58.3816, 10.0, null))
                 .thenReturn(List.of(zzz, aaa));

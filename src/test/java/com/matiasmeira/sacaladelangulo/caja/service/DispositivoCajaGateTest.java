@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.caja.service;
 
 import com.matiasmeira.sacaladelangulo.caja.model.DispositivoCaja;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.DisplayName;
@@ -48,7 +49,7 @@ class DispositivoCajaGateTest {
     @Test
     @DisplayName("exigirDispositivo_ConCookieValida_DelegaEnElServicio")
     void exigirDispositivo_ConCookieValida_DelegaEnElServicio() {
-        Establecimiento establecimiento = Establecimiento.builder().id(10L).build();
+        Establecimiento establecimiento = Establecimientos.establecimientoOperativo(b -> b.id(10L));
         DispositivoCaja dispositivo = DispositivoCaja.builder().id(1L).establecimiento(establecimiento).build();
 
         when(request.getCookies()).thenReturn(new Cookie[]{new Cookie("saque_caja_device", "token-crudo")});

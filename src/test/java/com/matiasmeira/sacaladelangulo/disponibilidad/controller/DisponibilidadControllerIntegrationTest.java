@@ -6,11 +6,11 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
-import com.matiasmeira.sacaladelangulo.establecimiento.model.EstadoVerificacion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,17 +85,14 @@ class DisponibilidadControllerIntegrationTest {
     }
 
     private Establecimiento crearEstablecimientoConCancha(String slug, Usuario dueno) {
-        Establecimiento establecimiento = establecimientoRepository.save(Establecimiento.builder()
+        Establecimiento establecimiento = establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + slug)
                 .direccion("Calle Test 123")
                 .slug(slug)
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(true)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
         establecimiento.setHorariosAtencion(new ArrayList<>(List.of(HorarioAtencion.builder()
                 .diaSemana(DayOfWeek.MONDAY)
                 .horaApertura(LocalTime.of(9, 0))

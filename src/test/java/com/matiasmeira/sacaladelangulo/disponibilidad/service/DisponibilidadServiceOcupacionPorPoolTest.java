@@ -15,6 +15,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOp
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -81,7 +82,7 @@ class DisponibilidadServiceOcupacionPorPoolTest {
     void setUp() {
         fecha = LocalDate.now().plusDays(30);
 
-        establecimiento = Establecimiento.builder()
+        establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(100L)
                 .nombre("Complejo Test")
                 .horariosAtencion(new ArrayList<>(List.of(
@@ -90,8 +91,7 @@ class DisponibilidadServiceOcupacionPorPoolTest {
                                 .horaApertura(LocalTime.of(14, 0))
                                 .horaCierre(LocalTime.of(22, 0))
                                 .build()
-                )))
-                .build();
+                ))));
 
         f1 = fisica(1L, "F1");
         f2 = fisica(2L, "F2");

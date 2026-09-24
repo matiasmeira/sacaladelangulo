@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.HorarioAtencion;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -79,17 +80,14 @@ class ComplejoPublicoControllerIntegrationTest {
                 .telefonoVerificado(false)
                 .build());
 
-        Establecimiento establecimiento = Establecimiento.builder()
+        Establecimiento establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo E2E")
                 .direccion("Calle E2E 123")
                 .slug("complejo-e2e")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(true)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build();
+                .dueno(dueno));
         establecimiento.setHorariosAtencion(new ArrayList<>(List.of(HorarioAtencion.builder()
                 .diaSemana(DayOfWeek.MONDAY)
                 .horaApertura(LocalTime.of(9, 0))
@@ -139,17 +137,14 @@ class ComplejoPublicoControllerIntegrationTest {
                 .telefonoVerificado(false)
                 .build());
 
-        Establecimiento establecimiento = Establecimiento.builder()
+        Establecimiento establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + deporte.name())
                 .direccion("Calle " + deporte.name())
                 .slug("complejo-" + deporte.name().toLowerCase().replace('_', '-'))
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(false)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build();
+                .dueno(dueno));
         establecimiento.setHorariosAtencion(new ArrayList<>(List.of(HorarioAtencion.builder()
                 .diaSemana(DayOfWeek.MONDAY)
                 .horaApertura(LocalTime.of(9, 0))
@@ -225,17 +220,14 @@ class ComplejoPublicoControllerIntegrationTest {
 
         // Sin setHorariosAtencion: nace con la lista vacía por defecto, igual que
         // un alta real desde el panel (ver ModalCrearEstablecimiento en el front).
-        Establecimiento establecimiento = Establecimiento.builder()
+        Establecimiento establecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Sin Horarios")
                 .direccion("Calle Sin Horarios 1")
                 .slug("complejo-sin-horarios")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(false)
-                .isActive(true)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(dueno)
-                .build();
+                .dueno(dueno));
         establecimiento = establecimientoRepository.save(establecimiento);
 
         Cancha cancha = Cancha.builder()
@@ -284,17 +276,14 @@ class ComplejoPublicoControllerIntegrationTest {
                 .telefonoVerificado(false)
                 .build());
 
-        Establecimiento inactivo = Establecimiento.builder()
+        Establecimiento inactivo = Establecimientos.establecimientoDeshabilitado(b -> b
                 .nombre("Complejo Inactivo Buscador")
                 .direccion("Calle Inactiva 1")
                 .slug("complejo-inactivo-buscador")
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(true)
-                .isActive(false)
-                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
-                .dueno(duenoInactivo)
-                .build();
+                .dueno(duenoInactivo));
         inactivo = establecimientoRepository.save(inactivo);
 
         canchaRepository.save(Cancha.builder()
@@ -331,17 +320,15 @@ class ComplejoPublicoControllerIntegrationTest {
                 .build());
 
         String slugNoVerificado = "complejo-nv-buscador-" + estadoVerificacion.name().toLowerCase();
-        Establecimiento noVerificado = Establecimiento.builder()
+        Establecimiento noVerificado = Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo No Verificado Buscador")
                 .direccion("Calle No Verificada 1")
                 .slug(slugNoVerificado)
                 .latitud(-34.6037)
                 .longitud(-58.3816)
                 .requiereSena(true)
-                .isActive(true)
                 .estadoVerificacion(estadoVerificacion)
-                .dueno(duenoNoVerificado)
-                .build();
+                .dueno(duenoNoVerificado));
         establecimientoRepository.save(noVerificado);
 
         mockMvc.perform(get("/api/v1/publico/complejos"))
@@ -410,7 +397,7 @@ class ComplejoPublicoControllerIntegrationTest {
                 .telefonoVerificado(false)
                 .build());
 
-        return establecimientoRepository.save(Establecimiento.builder()
+        return establecimientoRepository.save(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo " + slug)
                 .direccion("Calle " + slug)
                 .slug(slug)
@@ -419,8 +406,7 @@ class ComplejoPublicoControllerIntegrationTest {
                 .requiereSena(true)
                 .isActive(isActive)
                 .estadoVerificacion(estadoVerificacion)
-                .dueno(dueno)
-                .build());
+                .dueno(dueno)));
     }
 
     @ParameterizedTest(name = "GET detalle de un complejo {0} responde 404")

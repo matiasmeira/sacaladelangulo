@@ -20,19 +20,32 @@ import java.util.Optional;
 @Repository
 public interface EstablecimientoRepository extends JpaRepository<Establecimiento, Long> {
 
-    List<Establecimiento> findByDuenoIdAndIsActiveTrue(Long duenoId);
+    /**
+     * "Mis establecimientos" del panel del dueño. Sigue llamándose sin "AndDeletedAtIsNull"
+     * en el nombre a propósito: bajo el invariante que mantiene EstablecimientoEliminacionService
+     * (sólo se puede eliminar un establecimiento ya deshabilitado), deletedAt != null implica
+     * isActive = false, así que el filtro de acá es defensivo -- no cambia el resultado para
+     * ningún caller existente, sólo evita depender para siempre de ese invariante. Se optó por
+     * @Query en vez de renombrar el derived query para no forzar un cambio de firma en callers
+     * cuyo comportamiento no cambia.
+     */
+    @Query("SELECT e FROM Establecimiento e WHERE e.dueno.id = :duenoId AND e.isActive = true AND e.deletedAt IS NULL")
+    List<Establecimiento> findByDuenoIdAndIsActiveTrue(@Param("duenoId") Long duenoId);
 
     long countByDuenoIdAndIsActiveTrue(Long duenoId);
 
     /**
-     * Cuenta TODOS los establecimientos del dueño, estén habilitados o no: usado por el
-     * límite de 3 establecimientos por dueño (ver EstablecimientoService#crearEstablecimiento).
-     * A propósito no filtra por isActive -- un establecimiento deshabilitado sigue ocupando
-     * un lugar (sigue teniendo canchas, reservas, turnos fijos y slug reservado), así que
-     * deshabilitarlo no libera cupo. Si el límite mirara solo los activos, deshabilitar y
-     * rehabilitar establecimientos dejaría el tope de 3 en la práctica sin efecto.
+     * Cuenta los establecimientos del dueño que NO están eliminados, estén habilitados o no:
+     * usado por el límite de 3 establecimientos por dueño (ver
+     * EstablecimientoService#crearEstablecimiento). A propósito no filtra por isActive --
+     * un establecimiento deshabilitado sigue ocupando un lugar (sigue teniendo canchas,
+     * reservas, turnos fijos y slug reservado), así que deshabilitarlo no libera cupo. Si el
+     * límite mirara solo los activos, deshabilitar y rehabilitar establecimientos dejaría el
+     * tope de 3 en la práctica sin efecto. Eliminar SÍ libera cupo -- por eso, a diferencia de
+     * isActive, deletedAt sí forma parte del criterio acá (ver javadoc de
+     * EstablecimientoService#crearEstablecimiento).
      */
-    long countByDuenoId(Long duenoId);
+    long countByDuenoIdAndDeletedAtIsNull(Long duenoId);
 
     /**
      * Pre-filtro por bounding box de latitud/longitud (comparación numérica simple, sí
@@ -44,7 +57,7 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * siendo el filtro final real (ver M29 en la auditoría).
      */
     @Query("SELECT DISTINCT e FROM Establecimiento e LEFT JOIN Cancha c ON c.establecimiento.id = e.id AND c.isActive = true " +
-           "WHERE e.isActive = true AND e.estadoVerificacion = 'VERIFICADO' " +
+           "WHERE e.isActive = true AND e.estadoVerificacion = 'VERIFICADO' AND e.deletedAt IS NULL " +
            "AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes) " +
            "AND e.latitud BETWEEN (:latitud - (:distanciaKm / 110.0)) AND (:latitud + (:distanciaKm / 110.0)) " +
            "AND e.longitud BETWEEN (:longitud - (:distanciaKm / (110.0 * COS(RADIANS(:latitud))))) AND (:longitud + (:distanciaKm / (110.0 * COS(RADIANS(:latitud))))) " +
@@ -65,9 +78,10 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * derived query name porque "AndEstadoVerificacion" además necesitaría el valor VERIFICADO
      * como parámetro en cada call site -- eso mueve el criterio al caller y es exactamente el
      * tipo de duplicación que se quiere evitar (ver EstablecimientoOperativoCoherenciaTest,
-     * que ata este método al guard).
+     * que ata este método al guard). El criterio ahora también incluye deletedAt IS NULL,
+     * por el mismo motivo.
      */
-    @Query("SELECT e FROM Establecimiento e WHERE e.slug = :slug AND e.isActive = true AND e.estadoVerificacion = 'VERIFICADO'")
+    @Query("SELECT e FROM Establecimiento e WHERE e.slug = :slug AND e.isActive = true AND e.estadoVerificacion = 'VERIFICADO' AND e.deletedAt IS NULL")
     Optional<Establecimiento> findBySlugOperativo(@Param("slug") String slug);
 
     /**
@@ -79,7 +93,8 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * follow-up de zona pública).
      */
     @Query("SELECT DISTINCT e FROM Establecimiento e LEFT JOIN Cancha c ON c.establecimiento.id = e.id AND c.isActive = true " +
-           "WHERE e.isActive = true AND e.estadoVerificacion = 'VERIFICADO' AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes)")
+           "WHERE e.isActive = true AND e.estadoVerificacion = 'VERIFICADO' AND e.deletedAt IS NULL " +
+           "AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes)")
     List<Establecimiento> findActivosPorDeporte(@Param("deporte") Deporte deporte, Pageable pageable);
 
     /**
@@ -112,16 +127,22 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * EntityGraph sobre "dueno" para no pagar un SELECT extra por fila al armar
      * AdminEstablecimientoResponse (nombre + email del dueño), mismo criterio que
      * precargarFotos/precargarHorarios.
+     *
+     * <p>A diferencia de findByDuenoIdAndIsActiveTrue, acá el nombre SÍ incluye
+     * "AndDeletedAtIsNull": este listado, a propósito, no filtra por isActive (el admin
+     * necesita ver también los deshabilitados), así que el invariante "eliminado implica
+     * inactivo" no alcanza para excluirlos -- sin esta condición explícita, un
+     * establecimiento eliminado seguiría apareciendo en la cola de verificación.
      */
     @EntityGraph(attributePaths = {"dueno"})
-    Page<Establecimiento> findByEstadoVerificacion(EstadoVerificacion estadoVerificacion, Pageable pageable);
+    Page<Establecimiento> findByEstadoVerificacionAndDeletedAtIsNull(EstadoVerificacion estadoVerificacion, Pageable pageable);
 
     /**
-     * Variante de findByEstadoVerificacion sin filtro, para cuando el admin no elige un
-     * estado puntual (ver AdminEstablecimientoController). "findAllBy" es el nombre derivado
-     * que Spring Data reconoce para "todos", necesario para poder seguir sumándole el
-     * EntityGraph (JpaRepository.findAll(Pageable) no admite anotarse).
+     * Variante de findByEstadoVerificacionAndDeletedAtIsNull sin filtro, para cuando el admin
+     * no elige un estado puntual (ver AdminEstablecimientoController). "findAllBy" es el
+     * nombre derivado que Spring Data reconoce para "todos", necesario para poder seguir
+     * sumándole el EntityGraph (JpaRepository.findAll(Pageable) no admite anotarse).
      */
     @EntityGraph(attributePaths = {"dueno"})
-    Page<Establecimiento> findAllBy(Pageable pageable);
+    Page<Establecimiento> findAllByDeletedAtIsNull(Pageable pageable);
 }

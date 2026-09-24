@@ -26,6 +26,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -69,6 +70,9 @@ class TurnoCajaServiceTest {
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
+    @Mock
     private RegistroAuditoriaService registroAuditoriaService;
 
     private TurnoCajaService turnoCajaService;
@@ -84,6 +88,7 @@ class TurnoCajaServiceTest {
                 establecimientoRepository,
                 dispositivoCajaRepository,
                 autorizacionEmpleadoService,
+                establecimientoOperativoGuard,
                 registroAuditoriaService,
                 new TurnoCajaMapper(new MovimientoCajaMapper()),
                 new MovimientoCajaMapper()
@@ -150,6 +155,23 @@ class TurnoCajaServiceTest {
 
         assertEquals(0, BigDecimal.valueOf(5000).compareTo(response.fondoInicial()));
         assertEquals("ABIERTO", response.estado());
+    }
+
+    @Test
+    @DisplayName("abrirCaja_Fallo_EstablecimientoDeshabilitado_NoAbreTurno")
+    void abrirCaja_Fallo_EstablecimientoDeshabilitado_NoAbreTurno() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(10L).dueno(dueno));
+        AbrirCajaRequest request = new AbrirCajaRequest(BigDecimal.valueOf(5000), null);
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarAccion(deshabilitado, dueno.getEmail(), PermisoEmpleado.OPERAR_CAJA))
+                .thenReturn(dueno);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(AccessDeniedException.class,
+                () -> turnoCajaService.abrirCaja(deshabilitado.getId(), request, dueno.getEmail()));
+        verify(turnoCajaRepository, never()).save(any());
     }
 
     @Test
@@ -267,6 +289,35 @@ class TurnoCajaServiceTest {
         assertEquals(0, BigDecimal.valueOf(500).compareTo(response.monto()));
     }
 
+    @Test
+    @DisplayName("registrarMovimientoManual_Exito_EstablecimientoDeshabilitado_SigueFuncionando")
+    void registrarMovimientoManual_Exito_EstablecimientoDeshabilitado_SigueFuncionando() {
+        // Administrar un turno YA ABIERTO (registrar el retiro final antes de cerrar) no es
+        // "generar un compromiso nuevo": queda exento a propósito, no pasa por el guard nuevo.
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(10L).dueno(dueno));
+        TurnoCaja turno = TurnoCaja.builder().id(100L).establecimiento(deshabilitado).usuarioApertura(dueno)
+                .fechaApertura(LocalDateTime.now().minusHours(2)).fondoInicial(BigDecimal.ZERO)
+                .estado(EstadoTurnoCaja.ABIERTO).build();
+        MovimientoManualRequest request = new MovimientoManualRequest(TipoMovimientoCaja.EGRESO, BigDecimal.valueOf(500), "Retiro final");
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarAccion(deshabilitado, dueno.getEmail(), PermisoEmpleado.OPERAR_CAJA))
+                .thenReturn(dueno);
+        when(turnoCajaRepository.findByEstablecimientoIdAndEstado(deshabilitado.getId(), EstadoTurnoCaja.ABIERTO))
+                .thenReturn(Optional.of(turno));
+        when(movimientoCajaRepository.save(any(MovimientoCaja.class))).thenAnswer(invocation -> {
+            MovimientoCaja movimiento = invocation.getArgument(0);
+            movimiento.setId(300L);
+            movimiento.setFechaHora(LocalDateTime.now());
+            return movimiento;
+        });
+
+        MovimientoCajaResponse response = turnoCajaService.registrarMovimientoManual(deshabilitado.getId(), request, dueno.getEmail());
+
+        assertEquals("EGRESO", response.tipo());
+        org.mockito.Mockito.verifyNoInteractions(establecimientoOperativoGuard);
+    }
+
     // ---------- cerrarCaja ----------
 
     @Test
@@ -354,6 +405,31 @@ class TurnoCajaServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> turnoCajaService.cerrarCaja(establecimiento.getId(), turno.getId(), request, dueno.getEmail()));
         verify(turnoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cerrarCaja_Exito_EstablecimientoDeshabilitado_SigueFuncionando")
+    void cerrarCaja_Exito_EstablecimientoDeshabilitado_SigueFuncionando() {
+        // Cerrar un turno YA abierto es administrar lo existente, no crear un compromiso
+        // nuevo: tiene que seguir funcionando aunque el establecimiento esté deshabilitado.
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(10L).dueno(dueno));
+        TurnoCaja turno = TurnoCaja.builder().id(100L).establecimiento(deshabilitado).usuarioApertura(dueno)
+                .fechaApertura(LocalDateTime.now().minusHours(2)).fondoInicial(BigDecimal.valueOf(1000))
+                .estado(EstadoTurnoCaja.ABIERTO).build();
+        CerrarCajaRequest request = new CerrarCajaRequest(BigDecimal.valueOf(1000), null);
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarAccion(deshabilitado, dueno.getEmail(), PermisoEmpleado.OPERAR_CAJA))
+                .thenReturn(dueno);
+        when(turnoCajaRepository.findByIdAndEstablecimientoId(turno.getId(), deshabilitado.getId()))
+                .thenReturn(Optional.of(turno));
+        when(movimientoCajaRepository.findByTurnoCajaIdOrderByFechaHoraAsc(turno.getId())).thenReturn(List.of());
+        when(turnoCajaRepository.save(any(TurnoCaja.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CierreCajaResponse response = turnoCajaService.cerrarCaja(deshabilitado.getId(), turno.getId(), request, dueno.getEmail());
+
+        assertEquals("EXACTO", response.resultado());
+        org.mockito.Mockito.verifyNoInteractions(establecimientoOperativoGuard);
     }
 
     @Test

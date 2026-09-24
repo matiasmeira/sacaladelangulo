@@ -157,4 +157,14 @@ public class Establecimiento {
      */
     @Column(name = "motivo_rechazo")
     private String motivoRechazo;
+
+    /**
+     * Momento en que el dueño eliminó este establecimiento (baja lógica). Discriminador real
+     * de "eliminado": isActive=false por sí solo no alcanza, porque ya se usa para
+     * "deshabilitado" (PATCH /estado, reversible, no libera cupo del límite de 3). Mismo
+     * patrón que Usuario.deletedAt (ver V14) -- columna simple, sin filtro global de
+     * Hibernate: cada query/servicio que necesita excluir eliminados lo declara explícitamente.
+     */
+    @Column(name = "deleted_at")
+    private java.time.LocalDateTime deletedAt;
 }

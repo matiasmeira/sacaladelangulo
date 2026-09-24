@@ -19,6 +19,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +66,9 @@ class DispositivoCajaServiceTest {
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
+    @Mock
     private RateLimiterService rateLimiterService;
 
     @Mock
@@ -82,7 +86,7 @@ class DispositivoCajaServiceTest {
     void setUp() {
         dispositivoCajaService = new DispositivoCajaService(
                 dispositivoCajaRepository, codigoEmparejamientoCajaRepository, establecimientoRepository,
-                autorizacionEmpleadoService, rateLimiterService, registroAuditoriaService);
+                autorizacionEmpleadoService, establecimientoOperativoGuard, rateLimiterService, registroAuditoriaService);
         ReflectionTestUtils.setField(dispositivoCajaService, "dispositivoExpirationMillis", 7_776_000_000L);
         ReflectionTestUtils.setField(dispositivoCajaService, "codigoEmparejamientoTtlMillis", 600_000L);
         ReflectionTestUtils.setField(dispositivoCajaService, "frontendUrl", "http://localhost:5173");
@@ -98,6 +102,48 @@ class DispositivoCajaServiceTest {
                 .longitud(-58.3816)
                 .dueno(dueno)
                 .requiereSena(true));
+    }
+
+    @Test
+    @DisplayName("activarLocal_Fallo_EstablecimientoDeshabilitado")
+    void activarLocal_Fallo_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(11L).dueno(dueno));
+        when(establecimientoRepository.findById(11L)).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(AccessDeniedException.class, () ->
+                dispositivoCajaService.activarLocal(11L, dueno.getEmail(), new ActivarLocalRequest("Caja 1"), httpServletResponse));
+        verify(dispositivoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("emparejar_Fallo_EstablecimientoDeshabilitado")
+    void emparejar_Fallo_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(11L).dueno(dueno));
+        when(establecimientoRepository.findById(11L)).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(AccessDeniedException.class, () ->
+                dispositivoCajaService.emparejar(11L, dueno.getEmail(), new EmparejarRequest("Mostrador")));
+        verify(codigoEmparejamientoCajaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("listar_Exito_EstablecimientoDeshabilitado_SigueFuncionando")
+    void listar_Exito_EstablecimientoDeshabilitado_SigueFuncionando() {
+        // Listar dispositivos ya emparejados es administrar lo existente, no un alta nueva:
+        // listar() no pasa por el guard nuevo.
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(11L).dueno(dueno));
+        when(establecimientoRepository.findById(11L)).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        when(dispositivoCajaRepository.findByEstablecimientoIdAndActivoTrue(11L)).thenReturn(List.of());
+
+        assertDoesNotThrow(() -> dispositivoCajaService.listar(11L, dueno.getEmail()));
+        org.mockito.Mockito.verifyNoInteractions(establecimientoOperativoGuard);
     }
 
     @Test

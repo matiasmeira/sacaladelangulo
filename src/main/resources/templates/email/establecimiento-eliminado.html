@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Diste de baja tu establecimiento</title>
+</head>
+<body>
+
+<div th:replace="~{layout :: email(titulo='Diste de baja tu establecimiento', contenidoHtml=~{::#contenido})}">
+
+    <div id="contenido">
+        <p style="margin:0 0 16px 0;">
+            Hola <span th:text="${nombreDueno}">Dueño</span>, confirmamos que eliminaste
+            <strong th:text="${nombreEstablecimiento}">Tu Complejo</strong> de Canchear.
+        </p>
+        <p style="margin:0 0 16px 0;">
+            Dejó de aparecer en el buscador y ya no se puede reservar. Sus canchas, empleados,
+            reservas históricas, ventas y movimientos de caja quedaron intactos, sólo que ya
+            no son visibles para nadie más.
+        </p>
+        <p style="margin:0;">
+            Es una acción irreversible: no hay forma de restaurar el establecimiento eliminado.
+            Si no fuiste vos quien la solicitó, contactanos lo antes posible.
+        </p>
+    </div>
+
+</div>
+
+</body>
+</html>

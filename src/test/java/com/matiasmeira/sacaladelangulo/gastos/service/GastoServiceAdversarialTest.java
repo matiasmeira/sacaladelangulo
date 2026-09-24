@@ -8,6 +8,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoMapper;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoRequest;
 import com.matiasmeira.sacaladelangulo.gastos.model.CategoriaGasto;
@@ -50,6 +51,7 @@ class GastoServiceAdversarialTest {
     @Mock private GastoRepository gastoRepository;
     @Mock private EstablecimientoRepository establecimientoRepository;
     @Mock private AutorizacionEmpleadoService autorizacionEmpleadoService;
+    @Mock private EstablecimientoOperativoGuard establecimientoOperativoGuard;
     @Mock private TurnoCajaService turnoCajaService;
     @Mock private RegistroAuditoriaService registroAuditoriaService;
 
@@ -60,7 +62,7 @@ class GastoServiceAdversarialTest {
     @BeforeEach
     void setUp() {
         gastoService = new GastoService(gastoRepository, establecimientoRepository, autorizacionEmpleadoService,
-                new GastoMapper(), turnoCajaService, registroAuditoriaService);
+                establecimientoOperativoGuard, new GastoMapper(), turnoCajaService, registroAuditoriaService);
 
         dueno = Usuario.builder().id(2L).email("dueno@test.com").nombre("Dueño Test").rol(Role.OWNER).build();
         establecimiento = Establecimientos.establecimientoOperativo(b -> b.id(10L).nombre("Establecimiento Test").dueno(dueno));

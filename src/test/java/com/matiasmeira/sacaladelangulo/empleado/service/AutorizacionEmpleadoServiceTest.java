@@ -184,6 +184,44 @@ class AutorizacionEmpleadoServiceTest {
     }
 
     @Test
+    @DisplayName("tienePermiso_False_EstablecimientoEliminado")
+    void tienePermiso_False_EstablecimientoEliminado() {
+        // El empleado de un establecimiento eliminado pierde el acceso al panel por completo,
+        // acá -- tienePermiso es el único punto por el que pasan validarAccion/validarLectura/
+        // tieneAccesoDePanel para un EMPLOYEE (ver AutorizacionEmpleadoService).
+        Establecimiento eliminado = Establecimientos.establecimientoEliminado(b -> b
+                .id(10L).nombre("Establecimiento Test").dueno(dueno));
+        Usuario empleado = Usuario.builder()
+                .id(5L)
+                .rol(Role.EMPLOYEE)
+                .establecimiento(eliminado)
+                .permisos(Set.of(PermisoEmpleado.FINALIZAR_RESERVA))
+                .build();
+
+        assertFalse(autorizacionEmpleadoService.tienePermiso(empleado, eliminado, PermisoEmpleado.FINALIZAR_RESERVA));
+    }
+
+    @Test
+    @DisplayName("validarAccion_Fallo_EmpleadoDeEstablecimientoEliminado")
+    void validarAccion_Fallo_EmpleadoDeEstablecimientoEliminado() {
+        Establecimiento eliminado = Establecimientos.establecimientoEliminado(b -> b
+                .id(10L).nombre("Establecimiento Test").dueno(dueno));
+        Usuario empleado = Usuario.builder()
+                .id(5L)
+                .email("empleado-uuid@empleados.interno")
+                .rol(Role.EMPLOYEE)
+                .establecimiento(eliminado)
+                .permisos(Set.of(PermisoEmpleado.CANCELAR_RESERVA))
+                .build();
+        when(usuarioRepository.findByEmail(empleado.getEmail())).thenReturn(Optional.of(empleado));
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> autorizacionEmpleadoService.validarAccion(eliminado, empleado.getEmail(), PermisoEmpleado.CANCELAR_RESERVA)
+        );
+    }
+
+    @Test
     @DisplayName("tienePermiso_False_EmpleadoSinEsePermiso")
     void tienePermiso_False_EmpleadoSinEsePermiso() {
         Usuario empleado = Usuario.builder()

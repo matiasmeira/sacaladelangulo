@@ -23,11 +23,13 @@ public class DiaNoLaborableService {
     private final DiaNoLaborableRepository diaNoLaborableRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
 
     @Transactional
     public DiaNoLaborableResponse crear(Long establecimientoId, DiaNoLaborableRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         if (diaNoLaborableRepository.existsByEstablecimientoIdAndFecha(establecimientoId, request.fecha())) {
             throw new IllegalArgumentException("Ya existe un día no laborable cargado para el " + request.fecha());

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.security.access.AccessDeniedException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,6 +26,14 @@ class EstablecimientoOperativoGuardTest {
 
     private Establecimiento establecimiento(boolean activo, EstadoVerificacion estadoVerificacion) {
         return Establecimiento.builder().id(1L).nombre("Test").isActive(activo).estadoVerificacion(estadoVerificacion).build();
+    }
+
+    /** Activo y verificado pero eliminado: aísla el efecto de deletedAt de isActive/estadoVerificacion. */
+    private Establecimiento establecimientoEliminado() {
+        return Establecimiento.builder().id(1L).nombre("Test").isActive(true)
+                .estadoVerificacion(EstadoVerificacion.VERIFICADO)
+                .deletedAt(java.time.LocalDateTime.now())
+                .build();
     }
 
     @Test
@@ -59,6 +68,17 @@ class EstablecimientoOperativoGuardTest {
     void validarEstablecimientoOperativoParaJugador_InactivoYNoVerificado_LanzaMismoMensajeOpaco() {
         EntityNotFoundException ex = assertThrows(EntityNotFoundException.class,
                 () -> guard.validarEstablecimientoOperativoParaJugador(establecimiento(false, EstadoVerificacion.PENDIENTE)));
+
+        assertEquals("Establecimiento no encontrado", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("validarEstablecimientoOperativoParaJugador_Eliminado_LanzaEntityNotFoundOpaco")
+    void validarEstablecimientoOperativoParaJugador_Eliminado_LanzaEntityNotFoundOpaco() {
+        // Activo=true y verificado=true a propósito: aísla que deletedAt por sí solo alcanza
+        // para tumbar el guard, no depende de que isActive también sea false.
+        EntityNotFoundException ex = assertThrows(EntityNotFoundException.class,
+                () -> guard.validarEstablecimientoOperativoParaJugador(establecimientoEliminado()));
 
         assertEquals("Establecimiento no encontrado", ex.getMessage());
     }
@@ -102,5 +122,51 @@ class EstablecimientoOperativoGuardTest {
                 () -> guard.validarEstablecimientoOperativoParaPanel(establecimiento(false, EstadoVerificacion.PENDIENTE)));
 
         assertTrue(ex.getMessage().toLowerCase().contains("deshabilitado"));
+    }
+
+    @Test
+    @DisplayName("validarEstablecimientoOperativoParaPanel_Eliminado_LanzaIllegalArgumentMencionandoDeshabilitado")
+    void validarEstablecimientoOperativoParaPanel_Eliminado_LanzaIllegalArgumentMencionandoDeshabilitado() {
+        // Mismo mensaje que "deshabilitado": bajo el invariante de EstablecimientoEliminacionService
+        // esto nunca pasaría con isActive=true en producción, pero el chequeo explícito de
+        // deletedAt tiene que sostenerse solo, sin depender de ese invariante.
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> guard.validarEstablecimientoOperativoParaPanel(establecimientoEliminado()));
+
+        assertTrue(ex.getMessage().toLowerCase().contains("deshabilitado"));
+    }
+
+    @Test
+    @DisplayName("validarPuedeGenerarCompromisosNuevos_Activo_NoLanza")
+    void validarPuedeGenerarCompromisosNuevos_Activo_NoLanza() {
+        assertDoesNotThrow(() -> guard.validarPuedeGenerarCompromisosNuevos(establecimiento(true)));
+    }
+
+    @Test
+    @DisplayName("validarPuedeGenerarCompromisosNuevos_Inactivo_LanzaAccessDeniedMencionandoDeshabilitado")
+    void validarPuedeGenerarCompromisosNuevos_Inactivo_LanzaAccessDeniedMencionandoDeshabilitado() {
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class,
+                () -> guard.validarPuedeGenerarCompromisosNuevos(establecimiento(false)));
+
+        assertTrue(ex.getMessage().toLowerCase().contains("deshabilitado"));
+    }
+
+    @Test
+    @DisplayName("validarPuedeGenerarCompromisosNuevos_Eliminado_LanzaAccessDenied")
+    void validarPuedeGenerarCompromisosNuevos_Eliminado_LanzaAccessDenied() {
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class,
+                () -> guard.validarPuedeGenerarCompromisosNuevos(establecimientoEliminado()));
+
+        assertTrue(ex.getMessage().toLowerCase().contains("deshabilitado"));
+    }
+
+    @ParameterizedTest(name = "validarPuedeGenerarCompromisosNuevos_ActivoSinImportarVerificacion_{0}_NoLanza")
+    @EnumSource(EstadoVerificacion.class)
+    @DisplayName("validarPuedeGenerarCompromisosNuevos_ActivoSinImportarVerificacion_NoLanza")
+    void validarPuedeGenerarCompromisosNuevos_ActivoSinImportarVerificacion_NoLanza(EstadoVerificacion estadoVerificacion) {
+        // A diferencia de ParaJugador/ParaPanel, este chequeo no exige estadoVerificacion:
+        // un establecimiento todavía no verificado tiene que poder seguir dando de alta
+        // canchas, productos y fotos como parte de su propio onboarding.
+        assertDoesNotThrow(() -> guard.validarPuedeGenerarCompromisosNuevos(establecimiento(true, estadoVerificacion)));
     }
 }

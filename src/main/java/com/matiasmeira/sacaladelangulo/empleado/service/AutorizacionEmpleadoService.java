@@ -104,11 +104,21 @@ public class AutorizacionEmpleadoService {
     /**
      * Chequeo puro (no lanza excepción): ¿este usuario es un empleado de este
      * establecimiento con el permiso indicado habilitado?
+     *
+     * <p>El chequeo de {@code establecimiento.getDeletedAt() == null} es a propósito el ÚNICO
+     * chequeo de estado del establecimiento acá -- no isActive. Un establecimiento
+     * deshabilitado (pero no eliminado) sigue dejando que sus empleados administren lo
+     * existente (ver EstablecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos, que
+     * corta las altas nuevas en otro punto); un establecimiento ELIMINADO en cambio le corta
+     * el acceso al panel al empleado por completo, acá, porque este método es el único punto
+     * por el que pasan {@link #validarAccion} y {@link #tieneAccesoDeLectura} (y por lo tanto
+     * {@link #validarLectura}/{@link #tieneAccesoDePanel}) para un EMPLOYEE.
      */
     public boolean tienePermiso(Usuario usuario, Establecimiento establecimiento, PermisoEmpleado permiso) {
         return usuario.getRol() == Role.EMPLOYEE
                 && usuario.getEstablecimiento() != null
                 && usuario.getEstablecimiento().getId().equals(establecimiento.getId())
+                && establecimiento.getDeletedAt() == null
                 && usuario.getPermisos().contains(permiso);
     }
 

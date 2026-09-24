@@ -47,6 +47,7 @@ public class CanchaService {
     private final CanchaRepository canchaRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
     private final RegistroAuditoriaService registroAuditoriaService;
     private final ComplejoDetalleCache complejoDetalleCache;
     private final ReservaRepository reservaRepository;
@@ -56,6 +57,7 @@ public class CanchaService {
 
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         BigDecimal montoSena = validarMontoSena(request.montoSena(), usuarioAutenticado.getPlanSuscripcion());
         Integer canchasNecesarias = calcularCanchasNecesarias(request.canchasFisicasIds(), request.cantidadCanchasNecesarias());

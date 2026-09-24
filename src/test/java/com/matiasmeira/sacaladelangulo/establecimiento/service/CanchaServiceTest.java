@@ -58,6 +58,9 @@ class CanchaServiceTest {
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
+    @Mock
     private RegistroAuditoriaService registroAuditoriaService;
 
     @Mock
@@ -97,6 +100,24 @@ class CanchaServiceTest {
                 .establecimiento(establecimiento)
                 .isActive(true)
                 .build();
+    }
+
+    @Test
+    @DisplayName("crearCancha_Fallo_EstablecimientoDeshabilitado")
+    void crearCancha_Fallo_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b
+                .id(20L).dueno(dueno).requiereSena(true));
+        CanchaRequest request = new CanchaRequest("Cancha A", Set.of(Deporte.FUTBOL_5), BigDecimal.valueOf(5000),
+                BigDecimal.valueOf(1000), null, null, null, null, null, null, null);
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> canchaService.crearCancha(deshabilitado.getId(), request, dueno.getEmail()));
+        verify(canchaRepository, never()).save(any());
     }
 
     @Test

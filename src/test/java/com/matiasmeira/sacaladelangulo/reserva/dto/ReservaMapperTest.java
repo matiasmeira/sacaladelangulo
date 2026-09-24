@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.reserva.dto;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
+import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.TurnoFijo;
@@ -32,6 +33,33 @@ class ReservaMapperTest {
     @DisplayName("mapToResponse_ReservaPuntual_DejaElIdDeSerieEnNulo")
     void mapToResponse_ReservaPuntual_DejaElIdDeSerieEnNulo() {
         assertThat(reservaMapper.mapToResponse(reservaBase()).turnoFijoId()).isNull();
+    }
+
+    /**
+     * GARANTÍA MÁS IMPORTANTE del historial del jugador (ver inventario de la eliminación de
+     * establecimientos): un jugador con una reserva vieja en un establecimiento que después el
+     * dueño eliminó tiene que seguir viendo su historial sin errores. ReservaResponse no
+     * expone ningún dato de Establecimiento (ni nombre, ni slug, ni dirección) y el mapper
+     * nunca dereferencia esa asociación -- así que ni siquiera necesita filtrarla. Este test
+     * lo fija: si algún día alguien le agrega un campo de establecimiento al DTO, este es el
+     * primer lugar que hay que revisar para no reventar el historial con un establecimiento
+     * eliminado.
+     */
+    @Test
+    @DisplayName("mapToResponse_CanchaDeEstablecimientoEliminado_NoRompeYNoExponeNadaDelEstablecimiento")
+    void mapToResponse_CanchaDeEstablecimientoEliminado_NoRompeYNoExponeNadaDelEstablecimiento() {
+        Cancha cancha = Cancha.builder()
+                .id(1L)
+                .nombre("Cancha 1")
+                .establecimiento(Establecimientos.establecimientoEliminado(b -> b.id(99L)))
+                .build();
+        Reserva reserva = reservaBase();
+        reserva.setCancha(cancha);
+
+        ReservaResponse response = reservaMapper.mapToResponse(reserva);
+
+        assertThat(response.canchaId()).isEqualTo(1L);
+        assertThat(response.canchaNombre()).isEqualTo("Cancha 1");
     }
 
     /** Reserva puntual "genérica" (sin turno fijo), para los tests que no necesitan más. */

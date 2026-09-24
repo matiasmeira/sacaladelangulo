@@ -55,6 +55,8 @@ class FotoEstablecimientoServiceTest {
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
     @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+    @Mock
     private ImageKitService imageKitService;
     @Mock
     private RegistroAuditoriaService registroAuditoriaService;
@@ -78,6 +80,7 @@ class FotoEstablecimientoServiceTest {
         servicio = new FotoEstablecimientoService(
                 establecimientoRepository,
                 autorizacionEmpleadoService,
+                establecimientoOperativoGuard,
                 imageKitService,
                 new ValidadorFoto(),
                 registroAuditoriaService,
@@ -108,6 +111,20 @@ class FotoEstablecimientoServiceTest {
                 .url("https://ik.imagekit.io/demo/" + fileId + ".jpg")
                 .fileId(fileId)
                 .build();
+    }
+
+    @Test
+    @DisplayName("subir_Fallo_EstablecimientoDeshabilitado")
+    void subir_Fallo_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b
+                .id(ESTABLECIMIENTO_ID).nombre("Complejo Test").dueno(dueno).fotos(new ArrayList<>()));
+        when(establecimientoRepository.findById(ESTABLECIMIENTO_ID)).thenReturn(Optional.of(deshabilitado));
+        doThrow(new AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThatThrownBy(() -> servicio.subir(ESTABLECIMIENTO_ID, jpeg(), "nueva.jpg", EMAIL_DUENO))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(imageKitService, never()).subir(any(), anyString(), anyString());
     }
 
     @Test
@@ -188,6 +205,22 @@ class FotoEstablecimientoServiceTest {
         servicio.borrar(ESTABLECIMIENTO_ID, "file_1", EMAIL_DUENO);
 
         assertThat(establecimiento.getFotos()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("borrar_Exito_EstablecimientoDeshabilitado_SigueFuncionando")
+    void borrar_Exito_EstablecimientoDeshabilitado_SigueFuncionando() {
+        // Borrar una foto ya subida es administrar lo existente, no un alta nueva: borrar()
+        // no pasa por el guard nuevo (a diferencia de subir()).
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b
+                .id(ESTABLECIMIENTO_ID).nombre("Complejo Test").dueno(dueno).fotos(new ArrayList<>()));
+        deshabilitado.getFotos().add(foto("file_1"));
+        when(establecimientoRepository.findById(ESTABLECIMIENTO_ID)).thenReturn(Optional.of(deshabilitado));
+
+        servicio.borrar(ESTABLECIMIENTO_ID, "file_1", EMAIL_DUENO);
+
+        assertThat(deshabilitado.getFotos()).isEmpty();
+        verify(establecimientoOperativoGuard, never()).validarPuedeGenerarCompromisosNuevos(any());
     }
 
     @Test

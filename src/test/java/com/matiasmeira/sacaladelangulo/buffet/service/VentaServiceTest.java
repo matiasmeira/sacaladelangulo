@@ -22,6 +22,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -71,6 +72,9 @@ class VentaServiceTest {
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
+    @Mock
     private RegistroAuditoriaService registroAuditoriaService;
 
     @Mock
@@ -88,7 +92,7 @@ class VentaServiceTest {
         ventaService = new VentaService(
                 ventaRepository, productoBuffetRepository, establecimientoRepository,
                 reservaRepository, new VentaMapper(),
-                autorizacionEmpleadoService, registroAuditoriaService, turnoCajaService);
+                autorizacionEmpleadoService, establecimientoOperativoGuard, registroAuditoriaService, turnoCajaService);
 
         dueno = Usuario.builder()
                 .id(2L)
@@ -277,6 +281,66 @@ class VentaServiceTest {
         verify(registroAuditoriaService).registrar(
                 eq(empleado), eq(com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria.REGISTRAR_VENTA_BUFFET),
                 eq(105L), eq(true), any());
+    }
+
+    @Test
+    @DisplayName("registrarVenta_Fallo_EstablecimientoDeshabilitado_Dueno")
+    void registrarVenta_Fallo_EstablecimientoDeshabilitado_Dueno() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(11L).dueno(dueno));
+        VentaRequest request = new VentaRequest(deshabilitado.getId(), null, MetodoPago.EFECTIVO,
+                List.of(new DetalleVentaRequest(agua.getId(), 1)));
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> ventaService.registrarVenta(request, dueno.getEmail()));
+        verify(ventaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("registrarVenta_Fallo_EstablecimientoDeshabilitado_Empleado")
+    void registrarVenta_Fallo_EstablecimientoDeshabilitado_Empleado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(11L).dueno(dueno));
+        Usuario empleado = Usuario.builder()
+                .id(9L).email("empleado-uuid@empleados.interno").nombre("Empleado Mostrador").rol(Role.EMPLOYEE)
+                .establecimiento(deshabilitado)
+                .permisos(Set.of(com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.REGISTRAR_VENTA_BUFFET))
+                .isActive(true).build();
+        VentaRequest request = new VentaRequest(deshabilitado.getId(), null, MetodoPago.EFECTIVO,
+                List.of(new DetalleVentaRequest(agua.getId(), 1)));
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarAccion(deshabilitado, empleado.getEmail(),
+                com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado.REGISTRAR_VENTA_BUFFET)).thenReturn(empleado);
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> ventaService.registrarVenta(request, empleado.getEmail()));
+        verify(ventaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancelarVenta_Exito_EstablecimientoDeshabilitado_SigueFuncionando")
+    void cancelarVenta_Exito_EstablecimientoDeshabilitado_SigueFuncionando() {
+        // Cancelar una venta ya registrada es administrar lo existente, no un compromiso
+        // nuevo: cancelarVenta no pasa por el guard nuevo (usa validarPropietarioOAdmin solo).
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(11L).dueno(dueno));
+        Venta venta = Venta.builder()
+                .id(201L).establecimiento(deshabilitado).fechaHora(LocalDateTime.now())
+                .total(BigDecimal.valueOf(1500)).estado(EstadoVenta.CONFIRMADA).metodoPago(MetodoPago.EFECTIVO)
+                .detalles(List.of()).build();
+
+        when(ventaRepository.findByIdConDetalles(venta.getId())).thenReturn(Optional.of(venta));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        VentaResponse response = assertDoesNotThrow(() -> ventaService.cancelarVenta(venta.getId(), dueno.getEmail()));
+
+        assertEquals("CANCELADA", response.estado());
+        org.mockito.Mockito.verifyNoInteractions(establecimientoOperativoGuard);
     }
 
     @Test

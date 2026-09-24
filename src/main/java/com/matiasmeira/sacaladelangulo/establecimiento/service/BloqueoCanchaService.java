@@ -38,6 +38,7 @@ public class BloqueoCanchaService {
     private final ReservaMapper reservaMapper;
     private final UsuarioRepository usuarioRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
 
     @Transactional
     public BloqueoCanchaResponse crearBloqueo(Long establecimientoId, Long canchaId, BloqueoCanchaRequest request, String email) {
@@ -47,6 +48,7 @@ public class BloqueoCanchaService {
 
         Cancha cancha = buscarCanchaDelEstablecimiento(establecimientoId, canchaId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(cancha.getEstablecimiento());
 
         BloqueoCancha bloqueo = BloqueoCancha.builder()
                 .cancha(cancha)

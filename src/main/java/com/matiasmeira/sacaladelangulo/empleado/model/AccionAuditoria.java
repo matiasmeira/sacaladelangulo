@@ -65,5 +65,12 @@ public enum AccionAuditoria {
     // el dueño mismo, nunca un tercero.
     SOLICITAR_VERIFICACION_ESTABLECIMIENTO,
     HABILITAR_ESTABLECIMIENTO,
-    DESHABILITAR_ESTABLECIMIENTO
+    DESHABILITAR_ESTABLECIMIENTO,
+
+    /**
+     * Baja lógica del establecimiento (ver EstablecimientoEliminacionService): a diferencia
+     * de DESHABILITAR_ESTABLECIMIENTO, es irreversible y libera el slug y el cupo del límite
+     * de 3.
+     */
+    ELIMINAR_ESTABLECIMIENTO
 }

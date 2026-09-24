@@ -12,6 +12,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoMapper;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoRequest;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoResponse;
@@ -60,6 +61,9 @@ class GastoServiceTest {
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
+    @Mock
     private TurnoCajaService turnoCajaService;
 
     @Mock
@@ -73,7 +77,8 @@ class GastoServiceTest {
 
     @BeforeEach
     void setUp() {
-        gastoService = new GastoService(gastoRepository, establecimientoRepository, autorizacionEmpleadoService, new GastoMapper(), turnoCajaService, registroAuditoriaService);
+        gastoService = new GastoService(gastoRepository, establecimientoRepository, autorizacionEmpleadoService,
+                establecimientoOperativoGuard, new GastoMapper(), turnoCajaService, registroAuditoriaService);
 
         dueno = Usuario.builder()
                 .id(2L)
@@ -126,6 +131,22 @@ class GastoServiceTest {
     }
 
     @Test
+    @DisplayName("registrarGasto_Fallo_EstablecimientoDeshabilitado")
+    void registrarGasto_Fallo_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(20L).dueno(dueno));
+        GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(1000), CategoriaGasto.SERVICIOS, "Luz", MetodoPago.EFECTIVO, null);
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(AccessDeniedException.class,
+                () -> gastoService.registrarGasto(deshabilitado.getId(), request, dueno.getEmail()));
+        verify(gastoRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("registrarGasto_Fallo_Empleado_NoAutorizado")
     void registrarGasto_Fallo_Empleado_NoAutorizado() {
         GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(1000), CategoriaGasto.SERVICIOS, "Luz", MetodoPago.EFECTIVO, null);
@@ -150,6 +171,23 @@ class GastoServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> gastoService.registrarGasto(establecimiento.getId(), request, dueno.getEmail()));
         verify(gastoRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("listarGastos_Exito_EstablecimientoDeshabilitado_SigueFuncionando")
+    void listarGastos_Exito_EstablecimientoDeshabilitado_SigueFuncionando() {
+        // Listar gastos ya registrados es administrar/leer lo existente: listarGastos no
+        // pasa por el guard nuevo.
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(20L).dueno(dueno));
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        when(gastoRepository.buscar(deshabilitado.getId(), null, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        assertDoesNotThrow(() -> gastoService.listarGastos(deshabilitado.getId(), dueno.getEmail(), null, null, null, pageable));
+        org.mockito.Mockito.verifyNoInteractions(establecimientoOperativoGuard);
     }
 
     @Test

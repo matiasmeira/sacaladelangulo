@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.EstablecimientoRespon
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.PrevisualizacionEstablecimientoResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.SolicitarVerificacionRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.SolicitarVerificacionResponse;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoEliminacionService;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoEstadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoPrevisualizacionService;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoService;
@@ -34,6 +35,7 @@ public class EstablecimientoController {
     private final EstablecimientoVerificacionService establecimientoVerificacionService;
     private final EstablecimientoPrevisualizacionService establecimientoPrevisualizacionService;
     private final EstablecimientoEstadoService establecimientoEstadoService;
+    private final EstablecimientoEliminacionService establecimientoEliminacionService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
@@ -104,5 +106,19 @@ public class EstablecimientoController {
         CambiarEstadoEstablecimientoResponse response =
                 establecimientoEstadoService.cambiarEstado(id, request, userDetails.getUsername());
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Elimina (baja lógica) este establecimiento. Solo el dueño -- mismo criterio de
+     * hasRole('OWNER') puro que cambiarEstado/solicitarVerificacion. Irreversible: no hay
+     * endpoint de restauración.
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Void> eliminarEstablecimiento(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        establecimientoEliminacionService.eliminarEstablecimiento(id, userDetails.getUsername());
+        return ResponseEntity.noContent().build();
     }
 }

@@ -47,6 +47,9 @@ class BloqueoJugadorServiceTest {
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
 
+    @Mock
+    private EstablecimientoOperativoGuard establecimientoOperativoGuard;
+
     @InjectMocks
     private BloqueoJugadorService bloqueoJugadorService;
 
@@ -104,6 +107,22 @@ class BloqueoJugadorServiceTest {
         assertEquals(jugador.getId(), response.jugadorId());
         assertEquals("No-show reiterado", response.motivo());
         verify(bloqueoJugadorRepository).save(any(BloqueoJugador.class));
+    }
+
+    @Test
+    @DisplayName("crearBloqueo_Fallo_EstablecimientoDeshabilitado")
+    void crearBloqueo_Fallo_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b.id(20L).dueno(dueno));
+        BloqueoJugadorRequest request = new BloqueoJugadorRequest(jugador.getId(), "No-show reiterado");
+
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("Este establecimiento está deshabilitado."))
+                .when(establecimientoOperativoGuard).validarPuedeGenerarCompromisosNuevos(deshabilitado);
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> bloqueoJugadorService.crearBloqueo(deshabilitado.getId(), request, dueno.getEmail()));
+        verify(bloqueoJugadorRepository, never()).save(any());
     }
 
     @Test

@@ -65,6 +65,7 @@ public class FotoEstablecimientoService {
 
     private final EstablecimientoRepository establecimientoRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
     private final ImageKitService imageKitService;
     private final ValidadorFoto validadorFoto;
     private final RegistroAuditoriaService registroAuditoriaService;
@@ -75,6 +76,7 @@ public class FotoEstablecimientoService {
 
     public FotoEstablecimientoService(EstablecimientoRepository establecimientoRepository,
                                        AutorizacionEmpleadoService autorizacionEmpleadoService,
+                                       EstablecimientoOperativoGuard establecimientoOperativoGuard,
                                        ImageKitService imageKitService,
                                        ValidadorFoto validadorFoto,
                                        RegistroAuditoriaService registroAuditoriaService,
@@ -82,6 +84,7 @@ public class FotoEstablecimientoService {
                                        PlatformTransactionManager transactionManager) {
         this.establecimientoRepository = establecimientoRepository;
         this.autorizacionEmpleadoService = autorizacionEmpleadoService;
+        this.establecimientoOperativoGuard = establecimientoOperativoGuard;
         this.imageKitService = imageKitService;
         this.validadorFoto = validadorFoto;
         this.registroAuditoriaService = registroAuditoriaService;
@@ -106,6 +109,7 @@ public class FotoEstablecimientoService {
         Autorizacion autorizacion = ejecutarLectura(status -> {
             Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
             Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+            establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
             validadorFoto.validar(contenido, establecimiento.getFotos().size());
             return new Autorizacion(actor);
         });

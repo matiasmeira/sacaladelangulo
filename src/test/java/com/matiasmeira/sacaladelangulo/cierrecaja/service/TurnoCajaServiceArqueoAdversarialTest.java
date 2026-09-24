@@ -20,6 +20,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,6 +52,7 @@ class TurnoCajaServiceArqueoAdversarialTest {
     @Mock private EstablecimientoRepository establecimientoRepository;
     @Mock private DispositivoCajaRepository dispositivoCajaRepository;
     @Mock private AutorizacionEmpleadoService autorizacionEmpleadoService;
+    @Mock private EstablecimientoOperativoGuard establecimientoOperativoGuard;
     @Mock private RegistroAuditoriaService registroAuditoriaService;
 
     private TurnoCajaService turnoCajaService;
@@ -61,7 +63,7 @@ class TurnoCajaServiceArqueoAdversarialTest {
     void setUp() {
         turnoCajaService = new TurnoCajaService(
                 turnoCajaRepository, movimientoCajaRepository, establecimientoRepository, dispositivoCajaRepository,
-                autorizacionEmpleadoService, registroAuditoriaService,
+                autorizacionEmpleadoService, establecimientoOperativoGuard, registroAuditoriaService,
                 new TurnoCajaMapper(new MovimientoCajaMapper()), new MovimientoCajaMapper());
 
         dueno = Usuario.builder().id(2L).email("dueno@test.com").nombre("Dueño Test").rol(Role.OWNER).build();

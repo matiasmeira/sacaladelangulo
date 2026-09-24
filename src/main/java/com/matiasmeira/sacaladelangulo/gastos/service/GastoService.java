@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoMapper;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoRequest;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoResponse;
@@ -40,6 +41,7 @@ public class GastoService {
     private final GastoRepository gastoRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
+    private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
     private final GastoMapper gastoMapper;
     private final TurnoCajaService turnoCajaService;
     private final RegistroAuditoriaService registroAuditoriaService;
@@ -49,6 +51,7 @@ public class GastoService {
         Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
         validarMonto(request.monto());
         validarCamposObligatorios(request);
 

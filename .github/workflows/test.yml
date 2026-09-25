@@ -2,13 +2,13 @@ name: Tests
 
 on:
   push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -25,3 +25,26 @@ jobs:
 
       - name: Run tests
         run: ./mvnw clean test
+
+  test-integracion-postgres:
+    name: tests de integración (Postgres)
+    runs-on: ubuntu-latest
+    # Backstop contra un cuelgue de Ryuk o del arranque del contenedor de
+    # Postgres: sin esto, un daemon colgado se comería minutos de runner.
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Grant execute permission for mvnw
+        run: chmod +x mvnw
+
+      - name: Run testcontainers suite (Postgres real)
+        run: ./mvnw test -Dsurefire.excludedGroups= -Dgroups=testcontainers

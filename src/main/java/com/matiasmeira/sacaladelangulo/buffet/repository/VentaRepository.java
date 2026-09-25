@@ -44,8 +44,14 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
      * hace falta traerlos y se evita la trampa de combinar fetch join de una
      * colección con Pageable (Hibernate paginaría en memoria, warning HHH90003004).
      */
+    // El cast en "estado" evita SQLState 42P18 ("no se pudo determinar el tipo del
+    // parámetro"): pgjdbc no puede inferir el tipo de un parámetro cuya única aparición es
+    // un "? IS NULL" sin contexto. La comparación (=) no lo necesita porque ya tiene tipo por
+    // la columna del otro lado — no lo saques pensando que sobra: sin él esta query rompe en
+    // el 100% de las llamadas reales, porque "sin filtro" (el default del panel) manda
+    // estado=null (ver diagnóstico del 2026-09-24).
     @Query("SELECT v FROM Venta v WHERE v.establecimiento.id = :establecimientoId " +
-            "AND (:estado IS NULL OR v.estado = :estado) " +
+            "AND (cast(:estado as string) IS NULL OR v.estado = :estado) " +
             "AND v.fechaHora BETWEEN :desde AND :hasta")
     Page<Venta> buscarPaginado(@Param("establecimientoId") Long establecimientoId,
                                 @Param("estado") EstadoVenta estado,

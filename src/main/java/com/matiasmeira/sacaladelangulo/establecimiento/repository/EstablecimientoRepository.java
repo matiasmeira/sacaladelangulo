@@ -56,9 +56,14 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * nunca excluya un punto válido por redondeo) — el Haversine exacto de abajo sigue
      * siendo el filtro final real (ver M29 en la auditoría).
      */
+    // El cast en "deporte" evita SQLState 42P18 ("no se pudo determinar el tipo del
+    // parámetro"): pgjdbc no puede inferir el tipo de un parámetro cuya única aparición
+    // es un "? IS NULL" sin contexto. La comparación real (MEMBER OF) no necesita el
+    // cast porque ya tiene tipo por el lado de la colección — no lo saques de acá pensando
+    // que sobra, sin él esta query rompe con deporte=null (ver diagnóstico del 2026-09-24).
     @Query("SELECT DISTINCT e FROM Establecimiento e LEFT JOIN Cancha c ON c.establecimiento.id = e.id AND c.isActive = true " +
            "WHERE e.isActive = true AND e.estadoVerificacion = 'VERIFICADO' AND e.deletedAt IS NULL " +
-           "AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes) " +
+           "AND (cast(:deporte as string) IS NULL OR :deporte MEMBER OF c.deportes) " +
            "AND e.latitud BETWEEN (:latitud - (:distanciaKm / 110.0)) AND (:latitud + (:distanciaKm / 110.0)) " +
            "AND e.longitud BETWEEN (:longitud - (:distanciaKm / (110.0 * COS(RADIANS(:latitud))))) AND (:longitud + (:distanciaKm / (110.0 * COS(RADIANS(:latitud))))) " +
            "AND (6371 * ACOS(COS(RADIANS(:latitud)) * COS(RADIANS(e.latitud)) * COS(RADIANS(e.longitud) - RADIANS(:longitud)) + SIN(RADIANS(:latitud)) * SIN(RADIANS(e.latitud)))) <= :distanciaKm")
@@ -92,9 +97,10 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * ComplejoPublicoService le pasa un tope fijo de filas (ver M-final-2 / Goal 3 del
      * follow-up de zona pública).
      */
+    // Mismo cast que findCercanosYPorDeporte, misma razón (SQLState 42P18) — no lo saques.
     @Query("SELECT DISTINCT e FROM Establecimiento e LEFT JOIN Cancha c ON c.establecimiento.id = e.id AND c.isActive = true " +
            "WHERE e.isActive = true AND e.estadoVerificacion = 'VERIFICADO' AND e.deletedAt IS NULL " +
-           "AND (:deporte IS NULL OR :deporte MEMBER OF c.deportes)")
+           "AND (cast(:deporte as string) IS NULL OR :deporte MEMBER OF c.deportes)")
     List<Establecimiento> findActivosPorDeporte(@Param("deporte") Deporte deporte, Pageable pageable);
 
     /**

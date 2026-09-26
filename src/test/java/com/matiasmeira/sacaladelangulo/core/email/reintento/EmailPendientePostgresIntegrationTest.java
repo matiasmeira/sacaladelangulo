@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.core.email.reintento;
 
 import com.matiasmeira.sacaladelangulo.support.AbstractPostgresIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * dos filas para el mismo destinatario y asunto, el job podría reintentar un email de
  * verificación viejo cuyo token ya fue reemplazado.
  */
+@Tag("testcontainers")
 @DisplayName("EmailPendiente - cola de reintento contra Postgres real")
 class EmailPendientePostgresIntegrationTest extends AbstractPostgresIntegrationTest {
 

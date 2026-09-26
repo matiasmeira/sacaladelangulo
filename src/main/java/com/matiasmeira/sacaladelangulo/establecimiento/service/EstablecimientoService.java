@@ -49,7 +49,7 @@ public class EstablecimientoService {
     /**
      * El límite cuenta los establecimientos del dueño que NO están eliminados
      * (countByDuenoIdAndDeletedAtIsNull), estén habilitados o no -- no
-     * countByDuenoIdAndIsActiveTrue. El tope de 3 acota cuánto ocupa un dueño del sistema, no
+     * findEstablecimientosOperativosDelDueno, que sólo mira los activos. El tope de 3 acota cuánto ocupa un dueño del sistema, no
      * cuánto muestra: un establecimiento deshabilitado sigue teniendo canchas, reservas,
      * turnos fijos y slug reservado, así que si deshabilitar liberara cupo, el tope se
      * convierte en infinito rotando cuáles se muestran. Deshabilitar (isActive=false) NO
@@ -97,7 +97,7 @@ public class EstablecimientoService {
     public List<EstablecimientoResponse> obtenerMisEstablecimientos(String email) {
         Usuario dueno = buscarUsuarioPorEmail(email);
 
-        List<Establecimiento> establecimientos = establecimientoRepository.findByDuenoIdAndIsActiveTrue(dueno.getId());
+        List<Establecimiento> establecimientos = establecimientoRepository.findByDuenoIdAndDeletedAtIsNull(dueno.getId());
         return mapearConCalificaciones(establecimientos);
     }
 

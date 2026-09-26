@@ -164,6 +164,40 @@ class EstablecimientoServiceTest {
         assertEquals(EstadoVerificacion.PENDIENTE, captor.getValue().getEstadoVerificacion());
     }
 
+    /**
+     * Pin de regresión: el listado del panel del dueño tiene que incluir los establecimientos
+     * deshabilitados (isActive=false), no sólo los activos -- sin esto, el dueño que
+     * deshabilita su complejo lo pierde de vista en su propio panel y no puede ni rehabilitarlo
+     * ni eliminarlo (eliminar exige que ya esté deshabilitado).
+     */
+    @Test
+    @DisplayName("obtenerMisEstablecimientos_IncluyeEstablecimientoDeshabilitado")
+    void obtenerMisEstablecimientos_IncluyeEstablecimientoDeshabilitado() {
+        Usuario dueno = Usuario.builder()
+                .id(1L)
+                .email("dueno@test.com")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM)
+                .build();
+
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b
+                .id(10L)
+                .nombre("Complejo Deshabilitado")
+                .dueno(dueno));
+
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(establecimientoRepository.findByDuenoIdAndDeletedAtIsNull(dueno.getId()))
+                .thenReturn(List.of(deshabilitado));
+        when(feedbackRepository.calcularPromediosPorEstablecimientos(List.of(10L))).thenReturn(List.of());
+        when(feedbackRepository.contarPorEstablecimientos(List.of(10L))).thenReturn(List.of());
+        when(feedbackRepository.findDestacadosByEstablecimientoIdIn(List.of(10L))).thenReturn(List.of());
+
+        List<EstablecimientoResponse> resultado = establecimientoService.obtenerMisEstablecimientos(dueno.getEmail());
+
+        assertEquals(1, resultado.size());
+        assertEquals(false, resultado.get(0).isActive());
+    }
+
     @Test
     @DisplayName("actualizarEstablecimiento_Exito_ActualizaRequiereTelefonoVerificado")
     void actualizarEstablecimiento_Exito_ActualizaRequiereTelefonoVerificado() {

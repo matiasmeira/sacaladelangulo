@@ -188,7 +188,7 @@ class UsuarioEliminacionServiceTest {
         jugador.setRol(Role.OWNER);
         when(usuarioRepository.findByEmail("jugador@test.com")).thenReturn(Optional.of(jugador));
         when(passwordEncoder.matches("Password123", "hash-viejo")).thenReturn(true);
-        when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L))
+        when(establecimientoRepository.findEstablecimientosOperativosDelDueno(1L))
                 .thenReturn(List.of(Establecimientos.establecimientoOperativo(b -> b.id(10L))));
 
         EstablecimientosActivosException ex = assertThrows(EstablecimientosActivosException.class,
@@ -206,7 +206,7 @@ class UsuarioEliminacionServiceTest {
         when(usuarioRepository.findByEmail("jugador@test.com")).thenReturn(Optional.of(jugador));
         when(passwordEncoder.matches("Password123", "hash-viejo")).thenReturn(true);
         when(passwordEncoder.encode(anyString())).thenReturn("hash-random");
-        when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L)).thenReturn(List.of());
+        when(establecimientoRepository.findEstablecimientosOperativosDelDueno(1L)).thenReturn(List.of());
         when(reservaRepository.findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(eq(1L), any(), any())).thenReturn(List.of());
 
         usuarioEliminacionService.autoeliminar("jugador@test.com", "Password123");
@@ -293,7 +293,7 @@ class UsuarioEliminacionServiceTest {
         jugador.setRol(Role.OWNER);
         when(usuarioRepository.findByEmail("admin@test.com")).thenReturn(Optional.of(admin));
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(jugador));
-        when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L))
+        when(establecimientoRepository.findEstablecimientosOperativosDelDueno(1L))
                 .thenReturn(List.of(Establecimientos.establecimientoOperativo(b -> b.id(10L))));
 
         assertThrows(EstablecimientosActivosException.class,
@@ -310,7 +310,7 @@ class UsuarioEliminacionServiceTest {
         when(usuarioRepository.findByEmail("admin@test.com")).thenReturn(Optional.of(admin));
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(jugador));
         when(passwordEncoder.encode(anyString())).thenReturn("hash-random");
-        when(establecimientoRepository.findByDuenoIdAndIsActiveTrue(1L)).thenReturn(
+        when(establecimientoRepository.findEstablecimientosOperativosDelDueno(1L)).thenReturn(
                 List.of(Establecimientos.establecimientoOperativo(b -> b.id(10L)),
                         Establecimientos.establecimientoOperativo(b -> b.id(11L))));
         when(reservaRepository.findByJugadorIdAndEstadoInAndFechaHoraInicioAfter(eq(1L), any(), any())).thenReturn(List.of());

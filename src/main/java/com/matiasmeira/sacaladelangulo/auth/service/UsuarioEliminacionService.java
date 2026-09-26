@@ -109,7 +109,7 @@ public class UsuarioEliminacionService {
 
         String detalleAuditoria = null;
         if (usuario.getRol() == Role.OWNER) {
-            List<Establecimiento> activos = establecimientoRepository.findByDuenoIdAndIsActiveTrue(usuario.getId());
+            List<Establecimiento> activos = establecimientoRepository.findEstablecimientosOperativosDelDueno(usuario.getId());
             if (!activos.isEmpty()) {
                 if (!forzar) {
                     throw new EstablecimientosActivosException(

@@ -347,8 +347,8 @@ class EstablecimientoRepositoryTest {
     }
 
     @Test
-    @DisplayName("findByDuenoIdAndIsActiveTrue_NoDevuelveComplejoEliminado")
-    void findByDuenoIdAndIsActiveTrue_NoDevuelveComplejoEliminado() {
+    @DisplayName("findEstablecimientosOperativosDelDueno_NoDevuelveComplejoEliminado")
+    void findEstablecimientosOperativosDelDueno_NoDevuelveComplejoEliminado() {
         Usuario dueno = duenoEliminacion("dueno-elim-panel@test.com");
         entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
                 .nombre("Complejo Vivo")
@@ -360,7 +360,7 @@ class EstablecimientoRepositoryTest {
                 .dueno(dueno)));
         // Nace inactivo (isActive=false, ver invariante) y con deletedAt: sin esto, un
         // establecimiento eliminado "de verdad" (isActive=false) ya quedaría afuera por el
-        // propio nombre del método (AndIsActiveTrue) -- este test aísla igual el aporte de
+        // propio filtro de isActive en la query -- este test aísla igual el aporte de
         // deletedAt seteando explícitamente isActive=true, un estado que en producción no
         // debería darse (ver EstablecimientoEliminacionService), para probar que el filtro no
         // depende sólo de ese invariante.
@@ -375,10 +375,56 @@ class EstablecimientoRepositoryTest {
                 .dueno(dueno)));
         entityManager.flush();
 
-        List<Establecimiento> misEstablecimientos = establecimientoRepository.findByDuenoIdAndIsActiveTrue(dueno.getId());
+        List<Establecimiento> operativos = establecimientoRepository.findEstablecimientosOperativosDelDueno(dueno.getId());
 
-        assertEquals(1, misEstablecimientos.size());
-        assertEquals("Complejo Vivo", misEstablecimientos.get(0).getNombre());
+        assertEquals(1, operativos.size());
+        assertEquals("Complejo Vivo", operativos.get(0).getNombre());
+    }
+
+    @Test
+    @DisplayName("findEstablecimientosOperativosDelDueno_ExcluyeDeshabilitados")
+    void findEstablecimientosOperativosDelDueno_ExcluyeDeshabilitados() {
+        // Pin de regresión para la baja de cuenta: un dueño con sólo establecimientos
+        // deshabilitados (ninguno activo) no debe bloquear su autoeliminación de cuenta --
+        // ver UsuarioEliminacionService.eliminar, que usa este método para decidir si
+        // lanzar EstablecimientosActivosException.
+        Usuario dueno = duenoEliminacion("dueno-elim-solo-deshabilitado@test.com");
+        entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Deshabilitado")
+                .direccion("Calle")
+                .slug("solo-deshabilitado")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+        entityManager.flush();
+
+        assertTrue(establecimientoRepository.findEstablecimientosOperativosDelDueno(dueno.getId()).isEmpty());
+    }
+
+    @Test
+    @DisplayName("findByDuenoIdAndDeletedAtIsNull_IncluyeDeshabilitadoPeroExcluyeEliminado")
+    void findByDuenoIdAndDeletedAtIsNull_IncluyeDeshabilitadoPeroExcluyeEliminado() {
+        // Pin de regresión para el listado del panel del dueño (EstablecimientoService.
+        // obtenerMisEstablecimientos): sin esto, el dueño que deshabilita su complejo lo
+        // pierde de vista en su propio panel y no puede ni rehabilitarlo ni eliminarlo.
+        Usuario dueno = duenoEliminacion("dueno-elim-panel-deshabilitado@test.com");
+        entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
+                .nombre("Activo").direccion("Calle").slug("panel-activo").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).dueno(dueno)));
+        entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Deshabilitado").direccion("Calle").slug("panel-deshabilitado").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).dueno(dueno)));
+        entityManager.persist(Establecimientos.establecimientoEliminado(b -> b
+                .nombre("Eliminado").direccion("Calle").slug("panel-eliminado").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).dueno(dueno)));
+        entityManager.flush();
+
+        List<Establecimiento> misEstablecimientos = establecimientoRepository.findByDuenoIdAndDeletedAtIsNull(dueno.getId());
+
+        assertEquals(2, misEstablecimientos.size());
+        assertTrue(misEstablecimientos.stream().anyMatch(e -> e.getNombre().equals("Activo")));
+        assertTrue(misEstablecimientos.stream().anyMatch(e -> e.getNombre().equals("Deshabilitado")));
     }
 
     @Test

@@ -21,18 +21,28 @@ import java.util.Optional;
 public interface EstablecimientoRepository extends JpaRepository<Establecimiento, Long> {
 
     /**
-     * "Mis establecimientos" del panel del dueño. Sigue llamándose sin "AndDeletedAtIsNull"
-     * en el nombre a propósito: bajo el invariante que mantiene EstablecimientoEliminacionService
-     * (sólo se puede eliminar un establecimiento ya deshabilitado), deletedAt != null implica
-     * isActive = false, así que el filtro de acá es defensivo -- no cambia el resultado para
-     * ningún caller existente, sólo evita depender para siempre de ese invariante. Se optó por
-     * @Query en vez de renombrar el derived query para no forzar un cambio de firma en callers
-     * cuyo comportamiento no cambia.
+     * Establecimientos que el dueño tiene operando ahora mismo (activo y no eliminado).
+     * Único uso: UsuarioEliminacionService, para decidir si bloquear la autoeliminación de
+     * cuenta con EstablecimientosActivosException -- la pregunta es "¿tiene algo operando de
+     * lo que dependan terceros (reservas, jugadores)?", no "¿cuántos establecimientos tiene
+     * en total?" (para eso ver countByDuenoIdAndDeletedAtIsNull, el límite de 3) ni "¿cuáles
+     * le tengo que mostrar en su panel?" (para eso ver findByDuenoIdAndDeletedAtIsNull, abajo).
+     * No es un derived query porque el nombre de columnas ya no describe para qué se usa esto
+     * -- lo que importa acá es la pregunta de negocio que responde, no isActive/deletedAt.
      */
     @Query("SELECT e FROM Establecimiento e WHERE e.dueno.id = :duenoId AND e.isActive = true AND e.deletedAt IS NULL")
-    List<Establecimiento> findByDuenoIdAndIsActiveTrue(@Param("duenoId") Long duenoId);
+    List<Establecimiento> findEstablecimientosOperativosDelDueno(@Param("duenoId") Long duenoId);
 
-    long countByDuenoIdAndIsActiveTrue(Long duenoId);
+    /**
+     * "Mis establecimientos" del panel del dueño: todos los que no están eliminados, estén
+     * habilitados o no. Si este listado filtrara por isActive (como hacía hasta ahora), el
+     * dueño que deshabilita su propio establecimiento lo perdería de vista en su panel apenas
+     * lo deshabilita -- no podría verlo en el selector, ni rehabilitarlo, ni eliminarlo
+     * (eliminar además exige que ya esté deshabilitado, así que quedaría inalcanzable). El
+     * DTO expuesto (EstablecimientoResponse) ya trae el campo isActive explícito, así que el
+     * frontend puede distinguir habilitado de deshabilitado sin que el repositorio filtre.
+     */
+    List<Establecimiento> findByDuenoIdAndDeletedAtIsNull(Long duenoId);
 
     /**
      * Cuenta los establecimientos del dueño que NO están eliminados, estén habilitados o no:
@@ -134,8 +144,9 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * AdminEstablecimientoResponse (nombre + email del dueño), mismo criterio que
      * precargarFotos/precargarHorarios.
      *
-     * <p>A diferencia de findByDuenoIdAndIsActiveTrue, acá el nombre SÍ incluye
-     * "AndDeletedAtIsNull": este listado, a propósito, no filtra por isActive (el admin
+     * <p>A diferencia de findEstablecimientosOperativosDelDueno, acá el nombre SÍ incluye
+     * "AndDeletedAtIsNull" (igual que findByDuenoIdAndDeletedAtIsNull, la contraparte para
+     * el panel del dueño): este listado, a propósito, no filtra por isActive (el admin
      * necesita ver también los deshabilitados), así que el invariante "eliminado implica
      * inactivo" no alcanza para excluirlos -- sin esta condición explícita, un
      * establecimiento eliminado seguiría apareciendo en la cola de verificación.

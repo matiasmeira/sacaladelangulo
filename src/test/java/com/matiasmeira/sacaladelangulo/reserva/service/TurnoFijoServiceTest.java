@@ -42,6 +42,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -282,7 +283,9 @@ class TurnoFijoServiceTest {
 
         // Default: la regla se guarda "tal cual" (mismo patrón que reservaRepository.saveAll
         // en los tests de abajo), para poder inspeccionar sus campos después con el captor.
-        lenient().when(turnoFijoRepository.save(any(TurnoFijo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // saveAndFlush, no save: TurnoFijoService.crearInterno usa saveAndFlush para poder
+        // traducir la DataIntegrityViolationException de uk_turnos_fijos_renovado_desde ahí mismo.
+        lenient().when(turnoFijoRepository.saveAndFlush(any(TurnoFijo.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Default: ningún jugador está bloqueado. No debería ni consultarse desde el turno
         // fijo (ver crear_TurnoFijo_Exito_GeneraUnaReservaConfirmadaPorFecha), pero queda
@@ -345,7 +348,7 @@ class TurnoFijoServiceTest {
 
         // Assert
         ArgumentCaptor<TurnoFijo> reglaCaptor = ArgumentCaptor.forClass(TurnoFijo.class);
-        verify(turnoFijoRepository).save(reglaCaptor.capture());
+        verify(turnoFijoRepository).saveAndFlush(reglaCaptor.capture());
         TurnoFijo regla = reglaCaptor.getValue();
         assertThat(regla.getDiaSemana()).isEqualTo(DayOfWeek.TUESDAY);
         assertThat(regla.getEstado()).isEqualTo(EstadoTurnoFijo.ACTIVO);
@@ -412,7 +415,7 @@ class TurnoFijoServiceTest {
                 () -> turnoFijoService.crear(request, dueno.getEmail()));
 
         assertThat(exception.getMessage()).contains("desactivada");
-        verify(turnoFijoRepository, never()).save(any());
+        verify(turnoFijoRepository, never()).saveAndFlush(any());
     }
 
     /**
@@ -446,7 +449,7 @@ class TurnoFijoServiceTest {
                 () -> turnoFijoService.crear(request, dueno.getEmail()));
 
         assertThat(exception.getMessage()).contains("establecimiento").contains("deshabilitado");
-        verify(turnoFijoRepository, never()).save(any());
+        verify(turnoFijoRepository, never()).saveAndFlush(any());
         verify(reservaRepository, never()).saveAll(any());
         // Ni siquiera llega a precargar el período: prueba que el gate corta antes de
         // cualquier trabajo de armado, no solo antes del guardado final.
@@ -586,7 +589,7 @@ class TurnoFijoServiceTest {
         );
         assert exception.getMessage().contains("PLAYER");
         verify(reservaRepository, never()).saveAll(any());
-        verify(turnoFijoRepository, never()).save(any());
+        verify(turnoFijoRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -1049,7 +1052,7 @@ class TurnoFijoServiceTest {
         turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO);
 
         ArgumentCaptor<TurnoFijo> captor = ArgumentCaptor.forClass(TurnoFijo.class);
-        verify(turnoFijoRepository, atLeastOnce()).save(captor.capture());
+        verify(turnoFijoRepository, atLeastOnce()).saveAndFlush(captor.capture());
         TurnoFijo nueva = captor.getValue();
         assertThat(nueva.getRenovadoDesdeId()).isEqualTo(TURNO_FIJO_ID);
         // El 1° de enero del año destino (2031), no "hoy": esta aserción es la que distingue
@@ -1091,7 +1094,7 @@ class TurnoFijoServiceTest {
         turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO);
 
         ArgumentCaptor<TurnoFijo> captor = ArgumentCaptor.forClass(TurnoFijo.class);
-        verify(turnoFijoRepository, atLeastOnce()).save(captor.capture());
+        verify(turnoFijoRepository, atLeastOnce()).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getFechaInicioPeriodo()).isEqualTo(hoy);
     }
 
@@ -1129,7 +1132,7 @@ class TurnoFijoServiceTest {
         turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO);
 
         ArgumentCaptor<TurnoFijo> captor = ArgumentCaptor.forClass(TurnoFijo.class);
-        verify(turnoFijoRepository, atLeastOnce()).save(captor.capture());
+        verify(turnoFijoRepository, atLeastOnce()).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getFechaInicioPeriodo()).isEqualTo(hoy.plusDays(1));
     }
 
@@ -1154,6 +1157,42 @@ class TurnoFijoServiceTest {
         assertThatThrownBy(() -> turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ya fue renovado");
+    }
+
+    /**
+     * Simula la carrera que el guard NO alcanza a ver: existsByRenovadoDesdeId consulta antes
+     * de que la otra transacción commitee y contesta false (nadie ganó todavía, según lo que
+     * el guard pudo mirar), pero esa otra transacción termina de commitear justo después, y el
+     * INSERT de esta la encuentra ya ahí: el índice uk_turnos_fijos_renovado_desde (V24) frena
+     * el insert de la regla con DataIntegrityViolationException. No es que los mocks estén mal
+     * configurados a propósito el guard y el insert están desincronizados: es exactamente lo
+     * que TurnoFijoService.renovar necesita traducir, sin depender de dos hilos reales
+     * (ver dosRenovacionesSimultaneasDeLaMismaSerie_SoloUnaGana en
+     * TurnoFijoRenovadoDesdeConstraintIntegrationTest, que sí ejercita la carrera real contra
+     * Postgres).
+     */
+    @Test
+    @DisplayName("renovar_ConstraintDeRenovacionViolada_TraduceAMensajeDeNegocioConLaCausaOriginal")
+    void renovar_ConstraintDeRenovacionViolada_TraduceAMensajeDeNegocioConLaCausaOriginal() {
+        when(turnoFijoRepository.existsByRenovadoDesdeId(TURNO_FIJO_ID)).thenReturn(false);
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(any(), any(), any())).thenReturn(List.of());
+        when(diaNoLaborableRepository.findByEstablecimientoIdAndFechaBetween(any(), any(), any())).thenReturn(List.of());
+        when(reservaRepository.findSuperpuestas(any(), any(), any(), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
+        DataIntegrityViolationException violacionDelIndice = new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"uk_turnos_fijos_renovado_desde\"");
+        when(turnoFijoRepository.saveAndFlush(any(TurnoFijo.class))).thenThrow(violacionDelIndice);
+
+        assertThatThrownBy(() -> turnoFijoService.renovar(TURNO_FIJO_ID, EMAIL_DUENO))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Este turno fijo ya fue renovado. Buscá la serie del año siguiente en el listado.")
+                // La causa inmediata es la excepción interna privada de TurnoFijoService (no
+                // es visible desde este test), pero la causa RAÍZ tiene que llegar hasta la
+                // DataIntegrityViolationException original: eso es lo que hace falta para
+                // diagnosticar si esto falla algún día por otro motivo.
+                .hasRootCause(violacionDelIndice);
+        verify(reservaRepository, never()).saveAll(any());
     }
 
     @Test

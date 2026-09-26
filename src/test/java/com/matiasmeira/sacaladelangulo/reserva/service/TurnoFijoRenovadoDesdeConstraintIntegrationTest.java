@@ -61,20 +61,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * check-then-act y sólo dos hilos reales compitiendo (el "doble click") pueden pasarlo ambos
  * antes de que cualquiera commitee.
  *
- * <p><b>Hallazgo de asimetría con V23 (documentado a propósito, no corregido — código de
- * producción fuera de alcance):</b> {@code EmpleadoService.crearEmpleado} captura
- * {@code DataIntegrityViolationException} y la traduce al mismo mensaje de negocio que su guard
- * (ver {@code EmpleadoActivoUnicoPorNombreConstraintIntegrationTest}).
- * {@code TurnoFijoService.renovar}/{@code crearInterno} NO tienen ningún catch equivalente
- * alrededor del insert de la regla. Eso significa que, en el caso concurrente real que este
- * índice existe para cubrir, el segundo click puede terminar mostrándole al dueño exactamente el
- * error crudo de base que el comentario de V24 dice querer evitar ("un mensaje que no le dice
- * nada al dueño") — el guard lo evita en el camino secuencial, pero no en el concurrente. El test
- * {@link #dosRenovacionesSimultaneasDeLaMismaSerie_SoloUnaGana()} de más abajo documenta este
- * comportamiento ACTUAL tal cual es, no lo avala: lo deseable sería que
- * {@code TurnoFijoService.renovar} tradujera esa excepción igual que hace
- * {@code EmpleadoService.crearEmpleado}, para que el día que se corrija, este test le diga a
- * quien lo toque qué esperar en vez de parecer que la asimetría era intencional.
+ * <p>{@code TurnoFijoService.renovar} traduce la {@code DataIntegrityViolationException} de este
+ * índice al mismo mensaje de negocio que su guard secuencial ("ya fue renovado..."), igual que
+ * hace {@code EmpleadoService.crearEmpleado} con {@code uk_empleados_activos_nombre} (V23) — ver
+ * {@code EmpleadoActivoUnicoPorNombreConstraintIntegrationTest}. La traducción vive en
+ * {@code renovar()}, envolviendo sólo su llamada a {@code crearInterno} — no en
+ * {@code crearInterno} mismo, que es compartido con {@link #crear} y no sabe nada de
+ * renovaciones (ver el javadoc de {@code TurnoFijoService.ReglaTurnoFijoDuplicadaException}).
+ * Por eso el test {@link #dosRenovacionesSimultaneasDeLaMismaSerie_SoloUnaGana()} de más abajo
+ * espera únicamente {@code IllegalArgumentException} en el hilo perdedor: ya sea porque el guard
+ * alcanzó a ver la renovación del otro hilo, o porque el índice frenó el insert y el catch lo
+ * tradujo, el dueño ve el mismo mensaje de negocio en los dos casos.
  */
 @Tag("testcontainers")
 @DisplayName("uk_turnos_fijos_renovado_desde - Postgres real (Testcontainers)")
@@ -212,17 +209,16 @@ class TurnoFijoRenovadoDesdeConstraintIntegrationTest extends AbstractPostgresIn
         // guard existsByRenovadoDesdeId de TurnoFijoService.renovar es check-then-act y no es
         // atómico, así que ambos pueden pasarlo antes de que cualquiera commitee.
         //
-        // Se acepta CUALQUIERA de las dos excepciones en el hilo perdedor, y es importante
-        // notar que NO es el mismo par de excepciones que en el test análogo de V23
-        // (EmpleadoActivoUnicoPorNombreConstraintIntegrationTest):
-        //   - IllegalArgumentException: el guard alcanzó a ver la renovación del otro hilo ya
-        //     commiteada ("ya fue renovado"), mensaje de negocio normal.
-        //   - DataIntegrityViolationException: ambos hilos pasaron el guard antes de que
-        //     cualquiera commiteara, y el índice de V24 frenó al segundo insert de la regla SIN
-        //     que ningún catch en TurnoFijoService la traduzca (ver el javadoc de la clase).
-        //     Aceptarla acá documenta el comportamiento actual; NO significa que un 500/error
-        //     crudo llegando al dueño en ese momento sea el resultado deseable.
-        // Cualquiera de las dos formas, el dato queda íntegro: una sola renovación persistida.
+        // El hilo perdedor siempre ve IllegalArgumentException con el mismo mensaje de negocio,
+        // sin importar contra qué perdió:
+        //   - Si el guard alcanzó a ver la renovación del otro hilo ya commiteada, lo rechaza
+        //     él mismo ("ya fue renovado").
+        //   - Si ambos pasaron el guard antes de que cualquiera commiteara, el índice de V24
+        //     frena el segundo insert de la regla con una DataIntegrityViolationException que
+        //     TurnoFijoService.renovar traduce al mismo mensaje (ver
+        //     ReglaTurnoFijoDuplicadaException en TurnoFijoService).
+        // Al dueño le da igual contra cuál de los dos perdió: ve el mismo texto en ambos casos.
+        // Y el dato queda íntegro en los dos: una sola renovación persistida.
         TurnoFijo original = turnoFijoActivo(null);
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -233,7 +229,7 @@ class TurnoFijoRenovadoDesdeConstraintIntegrationTest extends AbstractPostgresIn
                 barrier.await(10, TimeUnit.SECONDS);
                 turnoFijoService.renovar(original.getId(), dueno.getEmail());
                 return true;
-            } catch (IllegalArgumentException | DataIntegrityViolationException ex) {
+            } catch (IllegalArgumentException ex) {
                 return false;
             }
         };

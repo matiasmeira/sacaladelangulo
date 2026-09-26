@@ -31,6 +31,7 @@ import com.matiasmeira.sacaladelangulo.reserva.repository.TurnoFijoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -162,7 +163,12 @@ public class TurnoFijoService {
                 original.getNombreClienteManual(),
                 original.getTelefonoClienteManual());
 
-        return crearInterno(pedido, email, id);
+        try {
+            return crearInterno(pedido, email, id);
+        } catch (ReglaTurnoFijoDuplicadaException ex) {
+            throw new IllegalArgumentException(
+                    "Este turno fijo ya fue renovado. Buscá la serie del año siguiente en el listado.", ex);
+        }
     }
 
     /**
@@ -247,20 +253,38 @@ public class TurnoFijoService {
         // de cada Reserva.turnoFijo. Si alguna fecha del período no tiene disponibilidad, la
         // excepción de más abajo hace rollback de la transacción completa (regla incluida):
         // el alta sigue siendo todo-o-nada.
-        TurnoFijo regla = turnoFijoRepository.save(TurnoFijo.builder()
-                .cancha(cancha)
-                .deporteSeleccionado(request.deporteSeleccionado())
-                .diaSemana(request.diaSemana())
-                .horaInicio(request.horaInicio())
-                .horaFin(request.horaFin())
-                .fechaInicioPeriodo(request.fechaInicioPeriodo())
-                .fechaFinPeriodo(request.fechaFinPeriodo())
-                .jugador(jugador)
-                .nombreClienteManual(jugador == null ? request.nombreClienteManual() : null)
-                .telefonoClienteManual(jugador == null ? request.telefonoClienteManual() : null)
-                .estado(EstadoTurnoFijo.ACTIVO)
-                .renovadoDesdeId(renovadoDesdeId)
-                .build());
+        //
+        // El try envuelve SOLO este save, a propósito. El guard existsByRenovadoDesdeId de
+        // renovar() no es atómico y el índice único uk_turnos_fijos_renovado_desde (V24) es el
+        // backstop real contra el doble click. Un try más ancho (por ejemplo alrededor de todo
+        // este método) también capturaría la DataIntegrityViolationException del índice de
+        // exclusión por solapamiento de reservas (V10), que puede saltar más abajo en el
+        // saveAll de las ocurrencias, y la traduciría al mensaje de renovación aunque no tenga
+        // nada que ver — un mensaje falso para el dueño. saveAndFlush (no save) para que el
+        // INSERT ocurra acá mismo, sin depender de que TurnoFijo.id sea IDENTITY.
+        TurnoFijo regla;
+        try {
+            regla = turnoFijoRepository.saveAndFlush(TurnoFijo.builder()
+                    .cancha(cancha)
+                    .deporteSeleccionado(request.deporteSeleccionado())
+                    .diaSemana(request.diaSemana())
+                    .horaInicio(request.horaInicio())
+                    .horaFin(request.horaFin())
+                    .fechaInicioPeriodo(request.fechaInicioPeriodo())
+                    .fechaFinPeriodo(request.fechaFinPeriodo())
+                    .jugador(jugador)
+                    .nombreClienteManual(jugador == null ? request.nombreClienteManual() : null)
+                    .telefonoClienteManual(jugador == null ? request.telefonoClienteManual() : null)
+                    .estado(EstadoTurnoFijo.ACTIVO)
+                    .renovadoDesdeId(renovadoDesdeId)
+                    .build());
+        } catch (DataIntegrityViolationException ex) {
+            // crearInterno no sabe de renovaciones ni arma mensajes de negocio: sólo señala el
+            // conflicto. Quien lo traduce es renovar() (ver ReglaTurnoFijoDuplicadaException),
+            // igual que el guard secuencial de más arriba.
+            log.debug("Conflicto al persistir la regla del turno fijo (renovadoDesdeId={})", renovadoDesdeId);
+            throw new ReglaTurnoFijoDuplicadaException(ex);
+        }
 
         List<Reserva> reservasAGuardar = new ArrayList<>();
         for (LocalDate fecha : fechasDelPeriodo) {
@@ -516,5 +540,22 @@ public class TurnoFijoService {
             fecha = fecha.plusWeeks(1);
         }
         return fechas;
+    }
+
+    /**
+     * Señal interna entre {@link #crearInterno} y {@link #renovar}: el insert de la regla
+     * chocó contra {@code uk_turnos_fijos_renovado_desde} (V24). No lleva mensaje de negocio a
+     * propósito — crearInterno no sabe de renovaciones, sólo señala el conflicto.
+     *
+     * <p>Sólo {@link #renovar} la traduce. {@link #crear} no necesita hacerlo: llama a
+     * crearInterno con {@code renovadoDesdeId} nulo, y el índice es parcial
+     * ({@code WHERE renovado_desde_id IS NOT NULL}), así que nunca puede dispararse por esa
+     * vía. Si en el futuro aparece un tercer caller de crearInterno, este javadoc le avisa que
+     * tiene que decidir qué hacer con esta excepción en vez de dejarla escapar sin traducir.
+     */
+    private static final class ReglaTurnoFijoDuplicadaException extends RuntimeException {
+        ReglaTurnoFijoDuplicadaException(Throwable cause) {
+            super(cause);
+        }
     }
 }

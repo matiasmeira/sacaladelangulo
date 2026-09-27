@@ -458,6 +458,81 @@ class ReservaRepositoryTest {
         org.junit.jupiter.api.Assertions.assertNotNull(releida.getCancha().getDeletedAt());
     }
 
+    /**
+     * liberarReservasVencidas sólo filtra por estado='PENDIENTE_SENA', así que una reserva
+     * que nació CONFIRMADA (sin seña correspondiente, ver ReservaService.correspondeSena) y
+     * por lo tanto tiene expiraEn null nunca puede entrar al UPDATE, sin importar cuánto
+     * tiempo pase. Este test lo deja explícito contra el JPQL real, no sólo por lectura del
+     * WHERE.
+     */
+    @Test
+    @DisplayName("liberarReservasVencidas_LiberaSoloPendienteSenaVencida_NoTocaConfirmadaNiPendienteVigente")
+    void liberarReservasVencidas_LiberaSoloPendienteSenaVencida_NoTocaConfirmadaNiPendienteVigente() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-liberacion@test.com")
+                .password("hash")
+                .nombre("Dueno")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
+                .nombre("Complejo Liberacion")
+                .direccion("Calle Liberacion 123")
+                .slug("complejo-liberacion")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+
+        Cancha cancha = entityManager.persist(Cancha.builder()
+                .nombre("Cancha 1")
+                .deportes(Set.of(Deporte.PADEL))
+                .isActive(true)
+                .precioBase(BigDecimal.valueOf(1000))
+                .montoSena(BigDecimal.valueOf(200))
+                .establecimiento(establecimiento)
+                .build());
+
+        LocalDateTime ahora = LocalDateTime.now();
+
+        Reserva pendienteVencida = entityManager.persist(Reserva.builder()
+                .cancha(cancha).deporteSeleccionado(Deporte.PADEL)
+                .fechaHoraInicio(ahora.plusDays(1)).fechaHoraFin(ahora.plusDays(1).plusHours(1))
+                .estado(EstadoReserva.PENDIENTE_SENA).precioTotal(BigDecimal.valueOf(1000))
+                .expiraEn(ahora.minusMinutes(5))
+                .build());
+        Reserva pendienteVigente = entityManager.persist(Reserva.builder()
+                .cancha(cancha).deporteSeleccionado(Deporte.PADEL)
+                .fechaHoraInicio(ahora.plusDays(2)).fechaHoraFin(ahora.plusDays(2).plusHours(1))
+                .estado(EstadoReserva.PENDIENTE_SENA).precioTotal(BigDecimal.valueOf(1000))
+                .expiraEn(ahora.plusMinutes(5))
+                .build());
+        // Nacida CONFIRMADA sin seña correspondiente: expiraEn null, exactamente como la
+        // arma ahora ReservaService.crearReserva cuando correspondeSena es false.
+        Reserva confirmadaSinExpiracion = entityManager.persist(Reserva.builder()
+                .cancha(cancha).deporteSeleccionado(Deporte.PADEL)
+                .fechaHoraInicio(ahora.plusDays(3)).fechaHoraFin(ahora.plusDays(3).plusHours(1))
+                .estado(EstadoReserva.CONFIRMADA).precioTotal(BigDecimal.valueOf(1000))
+                .expiraEn(null)
+                .build());
+        entityManager.flush();
+
+        int liberadas = reservaRepository.liberarReservasVencidas(ahora);
+        entityManager.clear();
+
+        assertEquals(1, liberadas);
+        assertEquals(EstadoReserva.CANCELADA_PRERESERVA,
+                entityManager.find(Reserva.class, pendienteVencida.getId()).getEstado());
+        assertEquals(EstadoReserva.PENDIENTE_SENA,
+                entityManager.find(Reserva.class, pendienteVigente.getId()).getEstado());
+        assertEquals(EstadoReserva.CONFIRMADA,
+                entityManager.find(Reserva.class, confirmadaSinExpiracion.getId()).getEstado());
+    }
+
     private Reserva reservaDe(Cancha cancha, EstadoReserva estado, LocalDateTime fechaHoraInicio) {
         return Reserva.builder()
                 .cancha(cancha)

@@ -107,6 +107,9 @@ public class ReservaService {
 
     /**
      * Crea una nueva reserva con validación de solapamientos y disponibilidad de pool.
+     * Nace PENDIENTE_SENA sólo si {@link #correspondeSena} es true para esta cancha; en
+     * caso contrario nace directamente CONFIRMADA (sin ventana de expiración), igual que
+     * crearReservaManual, y dispara el mismo ReservaConfirmadaEvent.
      *
      * @param request DTO con datos de la reserva
      * @param email Email del usuario autenticado (jugador)
@@ -162,6 +165,7 @@ public class ReservaService {
         validarPoolCanchas(cancha, solapadas, todasLasCanchas);
 
         BigDecimal precioCalculado = calcularPrecio(cancha, request, duracionMinutos);
+        boolean correspondeSena = correspondeSena(cancha.getEstablecimiento(), cancha);
 
         Reserva reserva = Reserva.builder()
                 .jugador(jugador)
@@ -169,17 +173,36 @@ public class ReservaService {
                 .deporteSeleccionado(request.deporteSeleccionado())
                 .fechaHoraInicio(request.fechaHoraInicio())
                 .fechaHoraFin(request.fechaHoraFin())
-                .estado(EstadoReserva.PENDIENTE_SENA)
+                .estado(correspondeSena ? EstadoReserva.PENDIENTE_SENA : EstadoReserva.CONFIRMADA)
                 .precioTotal(precioCalculado)
                 .senaPagada(BigDecimal.ZERO)
-                .expiraEn(LocalDateTime.now().plusMinutes(TIEMPO_EXPIRACION_MINUTOS))
+                .expiraEn(correspondeSena ? LocalDateTime.now().plusMinutes(TIEMPO_EXPIRACION_MINUTOS) : null)
                 .build();
 
         Reserva reservaGuardada = reservaRepository.save(reserva);
         log.info("Nueva reserva creada con éxito. ID: {}, Cancha: {}, Jugador: {}",
                 reservaGuardada.getId(), cancha.getNombre(), jugador.getNombre());
 
+        if (!correspondeSena) {
+            eventPublisher.publishEvent(new ReservaConfirmadaEvent(reservaGuardada.getId()));
+        }
+
         return reservaMapper.mapToResponse(reservaGuardada);
+    }
+
+    /**
+     * Determina si una reserva sobre esta cancha debe pasar por PENDIENTE_SENA (y su
+     * ventana de expiración) o puede nacer directamente CONFIRMADA. Corresponde seña sólo
+     * si el establecimiento la exige Y esta cancha puntual tiene un monto de seña positivo
+     * configurado -- un establecimiento con requiereSena=true pero una cancha con
+     * montoSena en 0/null no tiene, en los hechos, nada que cobrar antes de confirmar.
+     * Decisión de negocio, no un detalle técnico: ver el análisis en el prompt que originó
+     * este método antes de tocar esta regla.
+     */
+    boolean correspondeSena(Establecimiento establecimiento, Cancha cancha) {
+        return Boolean.TRUE.equals(establecimiento.getRequiereSena())
+                && cancha.getMontoSena() != null
+                && cancha.getMontoSena().compareTo(BigDecimal.ZERO) > 0;
     }
 
     /**

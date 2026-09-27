@@ -3,7 +3,8 @@ package com.matiasmeira.sacaladelangulo.reserva.service;
 /**
  * Evento publicado cada vez que UNA Reserva suelta queda en estado CONFIRMADA (transición
  * PENDIENTE_SENA -> CONFIRMADA en confirmarReserva, o creación directa en CONFIRMADA vía
- * crearReservaManual).
+ * crearReservaManual o crearReserva cuando la cancha no tiene seña correspondiente -- ver
+ * ReservaService.correspondeSena).
  *
  * <p>TurnoFijoService.crear NO usa este evento: un turno fijo publica un único
  * {@link TurnoFijoCreadoEvent} con todas sus ocurrencias, para mandar un solo aviso con la

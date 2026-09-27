@@ -58,8 +58,10 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -258,6 +260,128 @@ class ReservaServiceTest {
         // Assert
         assert response != null;
         verify(reservaRepository).save(any(Reserva.class));
+    }
+
+    @Test
+    @DisplayName("correspondeSena_SoloTrueCuandoElEstablecimientoLaExigeYLaCanchaTieneMontoPositivo")
+    void correspondeSena_SoloTrueCuandoElEstablecimientoLaExigeYLaCanchaTieneMontoPositivo() {
+        Establecimiento requiereSena = Establecimiento.builder().requiereSena(true).build();
+        Establecimiento noRequiereSena = Establecimiento.builder().requiereSena(false).build();
+        Cancha montoPositivo = Cancha.builder().montoSena(BigDecimal.valueOf(500)).build();
+        Cancha montoCero = Cancha.builder().montoSena(BigDecimal.ZERO).build();
+        Cancha montoNulo = Cancha.builder().montoSena(null).build();
+
+        assertTrue(reservaService.correspondeSena(requiereSena, montoPositivo));
+        assertFalse(reservaService.correspondeSena(noRequiereSena, montoPositivo));
+        assertFalse(reservaService.correspondeSena(requiereSena, montoCero));
+        assertFalse(reservaService.correspondeSena(requiereSena, montoNulo));
+    }
+
+    /**
+     * Establecimiento propio para los tests de correspondeSena vía crearReserva, con
+     * requiereSena parametrizable e id/dueño/horario de atención propios (no reutiliza el
+     * establecimiento del fixture, que tiene requiereSena=true fijo).
+     */
+    private Establecimiento establecimientoParaSena(boolean requiereSena) {
+        Establecimiento est = Establecimientos.establecimientoOperativo(b -> b
+                .id(50L)
+                .nombre("Establecimiento Sena Test")
+                .direccion("Calle Sena 123")
+                .latitud(-34.6037)
+                .longitud(-58.3816)
+                .dueno(dueno)
+                .requiereSena(requiereSena));
+        est.setHorariosAtencion(List.of(
+                HorarioAtencion.builder()
+                        .diaSemana(DayOfWeek.TUESDAY)
+                        .horaApertura(LocalTime.of(10, 0))
+                        .horaCierre(LocalTime.of(22, 0))
+                        .establecimiento(est)
+                        .build()));
+        return est;
+    }
+
+    private Cancha canchaParaSena(Establecimiento establecimiento, BigDecimal montoSena) {
+        return Cancha.builder()
+                .id(200L)
+                .nombre("Cancha Sena Test")
+                .deportes(Set.of(Deporte.FUTBOL_5))
+                .precioBase(BigDecimal.valueOf(1500))
+                .montoSena(montoSena)
+                .duracionesPermitidas(new ArrayList<>(List.of(60)))
+                .permiteInicioMediaHora(false)
+                .establecimiento(establecimiento)
+                .isActive(true)
+                .tarifas(new ArrayList<>())
+                .canchasFisicas(new java.util.LinkedHashSet<>())
+                .build();
+    }
+
+    /**
+     * Ejercita crearReserva de punta a punta (no sólo correspondeSena) para las 4
+     * combinaciones de la matriz acordada, capturando con ArgumentCaptor la Reserva que
+     * realmente se pasa a save -- a diferencia de crearReserva_Exito_SinSolapamiento, que
+     * sólo comprueba que se llamó a save, sin mirar qué construyó.
+     */
+    private Reserva crearReservaYCapturar(boolean requiereSenaEstablecimiento, BigDecimal montoSenaCancha) {
+        Establecimiento est = establecimientoParaSena(requiereSenaEstablecimiento);
+        Cancha canchaTest = canchaParaSena(est, montoSenaCancha);
+
+        LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
+        LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
+        ReservaRequest request = new ReservaRequest(canchaTest.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(canchaTest.getId())).thenReturn(Optional.of(canchaTest));
+        when(reservaRepository.findSuperpuestas(eq(est.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoId(est.getId())).thenReturn(List.of(canchaTest));
+
+        ArgumentCaptor<Reserva> captor = ArgumentCaptor.forClass(Reserva.class);
+        when(reservaRepository.save(captor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        reservaService.crearReserva(request, jugador.getEmail());
+
+        return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("crearReserva_RequiereSenaConMontoPositivo_NacePendienteSenaConExpiracionYSinEvento")
+    void crearReserva_RequiereSenaConMontoPositivo_NacePendienteSenaConExpiracionYSinEvento() {
+        Reserva guardada = crearReservaYCapturar(true, BigDecimal.valueOf(500));
+
+        assertEquals(EstadoReserva.PENDIENTE_SENA, guardada.getEstado());
+        assertTrue(guardada.getExpiraEn() != null && guardada.getExpiraEn().isAfter(LocalDateTime.now()));
+        verify(eventPublisher, never()).publishEvent(any(ReservaConfirmadaEvent.class));
+    }
+
+    @Test
+    @DisplayName("crearReserva_NoRequiereSenaConMontoPositivo_NaceConfirmadaSinExpiracionYPublicaEvento")
+    void crearReserva_NoRequiereSenaConMontoPositivo_NaceConfirmadaSinExpiracionYPublicaEvento() {
+        Reserva guardada = crearReservaYCapturar(false, BigDecimal.valueOf(500));
+
+        assertEquals(EstadoReserva.CONFIRMADA, guardada.getEstado());
+        assertNull(guardada.getExpiraEn());
+        verify(eventPublisher).publishEvent(argThat((ReservaConfirmadaEvent evento) -> true));
+    }
+
+    @Test
+    @DisplayName("crearReserva_RequiereSenaConMontoCero_NaceConfirmadaSinExpiracionYPublicaEvento")
+    void crearReserva_RequiereSenaConMontoCero_NaceConfirmadaSinExpiracionYPublicaEvento() {
+        Reserva guardada = crearReservaYCapturar(true, BigDecimal.ZERO);
+
+        assertEquals(EstadoReserva.CONFIRMADA, guardada.getEstado());
+        assertNull(guardada.getExpiraEn());
+        verify(eventPublisher).publishEvent(argThat((ReservaConfirmadaEvent evento) -> true));
+    }
+
+    @Test
+    @DisplayName("crearReserva_RequiereSenaConMontoNulo_NaceConfirmadaSinExpiracionYPublicaEvento")
+    void crearReserva_RequiereSenaConMontoNulo_NaceConfirmadaSinExpiracionYPublicaEvento() {
+        Reserva guardada = crearReservaYCapturar(true, null);
+
+        assertEquals(EstadoReserva.CONFIRMADA, guardada.getEstado());
+        assertNull(guardada.getExpiraEn());
+        verify(eventPublisher).publishEvent(argThat((ReservaConfirmadaEvent evento) -> true));
     }
 
     /**

@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -108,4 +109,13 @@ public class Cancha {
     @Column(name = "permite_inicio_media_hora")
     @Builder.Default
     private Boolean permiteInicioMediaHora = true;
+
+    /**
+     * Baja lógica (soft delete), mismo patrón que Usuario.deletedAt/Establecimiento.deletedAt
+     * (V14/V26): columna simple, nullable, sin default, sin índice, SIN filtro global de
+     * Hibernate. Se exige isActive=false antes de eliminar (ver CanchaEliminacionService), así
+     * que deletedAt != null siempre implica isActive = false -- nunca la combinación inversa.
+     */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

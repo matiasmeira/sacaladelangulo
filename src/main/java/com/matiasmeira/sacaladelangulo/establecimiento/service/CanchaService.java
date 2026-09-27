@@ -136,8 +136,7 @@ public class CanchaService {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
-        Cancha cancha = canchaRepository.findById(canchaId)
-                .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
+        Cancha cancha = buscarCanchaNoEliminada(canchaId);
 
         if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
             throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
@@ -199,8 +198,7 @@ public class CanchaService {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
-        Cancha cancha = canchaRepository.findById(canchaId)
-                .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
+        Cancha cancha = buscarCanchaNoEliminada(canchaId);
 
         if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
             throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
@@ -384,6 +382,14 @@ public class CanchaService {
         if (canchasFisicas.size() != canchasFisicasIds.size()) {
             throw new IllegalArgumentException("Algunas canchas físicas no existen");
         }
+        // findAllById no filtra deletedAt (no es un finder derivado por establecimiento/
+        // isActive como el resto del repositorio): una cancha ELIMINADA es, para cualquier
+        // otro efecto del sistema, inexistente, así que no puede sumarse como física de un
+        // pool nuevo -- mismo mensaje que "no existen" a secas.
+        boolean incluyeEliminada = canchasFisicas.stream().anyMatch(c -> c.getDeletedAt() != null);
+        if (incluyeEliminada) {
+            throw new IllegalArgumentException("Algunas canchas físicas no existen");
+        }
         // Sin este chequeo, un pool podía armarse con canchas de OTRO establecimiento (ver
         // M-03 en la auditoría): el cálculo de disponibilidad y el lock pesimista de
         // ReservaService operarían sobre filas de un tenant ajeno.
@@ -503,6 +509,22 @@ public class CanchaService {
     private Establecimiento buscarEstablecimientoPorId(Long establecimientoId) {
         return establecimientoRepository.findById(establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+    }
+
+    /**
+     * Una cancha eliminada (deletedAt != null, ver CanchaEliminacionService) es, para
+     * cualquier efecto práctico, inexistente: no aparece en el panel del dueño (ver
+     * CanchaRepository.findByEstablecimientoId), así que nunca debería intentarse editar o
+     * desactivar por su id salvo con un id viejo/inválido -- mismo mensaje que "no
+     * encontrada" a secas, sin distinguirlo.
+     */
+    private Cancha buscarCanchaNoEliminada(Long canchaId) {
+        Cancha cancha = canchaRepository.findById(canchaId)
+                .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
+        if (cancha.getDeletedAt() != null) {
+            throw new EntityNotFoundException("Cancha no encontrada");
+        }
+        return cancha;
     }
 
     /** Mismo motivo que mapToResponse: preciosPorDuracion es @ElementCollection. */

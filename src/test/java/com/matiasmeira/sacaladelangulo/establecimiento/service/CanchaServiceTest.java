@@ -193,6 +193,51 @@ class CanchaServiceTest {
         );
     }
 
+    /**
+     * Una cancha eliminada (deletedAt != null, ver CanchaEliminacionService) es, para
+     * cualquier efecto práctico, inexistente: no se puede volver a desactivar algo que ya
+     * desapareció de todas las vistas. Mismo mensaje que "no encontrada" a secas, no uno
+     * específico -- desactivarCancha ya sabía de este id porque lo ve en su propio panel,
+     * pero una eliminada nunca aparece ahí, así que llegar acá con su id es indistinguible
+     * de un id inválido.
+     */
+    @Test
+    @DisplayName("desactivarCancha_Fallo_CanchaYaEliminada")
+    void desactivarCancha_Fallo_CanchaYaEliminada() {
+        Cancha canchaEliminada = com.matiasmeira.sacaladelangulo.support.Canchas.canchaEliminada(
+                establecimiento, b -> b.id(300L).nombre("Cancha Eliminada"));
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(canchaRepository.findById(300L)).thenReturn(Optional.of(canchaEliminada));
+
+        assertThrows(
+                EntityNotFoundException.class,
+                () -> canchaService.desactivarCancha(establecimiento.getId(), 300L, dueno.getEmail())
+        );
+        verify(canchaRepository, never()).save(any());
+    }
+
+    /** Mismo criterio que desactivarCancha_Fallo_CanchaYaEliminada, para el camino de edición. */
+    @Test
+    @DisplayName("actualizarCancha_Fallo_CanchaYaEliminada")
+    void actualizarCancha_Fallo_CanchaYaEliminada() {
+        Cancha canchaEliminada = com.matiasmeira.sacaladelangulo.support.Canchas.canchaEliminada(
+                establecimiento, b -> b.id(300L).nombre("Cancha Eliminada"));
+        CanchaRequest request = new CanchaRequest("Cancha A", Set.of(Deporte.FUTBOL_5), BigDecimal.valueOf(5000),
+                BigDecimal.valueOf(1000), null, null, null, null, null, null, null);
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(canchaRepository.findById(300L)).thenReturn(Optional.of(canchaEliminada));
+
+        assertThrows(
+                EntityNotFoundException.class,
+                () -> canchaService.actualizarCancha(establecimiento.getId(), 300L, request, dueno.getEmail())
+        );
+        verify(canchaRepository, never()).save(any());
+    }
+
     private CanchaRequest requestConPreciosPorDuracion(Map<Integer, BigDecimal> preciosPorDuracion) {
         return new CanchaRequest(
                 "Cancha A",
@@ -306,6 +351,29 @@ class CanchaServiceTest {
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findAllById(java.util.List.of(201L))).thenReturn(java.util.List.of(fisicaDeOtroEstablecimiento));
+
+        CanchaRequest request = requestConCanchasFisicasIds(java.util.List.of(201L));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> canchaService.crearCancha(establecimiento.getId(), request, dueno.getEmail()));
+        verify(canchaRepository, never()).save(any());
+    }
+
+    /**
+     * Una cancha ELIMINADA no puede sumarse como física de un pool nuevo: findAllById no
+     * filtra deletedAt (no es un finder derivado por establecimiento/isActive), así que sin
+     * este chequeo se podía armar una cancha combinada usando una física que, para cualquier
+     * otro efecto del sistema, ya no existe.
+     */
+    @Test
+    @DisplayName("crearCancha_Fallo_CanchaFisicaEliminada")
+    void crearCancha_Fallo_CanchaFisicaEliminada() {
+        Cancha fisicaEliminada = com.matiasmeira.sacaladelangulo.support.Canchas.canchaEliminada(
+                establecimiento, b -> b.id(201L).nombre("Física Eliminada"));
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(canchaRepository.findAllById(java.util.List.of(201L))).thenReturn(java.util.List.of(fisicaEliminada));
 
         CanchaRequest request = requestConCanchasFisicasIds(java.util.List.of(201L));
 

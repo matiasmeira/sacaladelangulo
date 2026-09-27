@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.establecimiento.controller;
 
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaResponse;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.CanchaEliminacionService;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.CanchaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import java.util.List;
 public class CanchaController {
 
     private final CanchaService canchaService;
+    private final CanchaEliminacionService canchaEliminacionService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
@@ -73,6 +75,27 @@ public class CanchaController {
             @PathVariable Long canchaId,
             @AuthenticationPrincipal UserDetails userDetails) {
         canchaService.desactivarCancha(establecimientoId, canchaId, userDetails.getUsername());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Baja lógica (soft delete, deletedAt) de la cancha, no la simple desactivación de arriba
+     * -- distinta del DELETE de arriba a propósito: ese verbo+ruta ya lo ocupa
+     * desactivarCancha (isActive=false, reversible), y el frontend ya depende de ese
+     * contrato. El sufijo "/definitiva" es la forma de sumar la baja real sin pisarlo; la
+     * causa de fondo es que ese DELETE debería haber sido un PATCH /estado desde el
+     * principio (como el análogo de Establecimiento), pero migrarlo es aparte, no algo a
+     * resolver en esta feature.
+     *
+     * <p>Sólo el dueño real: ni ADMIN ni EMPLOYEE (ver CanchaEliminacionService).
+     */
+    @DeleteMapping("/{canchaId}/definitiva")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Void> eliminarCancha(
+            @PathVariable Long establecimientoId,
+            @PathVariable Long canchaId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        canchaEliminacionService.eliminarCancha(establecimientoId, canchaId, userDetails.getUsername());
         return ResponseEntity.noContent().build();
     }
 }

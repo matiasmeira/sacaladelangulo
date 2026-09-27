@@ -52,13 +52,22 @@ public interface CanchaRepository extends JpaRepository<Cancha, Long> {
      * sumar a usoActual y el grupo quedaría con cupo de más (sobreventa). Las físicas
      * inactivas ya se excluyen de la capacidad dentro de PoolCanchaCalculator.footprint,
      * así que no hace falta filtrarlas en esta query.
+     *
+     * <p>SÍ filtra {@code deletedAt IS NULL}: a diferencia de isActive, una cancha eliminada
+     * (ver CanchaEliminacionService) no tiene que reaparecer ni siquiera acá -- es el único
+     * método que trae inactivas para que el panel las pueda reactivar, y una eliminada no es
+     * reactivable. No hace falta filtrarla también para el cálculo de pool: eliminar exige
+     * que ya esté inactiva, y PoolCanchaCalculator.footprint ya la excluye por isActive (ver
+     * su javadoc), así que su aporte a la capacidad de cualquier grupo ya era cero.
      */
     @EntityGraph(attributePaths = {"canchasFisicas", "deportes"})
-    List<Cancha> findByEstablecimientoId(Long establecimientoId);
+    @Query("SELECT c FROM Cancha c WHERE c.establecimiento.id = :establecimientoId AND c.deletedAt IS NULL")
+    List<Cancha> findByEstablecimientoId(@Param("establecimientoId") Long establecimientoId);
 
-    /** Variante en lote de {@link #findByEstablecimientoId}, mismo motivo que su par *AndIsActiveTrue. */
+    /** Variante en lote de {@link #findByEstablecimientoId}, mismo motivo que su par *AndIsActiveTrue y mismo filtro de deletedAt. */
     @EntityGraph(attributePaths = {"deportes"})
-    List<Cancha> findByEstablecimientoIdIn(List<Long> establecimientoIds);
+    @Query("SELECT c FROM Cancha c WHERE c.establecimiento.id IN :establecimientoIds AND c.deletedAt IS NULL")
+    List<Cancha> findByEstablecimientoIdIn(@Param("establecimientoIds") List<Long> establecimientoIds);
 
     /**
      * Trae, para el lote de establecimientos indicado, sus canchas activas con deportes y

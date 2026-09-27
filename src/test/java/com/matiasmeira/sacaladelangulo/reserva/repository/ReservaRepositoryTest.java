@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoTurnoFijo;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.TurnoFijo;
+import com.matiasmeira.sacaladelangulo.support.Canchas;
 import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -183,6 +184,209 @@ class ReservaRepositoryTest {
         assertEquals(1, resultado.size());
         assertEquals(0L, resultado.get(0)[0]);
         org.junit.jupiter.api.Assertions.assertNull(resultado.get(0)[1]);
+    }
+
+    /**
+     * Igual que resumenReservasFuturasConfirmadas pero a nivel de una cancha puntual: usada
+     * por CanchaEliminacionService para la precondición "sin reservas futuras confirmadas" de
+     * ESA cancha. Tiene que contar sólo CONFIRMADA futura de esta cancha y devolver, en la
+     * misma fila, la fecha más lejana -- ignorando otra cancha del mismo establecimiento.
+     */
+    @Test
+    @DisplayName("resumenReservasFuturasConfirmadasPorCancha_CuentaSoloDeEsaCancha_ExcluyeCanceladasPasadasYOtraCancha")
+    void resumenReservasFuturasConfirmadasPorCancha_CuentaSoloDeEsaCancha_ExcluyeCanceladasPasadasYOtraCancha() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-elim-cancha-resumen@test.com")
+                .password("hash")
+                .nombre("Dueno")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Complejo Resumen Cancha")
+                .direccion("Calle Resumen Cancha 123")
+                .slug("complejo-resumen-cancha")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+
+        Cancha canchaAEliminar = entityManager.persist(Canchas.canchaDesactivada(establecimiento));
+        Cancha otraCancha = entityManager.persist(Canchas.canchaActiva(establecimiento));
+
+        LocalDateTime ahora = LocalDateTime.now();
+        LocalDateTime masLejana = ahora.plusDays(10);
+
+        entityManager.persist(reservaDe(canchaAEliminar, EstadoReserva.CONFIRMADA, ahora.plusDays(2)));
+        entityManager.persist(reservaDe(canchaAEliminar, EstadoReserva.CONFIRMADA, masLejana));
+        // No deben contar: cancelada futura y confirmada ya pasada de la misma cancha.
+        entityManager.persist(reservaDe(canchaAEliminar, EstadoReserva.CANCELADA, ahora.plusDays(5)));
+        entityManager.persist(reservaDe(canchaAEliminar, EstadoReserva.CONFIRMADA, ahora.minusDays(1)));
+        // No debe contar: confirmada futura, pero de OTRA cancha del mismo establecimiento.
+        entityManager.persist(reservaDe(otraCancha, EstadoReserva.CONFIRMADA, ahora.plusDays(20)));
+        entityManager.flush();
+
+        List<Object[]> resultado = reservaRepository.resumenReservasFuturasConfirmadasPorCancha(canchaAEliminar.getId(), ahora);
+
+        assertEquals(1, resultado.size());
+        assertEquals(2L, resultado.get(0)[0]);
+        assertEquals(masLejana.truncatedTo(java.time.temporal.ChronoUnit.SECONDS),
+                ((LocalDateTime) resultado.get(0)[1]).truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+    }
+
+    @Test
+    @DisplayName("resumenReservasFuturasConfirmadasPorCancha_SinReservas_DevuelveCeroYFechaNula")
+    void resumenReservasFuturasConfirmadasPorCancha_SinReservas_DevuelveCeroYFechaNula() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-elim-cancha-resumen-vacio@test.com")
+                .password("hash")
+                .nombre("Dueno")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Complejo Resumen Cancha Vacio")
+                .direccion("Calle Resumen Cancha Vacio 123")
+                .slug("complejo-resumen-cancha-vacio")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+
+        Cancha cancha = entityManager.persist(Canchas.canchaDesactivada(establecimiento));
+        entityManager.flush();
+
+        List<Object[]> resultado = reservaRepository.resumenReservasFuturasConfirmadasPorCancha(cancha.getId(), LocalDateTime.now());
+
+        assertEquals(1, resultado.size());
+        assertEquals(0L, resultado.get(0)[0]);
+        org.junit.jupiter.api.Assertions.assertNull(resultado.get(0)[1]);
+    }
+
+    /**
+     * Confirma con datos reales de TurnoFijo (no sólo Reserva sueltas) el hallazgo del
+     * diagnóstico de CanchaEliminacionService: un turno fijo ACTIVO con una ocurrencia futura
+     * CONFIRMADA queda atrapado por resumenReservasFuturasConfirmadasPorCancha, sin que
+     * CanchaEliminacionService necesite consultar TurnoFijoRepository. Esto es así porque
+     * TurnoFijoService.crearInterno persiste TODAS las ocurrencias del período como Reserva
+     * CONFIRMADA en la misma transacción que la regla -- no hay materialización diferida.
+     */
+    @Test
+    @DisplayName("resumenReservasFuturasConfirmadasPorCancha_CapturaOcurrenciaDeTurnoFijoActivo")
+    void resumenReservasFuturasConfirmadasPorCancha_CapturaOcurrenciaDeTurnoFijoActivo() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-elim-turno-fijo@test.com")
+                .password("hash")
+                .nombre("Dueno")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Complejo Turno Fijo Elim")
+                .direccion("Calle Turno Fijo Elim 123")
+                .slug("complejo-turno-fijo-elim")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+
+        Cancha cancha = entityManager.persist(Canchas.canchaDesactivada(establecimiento));
+
+        TurnoFijo serieActiva = entityManager.persist(TurnoFijo.builder()
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.PADEL)
+                .diaSemana(DayOfWeek.TUESDAY)
+                .horaInicio(LocalTime.of(20, 0))
+                .horaFin(LocalTime.of(21, 0))
+                .fechaInicioPeriodo(LocalDate.of(2030, 1, 1))
+                .fechaFinPeriodo(LocalDate.of(2030, 12, 31))
+                .estado(EstadoTurnoFijo.ACTIVO)
+                .nombreClienteManual("Cliente Fijo")
+                .build());
+
+        LocalDateTime ahora = LocalDateTime.now();
+        LocalDateTime ocurrenciaFutura = ahora.plusDays(9);
+        entityManager.persist(reservaDeTurnoFijo(cancha, serieActiva, EstadoReserva.CONFIRMADA, ocurrenciaFutura));
+        entityManager.flush();
+
+        List<Object[]> resultado = reservaRepository.resumenReservasFuturasConfirmadasPorCancha(cancha.getId(), ahora);
+
+        assertEquals(1, resultado.size());
+        assertEquals(1L, resultado.get(0)[0]);
+        assertEquals(ocurrenciaFutura.truncatedTo(java.time.temporal.ChronoUnit.SECONDS),
+                ((LocalDateTime) resultado.get(0)[1]).truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+    }
+
+    /**
+     * El hallazgo más importante del diagnóstico de CanchaEliminacionService: una reserva
+     * HISTÓRICA (FINALIZADA, ya cobrada) sobre una cancha que HOY está eliminada tiene que
+     * seguir resolviendo el nombre y el precio de esa cancha sin romperse -- es exactamente lo
+     * que necesitan los reportes y los cierres de caja de hace meses. Cancha no se borra
+     * físicamente (soft delete, sin cascada) y Reserva.cancha es un FK directo sin ningún
+     * filtro por deletedAt, así que esto funciona "gratis": no hace falta ningún cambio de
+     * código en reportes para que siga andando.
+     */
+    @Test
+    @DisplayName("reservaHistorica_SobreCanchaEliminada_SigueResolviendoNombreYPrecio")
+    void reservaHistorica_SobreCanchaEliminada_SigueResolviendoNombreYPrecio() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-historial-cancha-eliminada@test.com")
+                .password("hash")
+                .nombre("Dueno")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
+                .nombre("Complejo Historial")
+                .direccion("Calle Historial 123")
+                .slug("complejo-historial-cancha-eliminada")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+
+        Cancha cancha = entityManager.persist(Canchas.canchaActiva(establecimiento, b -> b.nombre("Cancha Historica")));
+
+        Reserva reservaFinalizada = entityManager.persist(Reserva.builder()
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.PADEL)
+                .fechaHoraInicio(LocalDateTime.now().minusMonths(3))
+                .fechaHoraFin(LocalDateTime.now().minusMonths(3).plusHours(1))
+                .estado(EstadoReserva.FINALIZADA)
+                .precioTotal(BigDecimal.valueOf(5000))
+                .build());
+        entityManager.flush();
+
+        // Baja lógica de la cancha, mismo efecto que CanchaEliminacionService: sólo deletedAt,
+        // sin tocar ni borrar la reserva ni la fila de canchas.
+        cancha.setDeletedAt(LocalDateTime.now());
+        entityManager.persist(cancha);
+        entityManager.flush();
+        entityManager.clear();
+
+        Reserva releida = entityManager.find(Reserva.class, reservaFinalizada.getId());
+
+        assertEquals("Cancha Historica", releida.getCancha().getNombre());
+        assertEquals(0, BigDecimal.valueOf(5000).compareTo(releida.getPrecioTotal()));
+        assertEquals(EstadoReserva.FINALIZADA, releida.getEstado());
+        org.junit.jupiter.api.Assertions.assertNotNull(releida.getCancha().getPrecioBase());
+        org.junit.jupiter.api.Assertions.assertNotNull(releida.getCancha().getDeletedAt());
     }
 
     private Reserva reservaDe(Cancha cancha, EstadoReserva estado, LocalDateTime fechaHoraInicio) {

@@ -260,6 +260,21 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
            "AND r.estado = 'CONFIRMADA' AND r.fechaHoraInicio > :ahora")
     List<Object[]> resumenReservasFuturasConfirmadas(@Param("estId") Long estId, @Param("ahora") LocalDateTime ahora);
 
+    /**
+     * Igual que {@link #resumenReservasFuturasConfirmadas} pero a nivel de una cancha
+     * puntual, no de todo el establecimiento: usado por CanchaEliminacionService para la
+     * precondición "sin reservas futuras confirmadas" de ESA cancha. Cubre también las
+     * ocurrencias de un turno fijo activo: TurnoFijoService.crearInterno las persiste como
+     * Reserva CONFIRMADA en la misma transacción que la regla, así que no hace falta una
+     * precondición separada para turnos fijos -- si la serie tiene ocurrencias futuras
+     * vigentes, esta consulta ya las encuentra. Si el día de mañana los turnos fijos
+     * empezaran a materializar ocurrencias de forma diferida (no todas de una), esta
+     * garantía deja de valer y hay que revisar la precondición.
+     */
+    @Query("SELECT COUNT(r), MAX(r.fechaHoraInicio) FROM Reserva r WHERE r.cancha.id = :canchaId " +
+           "AND r.estado = 'CONFIRMADA' AND r.fechaHoraInicio > :ahora")
+    List<Object[]> resumenReservasFuturasConfirmadasPorCancha(@Param("canchaId") Long canchaId, @Param("ahora") LocalDateTime ahora);
+
     // ===== Reportes agregados (panel del dueño) =====
     // Solo cuentan reservas FINALIZADA: es el único estado que representa dinero/turno
     // efectivamente cerrado (decisión de negocio explícita, ver spec de reportes).

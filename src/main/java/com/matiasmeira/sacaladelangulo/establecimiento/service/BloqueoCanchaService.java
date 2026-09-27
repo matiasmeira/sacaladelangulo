@@ -208,9 +208,15 @@ public class BloqueoCanchaService {
     // A diferencia de ReservaService.buscarCanchaPorId, acá no hace falta validar isActive:
     // sólo dueño/admin llegan a este método (crearBloqueo/listarPorCancha), y un bloqueo
     // sobre una cancha ya inactiva es redundante, no peligroso -no le da una reserva a nadie-.
+    // deletedAt sí corta: una cancha ELIMINADA (ver CanchaEliminacionService) desapareció de
+    // todas las vistas del dueño, y no hay ningún caso de uso legítimo para crearle un
+    // bloqueo nuevo o listar los suyos.
     private Cancha buscarCanchaDelEstablecimiento(Long establecimientoId, Long canchaId) {
         Cancha cancha = canchaRepository.findById(canchaId)
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
+        if (cancha.getDeletedAt() != null) {
+            throw new EntityNotFoundException("Cancha no encontrada");
+        }
         if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
             throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
         }

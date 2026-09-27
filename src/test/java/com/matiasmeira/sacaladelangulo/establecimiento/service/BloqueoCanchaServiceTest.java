@@ -190,6 +190,30 @@ class BloqueoCanchaServiceTest {
         verify(bloqueoCanchaRepository).save(any(BloqueoCancha.class));
     }
 
+    /**
+     * A diferencia de una cancha simplemente inactiva (ver el comentario de
+     * buscarCanchaDelEstablecimiento: un bloqueo sobre una inactiva es redundante, no
+     * peligroso), una cancha ELIMINADA desapareció de todas las vistas -- no tiene sentido
+     * dejar crear un bloqueo nuevo sobre algo que el dueño ya no puede ver ni administrar.
+     */
+    @Test
+    @DisplayName("crearBloqueo_Fallo_CanchaEliminada")
+    void crearBloqueo_Fallo_CanchaEliminada() {
+        Cancha canchaEliminada = com.matiasmeira.sacaladelangulo.support.Canchas.canchaEliminada(
+                establecimiento, b -> b.id(cancha5A.getId()).nombre(cancha5A.getNombre()));
+        LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
+        LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 12, 0);
+        BloqueoCanchaRequest request = new BloqueoCanchaRequest(fechaInicio, fechaFin, "Mantenimiento");
+
+        when(canchaRepository.findById(canchaEliminada.getId())).thenReturn(Optional.of(canchaEliminada));
+
+        assertThrows(
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
+                () -> bloqueoCanchaService.crearBloqueo(establecimiento.getId(), canchaEliminada.getId(), request, dueno.getEmail())
+        );
+        verify(bloqueoCanchaRepository, never()).save(any());
+    }
+
     @Test
     @DisplayName("crearBloqueo_Fallo_FechaInicioIgualFechaFin")
     void crearBloqueo_Fallo_FechaInicioIgualFechaFin() {

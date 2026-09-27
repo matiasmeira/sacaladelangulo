@@ -272,10 +272,18 @@ public class ReservaService {
      * callers que SÍ crean o reasignan una reserva nueva (crearReserva, crearReservaManual,
      * moverReservaDeCancha, TurnoFijoService.crear) validan isActive aparte, después de
      * resolver la cancha, con validarCanchaActivaParaJugador/ParaPanel.
+     *
+     * <p>SÍ filtra por deletedAt: a diferencia de una simplemente desactivada, una cancha
+     * ELIMINADA (ver CanchaEliminacionService) desapareció de todas las vistas, incluida la
+     * agenda de obtenerReservasPorCanchaYFecha -- no hay ningún caso de uso legítimo para
+     * seguir leyéndola por id. "no encontrada" a secas, sin distinguirla de un id inválido.
      */
     Cancha buscarCanchaPorId(Long canchaId) {
         Cancha cancha = canchaRepository.findById(canchaId)
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
+        if (cancha.getDeletedAt() != null) {
+            throw new EntityNotFoundException("Cancha no encontrada");
+        }
         log.debug("Cancha encontrada: {} - Establecimiento: {}", cancha.getId(), cancha.getEstablecimiento().getId());
         return cancha;
     }

@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Deporte;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Tarifa;
+import com.matiasmeira.sacaladelangulo.support.Canchas;
 import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -201,5 +202,78 @@ class CanchaRepositoryTest {
         assertEquals(2, incluyendoInactivas.size());
         assertEquals(1, soloActivas.size());
         assertTrue(soloActivas.get(0).getIsActive());
+    }
+
+    /**
+     * A diferencia de la inactiva simplemente desactivada (ver el test de arriba), una cancha
+     * ELIMINADA (deletedAt != null) no tiene que aparecer ni siquiera en la variante que trae
+     * inactivas: el panel del dueño usa este método con incluirInactivas=true para poder
+     * reactivarlas, y una eliminada no es reactivable -- no debe reaparecer como si lo fuera.
+     */
+    @Test
+    @DisplayName("findByEstablecimientoId_ExcluyeCanchaEliminada")
+    void findByEstablecimientoId_ExcluyeCanchaEliminada() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno4@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
+                .nombre("Complejo Test 4")
+                .direccion("Calle Test 4")
+                .slug("complejo-test-4")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+        entityManager.persist(Canchas.canchaActiva(establecimiento));
+        entityManager.persist(Canchas.canchaDesactivada(establecimiento));
+        entityManager.persist(Canchas.canchaEliminada(establecimiento));
+        entityManager.flush();
+        entityManager.clear();
+
+        List<Cancha> incluyendoInactivas = canchaRepository.findByEstablecimientoId(establecimiento.getId());
+        List<Cancha> soloActivas = canchaRepository.findByEstablecimientoIdAndIsActiveTrue(establecimiento.getId());
+
+        assertEquals(2, incluyendoInactivas.size(),
+                "Trae la activa y la desactivada, pero no la eliminada");
+        assertEquals(1, soloActivas.size());
+    }
+
+    /** Mismo criterio que findByEstablecimientoId, en su variante en lote. */
+    @Test
+    @DisplayName("findByEstablecimientoIdIn_ExcluyeCanchaEliminada")
+    void findByEstablecimientoIdIn_ExcluyeCanchaEliminada() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno5@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
+                .nombre("Complejo Test 5")
+                .direccion("Calle Test 5")
+                .slug("complejo-test-5")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+        entityManager.persist(Canchas.canchaActiva(establecimiento));
+        entityManager.persist(Canchas.canchaEliminada(establecimiento));
+        entityManager.flush();
+        entityManager.clear();
+
+        List<Cancha> resultado = canchaRepository.findByEstablecimientoIdIn(List.of(establecimiento.getId()));
+
+        assertEquals(1, resultado.size());
     }
 }

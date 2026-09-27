@@ -2081,6 +2081,29 @@ class ReservaServiceTest {
         assert resultado.getTotalElements() == 0;
     }
 
+    /**
+     * A diferencia de una simplemente desactivada (ver el test de arriba), una cancha
+     * ELIMINADA (deletedAt != null) sí tiene que cortar acá: desapareció de todas las vistas
+     * del dueño, incluida la agenda. buscarCanchaPorId es quien filtra esto -- no
+     * validarCanchaActivaParaPanel/Jugador, que sólo miran isActive y esta lectura no pasa
+     * por ellos.
+     */
+    @Test
+    @DisplayName("obtenerReservasPorCanchaYFecha_CanchaEliminada_CanchaNoEncontrada")
+    void obtenerReservasPorCanchaYFecha_CanchaEliminada_CanchaNoEncontrada() {
+        Cancha canchaEliminada = com.matiasmeira.sacaladelangulo.support.Canchas.canchaEliminada(
+                establecimiento, b -> b.id(cancha.getId()).nombre(cancha.getNombre()));
+
+        Pageable pageable = PageRequest.of(0, 10);
+        LocalDate fecha = LocalDate.of(2030, 1, 15);
+
+        when(canchaRepository.findById(canchaEliminada.getId())).thenReturn(Optional.of(canchaEliminada));
+
+        assertThrows(EntityNotFoundException.class, () -> reservaService.obtenerReservasPorCanchaYFecha(
+                canchaEliminada.getId(), fecha, false, pageable, dueno.getEmail()));
+        verify(autorizacionEmpleadoService, never()).validarPropietarioOAdmin(any(), any());
+    }
+
     @Test
     @DisplayName("obtenerReservasPorCanchaYFecha_PorDefecto_ExcluyeCanceladas")
     void obtenerReservasPorCanchaYFecha_PorDefecto_ExcluyeCanceladas() {

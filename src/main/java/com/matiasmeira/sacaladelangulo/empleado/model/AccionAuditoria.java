@@ -72,5 +72,12 @@ public enum AccionAuditoria {
      * de DESHABILITAR_ESTABLECIMIENTO, es irreversible y libera el slug y el cupo del límite
      * de 3.
      */
-    ELIMINAR_ESTABLECIMIENTO
+    ELIMINAR_ESTABLECIMIENTO,
+
+    /**
+     * Baja lógica de una cancha (ver CanchaEliminacionService): a diferencia de desactivarla
+     * (DELETE .../canchas/{id}, reversible), es irreversible y la cancha deja de aparecer en
+     * cualquier vista, incluso como inactiva.
+     */
+    ELIMINAR_CANCHA
 }

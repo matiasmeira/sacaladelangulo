@@ -311,11 +311,11 @@ class AutorizacionEmpleadoServiceTest {
     }
 
     @Test
-    @DisplayName("validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoEliminado_PendienteDecisionDeProducto")
-    void validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoEliminado_PendienteDecisionDeProducto() {
-        // Pendiente decisión de producto: ¿el dueño debe ver reportes de un establecimiento
-        // eliminado? Este test documenta el comportamiento ACTUAL (permite), no que sea la
-        // regla deseada -- validarPropietarioOAdmin no chequea deletedAt.
+    @DisplayName("validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoEliminado_PermiteVerReportesComoHistorialContable")
+    void validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoEliminado_PermiteVerReportesComoHistorialContable() {
+        // Decisión de producto: el dueño SÍ puede ver los reportes de un establecimiento
+        // eliminado, como historial contable -- por eso validarPropietarioOAdmin no chequea
+        // deletedAt a propósito.
         Establecimiento eliminado = Establecimientos.establecimientoEliminado(b -> b
                 .id(10L).nombre("Establecimiento Test").dueno(dueno));
         when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));

@@ -557,6 +557,17 @@ public class ReservaService {
                     "La ventana de 10 minutos para confirmar esta reserva ya venció. Debe realizar una nueva reserva.");
         }
 
+        // Chequeo defensivo: con la precondición de CanchaEliminacionService (ver
+        // ReservaRepository.resumenReservasFuturasVivasPorCancha) no debería poder existir una
+        // PENDIENTE_SENA futura sobre una cancha eliminada, salvo datos anteriores a ese fix.
+        // Deliberadamente no mira isActive: confirmar sobre una cancha desactivada (pero no
+        // eliminada) tiene que seguir funcionando, mismo criterio que cancelarReserva.
+        if (reserva.getCancha().getDeletedAt() != null) {
+            log.warn("Intento de confirmar una reserva sobre una cancha eliminada. ID: {}, Cancha: {}",
+                    reservaId, reserva.getCancha().getId());
+            throw new IllegalArgumentException("No se puede confirmar esta reserva porque la cancha fue eliminada.");
+        }
+
         reserva.setEstado(EstadoReserva.CONFIRMADA);
         reserva.setExpiraEn(null);
         Reserva reservaActualizada = reservaRepository.save(reserva);

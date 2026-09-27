@@ -74,10 +74,23 @@ class CanchaEliminacionServiceTest {
         canchaDesactivada = Canchas.canchaDesactivada(establecimiento, b -> b.id(100L).nombre("Cancha 1"));
     }
 
-    /** Sin reservas futuras confirmadas: COUNT/MAX sin GROUP BY siempre da una fila, MAX null. */
-    private void sinReservasFuturasConfirmadas() {
-        when(reservaRepository.resumenReservasFuturasConfirmadasPorCancha(eq(100L), any()))
+    /** Sin reservas futuras vivas: COUNT/MAX sin GROUP BY siempre da una fila, MAX null. */
+    private void sinReservasFuturasVivas() {
+        when(reservaRepository.resumenReservasFuturasVivasPorCancha(eq(100L), any()))
                 .thenReturn(Collections.singletonList(new Object[]{0L, null}));
+    }
+
+    /**
+     * Simula el resultado que la query real devolvería para el escenario nombrado (count,
+     * fecha más lejana). La semántica de qué estado cuenta como "vivo" -- PENDIENTE_SENA
+     * vigente sí, vencida no, CONFIRMADA sí, pasadas/canceladas/FINALIZADA/AUSENTE no -- la
+     * ejercita el JPQL real en ReservaRepositoryTest (H2) y en el test de Testcontainers
+     * contra Postgres; acá solo se verifica que CanchaEliminacionService reaccione bien al
+     * resultado que la query le da.
+     */
+    private void resumenConReservaFutura(long cantidad, LocalDateTime fechaMasLejana) {
+        when(reservaRepository.resumenReservasFuturasVivasPorCancha(eq(100L), any()))
+                .thenReturn(Collections.singletonList(new Object[]{cantidad, fechaMasLejana}));
     }
 
     @Test
@@ -93,34 +106,57 @@ class CanchaEliminacionServiceTest {
 
         assertTrue(ex.getMessage().toLowerCase().contains("desactiv"));
         verify(canchaRepository, never()).save(any());
-        verify(reservaRepository, never()).resumenReservasFuturasConfirmadasPorCancha(anyLong(), any());
+        verify(reservaRepository, never()).resumenReservasFuturasVivasPorCancha(anyLong(), any());
     }
 
     @Test
-    @DisplayName("eliminarCancha_Fallo_ReservasFuturasConfirmadas_InformaCantidadYFecha")
-    void eliminarCancha_Fallo_ReservasFuturasConfirmadas_InformaCantidadYFecha() {
+    @DisplayName("eliminarCancha_Fallo_ReservasFuturasVivas_InformaCantidadYFechaFormateadaParaHumanos")
+    void eliminarCancha_Fallo_ReservasFuturasVivas_InformaCantidadYFechaFormateadaParaHumanos() {
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietario(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findById(100L)).thenReturn(Optional.of(canchaDesactivada));
-        LocalDateTime fechaMasLejana = LocalDateTime.of(2030, 6, 15, 20, 0);
-        when(reservaRepository.resumenReservasFuturasConfirmadasPorCancha(eq(100L), any()))
-                .thenReturn(Collections.singletonList(new Object[]{3L, fechaMasLejana}));
+        LocalDateTime fechaMasLejana = LocalDateTime.of(2026, 10, 3, 21, 0);
+        resumenConReservaFutura(3L, fechaMasLejana);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> canchaEliminacionService.eliminarCancha(10L, 100L, dueno.getEmail()));
 
         assertTrue(ex.getMessage().contains("3"));
-        assertTrue(ex.getMessage().contains("2030-06-15"));
+        assertTrue(ex.getMessage().contains("03/10/2026 a las 21:00"));
+        verify(canchaRepository, never()).save(any());
+    }
+
+    /**
+     * A este nivel (reservaRepository mockeado) "PENDIENTE_SENA vigente" y "PENDIENTE_SENA
+     * con expiraEn null" son indistinguibles: la distinción vive dentro del JPQL de
+     * resumenReservasFuturasVivasPorCancha, no en CanchaEliminacionService, que solo reacciona
+     * a un count &gt; 0. Ambos casos concretos (expiraEn futuro y expiraEn null) están
+     * cubiertos con datos reales en ReservaRepositoryTest (H2) y en el test de Testcontainers
+     * contra Postgres.
+     */
+    @Test
+    @DisplayName("eliminarCancha_Fallo_PendienteSenaFuturaVivaSeaVigenteOSinExpiraEn_Bloquea")
+    void eliminarCancha_Fallo_PendienteSenaFuturaVivaSeaVigenteOSinExpiraEn_Bloquea() {
+        when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietario(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(canchaRepository.findById(100L)).thenReturn(Optional.of(canchaDesactivada));
+        resumenConReservaFutura(1L, LocalDateTime.now().plusDays(2));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> canchaEliminacionService.eliminarCancha(10L, 100L, dueno.getEmail()));
         verify(canchaRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("eliminarCancha_Exito_SoloReservasCanceladasOPasadas_NoBloquea")
-    void eliminarCancha_Exito_SoloReservasCanceladasOPasadas_NoBloquea() {
+    @DisplayName("eliminarCancha_Exito_PendienteSenaVencida_NoBloqueaAunqueElJobNoLaHayaProcesado")
+    void eliminarCancha_Exito_PendienteSenaVencida_NoBloqueaAunqueElJobNoLaHayaProcesado() {
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietario(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findById(100L)).thenReturn(Optional.of(canchaDesactivada));
-        sinReservasFuturasConfirmadas();
+        // Una PENDIENTE_SENA con expiraEn ya vencido no cuenta como viva (mismo criterio que
+        // findSuperpuestas): la query real la excluye aunque ReservaExpiracionService todavía
+        // no haya corrido para pasarla a CANCELADA_PRERESERVA.
+        sinReservasFuturasVivas();
         when(canchaRepository.save(any(Cancha.class))).thenAnswer(inv -> inv.getArgument(0));
 
         canchaEliminacionService.eliminarCancha(10L, 100L, dueno.getEmail());
@@ -129,12 +165,31 @@ class CanchaEliminacionServiceTest {
     }
 
     @Test
+    @DisplayName("eliminarCancha_Fallo_ConfirmadaFutura_SigueBloqueando")
+    void eliminarCancha_Fallo_ConfirmadaFutura_SigueBloqueando() {
+        when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietario(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(canchaRepository.findById(100L)).thenReturn(Optional.of(canchaDesactivada));
+        resumenConReservaFutura(1L, LocalDateTime.now().plusDays(5));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> canchaEliminacionService.eliminarCancha(10L, 100L, dueno.getEmail()));
+        verify(canchaRepository, never()).save(any());
+    }
+
+    /**
+     * "Sin reservas futuras vivas" (count=0) cubre a este nivel tanto pasadas/canceladas
+     * como FINALIZADA/AUSENTE -- todas quedan afuera del JPQL de
+     * resumenReservasFuturasVivasPorCancha, mismo motivo que la nota de arriba. El detalle
+     * de qué estado cae en cada bucket lo verifica ReservaRepositoryTest.
+     */
+    @Test
     @DisplayName("eliminarCancha_Exito_SeteaDeletedAtAuditaEInvalidaCache")
     void eliminarCancha_Exito_SeteaDeletedAtAuditaEInvalidaCache() {
         when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietario(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(canchaRepository.findById(100L)).thenReturn(Optional.of(canchaDesactivada));
-        sinReservasFuturasConfirmadas();
+        sinReservasFuturasVivas();
         when(canchaRepository.save(any(Cancha.class))).thenAnswer(inv -> inv.getArgument(0));
 
         canchaEliminacionService.eliminarCancha(10L, 100L, dueno.getEmail());

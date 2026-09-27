@@ -188,13 +188,14 @@ class ReservaRepositoryTest {
 
     /**
      * Igual que resumenReservasFuturasConfirmadas pero a nivel de una cancha puntual: usada
-     * por CanchaEliminacionService para la precondición "sin reservas futuras confirmadas" de
+     * por CanchaEliminacionService para la precondición "sin reservas futuras vivas" de
      * ESA cancha. Tiene que contar sólo CONFIRMADA futura de esta cancha y devolver, en la
      * misma fila, la fecha más lejana -- ignorando otra cancha del mismo establecimiento.
+     * Los casos de PENDIENTE_SENA (vigente, sin expiraEn, vencida) están más abajo.
      */
     @Test
-    @DisplayName("resumenReservasFuturasConfirmadasPorCancha_CuentaSoloDeEsaCancha_ExcluyeCanceladasPasadasYOtraCancha")
-    void resumenReservasFuturasConfirmadasPorCancha_CuentaSoloDeEsaCancha_ExcluyeCanceladasPasadasYOtraCancha() {
+    @DisplayName("resumenReservasFuturasVivasPorCancha_CuentaSoloDeEsaCancha_ExcluyeCanceladasPasadasYOtraCancha")
+    void resumenReservasFuturasVivasPorCancha_CuentaSoloDeEsaCancha_ExcluyeCanceladasPasadasYOtraCancha() {
         Usuario dueno = entityManager.persist(Usuario.builder()
                 .email("dueno-elim-cancha-resumen@test.com")
                 .password("hash")
@@ -230,7 +231,7 @@ class ReservaRepositoryTest {
         entityManager.persist(reservaDe(otraCancha, EstadoReserva.CONFIRMADA, ahora.plusDays(20)));
         entityManager.flush();
 
-        List<Object[]> resultado = reservaRepository.resumenReservasFuturasConfirmadasPorCancha(canchaAEliminar.getId(), ahora);
+        List<Object[]> resultado = reservaRepository.resumenReservasFuturasVivasPorCancha(canchaAEliminar.getId(), ahora);
 
         assertEquals(1, resultado.size());
         assertEquals(2L, resultado.get(0)[0]);
@@ -239,8 +240,8 @@ class ReservaRepositoryTest {
     }
 
     @Test
-    @DisplayName("resumenReservasFuturasConfirmadasPorCancha_SinReservas_DevuelveCeroYFechaNula")
-    void resumenReservasFuturasConfirmadasPorCancha_SinReservas_DevuelveCeroYFechaNula() {
+    @DisplayName("resumenReservasFuturasVivasPorCancha_SinReservas_DevuelveCeroYFechaNula")
+    void resumenReservasFuturasVivasPorCancha_SinReservas_DevuelveCeroYFechaNula() {
         Usuario dueno = entityManager.persist(Usuario.builder()
                 .email("dueno-elim-cancha-resumen-vacio@test.com")
                 .password("hash")
@@ -264,7 +265,7 @@ class ReservaRepositoryTest {
         Cancha cancha = entityManager.persist(Canchas.canchaDesactivada(establecimiento));
         entityManager.flush();
 
-        List<Object[]> resultado = reservaRepository.resumenReservasFuturasConfirmadasPorCancha(cancha.getId(), LocalDateTime.now());
+        List<Object[]> resultado = reservaRepository.resumenReservasFuturasVivasPorCancha(cancha.getId(), LocalDateTime.now());
 
         assertEquals(1, resultado.size());
         assertEquals(0L, resultado.get(0)[0]);
@@ -274,14 +275,14 @@ class ReservaRepositoryTest {
     /**
      * Confirma con datos reales de TurnoFijo (no sólo Reserva sueltas) el hallazgo del
      * diagnóstico de CanchaEliminacionService: un turno fijo ACTIVO con una ocurrencia futura
-     * CONFIRMADA queda atrapado por resumenReservasFuturasConfirmadasPorCancha, sin que
+     * CONFIRMADA queda atrapado por resumenReservasFuturasVivasPorCancha, sin que
      * CanchaEliminacionService necesite consultar TurnoFijoRepository. Esto es así porque
      * TurnoFijoService.crearInterno persiste TODAS las ocurrencias del período como Reserva
      * CONFIRMADA en la misma transacción que la regla -- no hay materialización diferida.
      */
     @Test
-    @DisplayName("resumenReservasFuturasConfirmadasPorCancha_CapturaOcurrenciaDeTurnoFijoActivo")
-    void resumenReservasFuturasConfirmadasPorCancha_CapturaOcurrenciaDeTurnoFijoActivo() {
+    @DisplayName("resumenReservasFuturasVivasPorCancha_CapturaOcurrenciaDeTurnoFijoActivo")
+    void resumenReservasFuturasVivasPorCancha_CapturaOcurrenciaDeTurnoFijoActivo() {
         Usuario dueno = entityManager.persist(Usuario.builder()
                 .email("dueno-elim-turno-fijo@test.com")
                 .password("hash")
@@ -321,11 +322,79 @@ class ReservaRepositoryTest {
         entityManager.persist(reservaDeTurnoFijo(cancha, serieActiva, EstadoReserva.CONFIRMADA, ocurrenciaFutura));
         entityManager.flush();
 
-        List<Object[]> resultado = reservaRepository.resumenReservasFuturasConfirmadasPorCancha(cancha.getId(), ahora);
+        List<Object[]> resultado = reservaRepository.resumenReservasFuturasVivasPorCancha(cancha.getId(), ahora);
 
         assertEquals(1, resultado.size());
         assertEquals(1L, resultado.get(0)[0]);
         assertEquals(ocurrenciaFutura.truncatedTo(java.time.temporal.ChronoUnit.SECONDS),
+                ((LocalDateTime) resultado.get(0)[1]).truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+    }
+
+    /**
+     * El caso que motivó el fix: antes esta query sólo miraba CONFIRMADA, así que una
+     * PENDIENTE_SENA futura (vigente o sin expiraEn) no bloqueaba la eliminación de la cancha
+     * y quedaba colgada sobre una cancha eliminada (ver diagnóstico de CanchaEliminacionService).
+     * Cubre en una sola tabla los estados que sí y los que no cuentan como "viva".
+     */
+    @Test
+    @DisplayName("resumenReservasFuturasVivasPorCancha_PendienteSenaVigenteOSinExpiraEn_Cuenta_VencidaPasadaCanceladaFinalizadaAusente_NoCuentan")
+    void resumenReservasFuturasVivasPorCancha_PendienteSenaVigenteOSinExpiraEn_Cuenta_VencidaPasadaCanceladaFinalizadaAusente_NoCuentan() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-elim-cancha-pendiente-sena@test.com")
+                .password("hash")
+                .nombre("Dueno")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoDeshabilitado(b -> b
+                .nombre("Complejo Pendiente Sena")
+                .direccion("Calle Pendiente Sena 123")
+                .slug("complejo-pendiente-sena")
+                .latitud(-34.6)
+                .longitud(-58.4)
+                .requiereSena(false)
+                .dueno(dueno)));
+
+        Cancha cancha = entityManager.persist(Canchas.canchaDesactivada(establecimiento));
+
+        LocalDateTime ahora = LocalDateTime.now();
+        LocalDateTime masLejana = ahora.plusDays(4);
+
+        // Cuentan: PENDIENTE_SENA todavía vigente, PENDIENTE_SENA sin expiraEn (nula) y
+        // CONFIRMADA -- las tres futuras.
+        Reserva pendienteVigente = reservaDe(cancha, EstadoReserva.PENDIENTE_SENA, ahora.plusDays(1));
+        pendienteVigente.setExpiraEn(ahora.plusMinutes(10));
+        entityManager.persist(pendienteVigente);
+
+        Reserva pendienteSinExpiracion = reservaDe(cancha, EstadoReserva.PENDIENTE_SENA, masLejana);
+        pendienteSinExpiracion.setExpiraEn(null);
+        entityManager.persist(pendienteSinExpiracion);
+
+        entityManager.persist(reservaDe(cancha, EstadoReserva.CONFIRMADA, ahora.plusDays(2)));
+
+        // No cuentan: PENDIENTE_SENA con expiraEn ya vencido (aunque ReservaExpiracionService
+        // todavía no la haya pasado a CANCELADA_PRERESERVA), pasada, cancelada, finalizada y
+        // ausente.
+        Reserva pendienteVencida = reservaDe(cancha, EstadoReserva.PENDIENTE_SENA, ahora.plusDays(3));
+        pendienteVencida.setExpiraEn(ahora.minusMinutes(1));
+        entityManager.persist(pendienteVencida);
+
+        entityManager.persist(reservaDe(cancha, EstadoReserva.CONFIRMADA, ahora.minusDays(1)));
+        entityManager.persist(reservaDe(cancha, EstadoReserva.CANCELADA, ahora.plusDays(5)));
+        entityManager.persist(reservaDe(cancha, EstadoReserva.CANCELADA_PRERESERVA, ahora.plusDays(5)));
+        entityManager.persist(reservaDe(cancha, EstadoReserva.FINALIZADA, ahora.minusDays(2)));
+        entityManager.persist(reservaDe(cancha, EstadoReserva.AUSENTE, ahora.minusDays(2)));
+        entityManager.flush();
+
+        List<Object[]> resultado = reservaRepository.resumenReservasFuturasVivasPorCancha(cancha.getId(), ahora);
+
+        assertEquals(1, resultado.size());
+        assertEquals(3L, resultado.get(0)[0]);
+        assertEquals(masLejana.truncatedTo(java.time.temporal.ChronoUnit.SECONDS),
                 ((LocalDateTime) resultado.get(0)[1]).truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
     }
 

@@ -153,6 +153,35 @@ class ReservaServiceMatrizTransicionesTest {
     }
 
     /**
+     * Chequeo defensivo agregado junto con CanchaEliminacionService.resumenReservasFuturasVivasPorCancha:
+     * con esa precondición no debería poder existir una PENDIENTE_SENA futura sobre una cancha
+     * eliminada, salvo datos anteriores al fix. deletedAt (no isActive) es la señal correcta
+     * porque una cancha DESACTIVADA pero no eliminada tiene que seguir pudiendo confirmarse
+     * (ver el test de abajo).
+     */
+    @Test
+    @DisplayName("confirmarReserva: rechaza si la cancha fue eliminada (deletedAt seteado)")
+    void confirmar_CanchaEliminada_Rechaza() {
+        cancha.setDeletedAt(LocalDateTime.now());
+        when(reservaRepository.findByIdConEstablecimientoYDueno(RESERVA_ID))
+                .thenReturn(Optional.of(reservaEn(EstadoReserva.PENDIENTE_SENA)));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reservaService.confirmarReserva(RESERVA_ID, dueno.getEmail()));
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("eliminada"));
+    }
+
+    @Test
+    @DisplayName("confirmarReserva: sigue permitiendo confirmar sobre una cancha desactivada (no eliminada)")
+    void confirmar_CanchaDesactivadaPeroNoEliminada_Permite() {
+        cancha.setIsActive(false);
+        when(reservaRepository.findByIdConEstablecimientoYDueno(RESERVA_ID))
+                .thenReturn(Optional.of(reservaEn(EstadoReserva.PENDIENTE_SENA)));
+
+        assertDoesNotThrow(() -> reservaService.confirmarReserva(RESERVA_ID, dueno.getEmail()));
+    }
+
+    /**
      * AUSENTE se sumó acá al cerrarse el hueco que este mismo test documentaba como
      * tolerado: cancelar un no-show lo convertía en CANCELADA y borraba el registro de
      * que el jugador no se presentó (y, como el jugador es actor autorizado de

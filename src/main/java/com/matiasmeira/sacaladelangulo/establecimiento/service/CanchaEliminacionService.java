@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -33,8 +34,8 @@ import java.util.List;
  * ACTIVO con ocurrencias futuras vigentes SIEMPRE tiene esas ocurrencias como filas Reserva en
  * estado CONFIRMADA -- TurnoFijoService.crearInterno las persiste todas de una sola vez, en la
  * misma transacción que la regla, para todo el período pedido (no hay materialización
- * diferida). Por eso la precondición de reservas futuras confirmadas (ver
- * {@link ReservaRepository#resumenReservasFuturasConfirmadasPorCancha}) ya encuentra y bloquea
+ * diferida). Por eso la precondición de reservas futuras vivas (ver
+ * {@link ReservaRepository#resumenReservasFuturasVivasPorCancha}) ya encuentra y bloquea
  * también este caso, sin necesidad de consultar TurnoFijoRepository acá. Si el día de mañana
  * los turnos fijos empiezan a materializar ocurrencias de forma diferida, esta garantía deja
  * de valer y esta precondición hay que revisarla.
@@ -58,6 +59,8 @@ public class CanchaEliminacionService {
     private final RegistroAuditoriaService registroAuditoriaService;
     private final ComplejoDetalleCache complejoDetalleCache;
 
+    private static final DateTimeFormatter FORMATO_FECHA_HORA = DateTimeFormatter.ofPattern("dd/MM/yyyy 'a las' HH:mm");
+
     /**
      * Solo el dueño real (validarPropietario, no validarPropietarioOAdmin): un ADMIN no puede
      * eliminar la cancha de otro, mismo criterio que EstablecimientoEliminacionService.
@@ -78,14 +81,14 @@ public class CanchaEliminacionService {
         }
 
         LocalDateTime ahora = LocalDateTime.now();
-        List<Object[]> resumen = reservaRepository.resumenReservasFuturasConfirmadasPorCancha(canchaId, ahora);
+        List<Object[]> resumen = reservaRepository.resumenReservasFuturasVivasPorCancha(canchaId, ahora);
         long cantidadReservasFuturas = (long) resumen.get(0)[0];
         if (cantidadReservasFuturas > 0) {
             LocalDateTime fechaMasLejana = (LocalDateTime) resumen.get(0)[1];
             throw new IllegalArgumentException(
                     "Esta cancha tiene " + cantidadReservasFuturas
-                            + " reserva(s) futura(s) confirmada(s), la última el "
-                            + fechaMasLejana.toLocalDate() + " a las " + fechaMasLejana.toLocalTime()
+                            + " reserva(s) futura(s) sin cancelar (confirmada o pendiente de seña), la última el "
+                            + fechaMasLejana.format(FORMATO_FECHA_HORA)
                             + ". Cancelalas antes de eliminar la cancha.");
         }
 

@@ -262,18 +262,31 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     /**
      * Igual que {@link #resumenReservasFuturasConfirmadas} pero a nivel de una cancha
-     * puntual, no de todo el establecimiento: usado por CanchaEliminacionService para la
-     * precondición "sin reservas futuras confirmadas" de ESA cancha. Cubre también las
-     * ocurrencias de un turno fijo activo: TurnoFijoService.crearInterno las persiste como
-     * Reserva CONFIRMADA en la misma transacción que la regla, así que no hace falta una
-     * precondición separada para turnos fijos -- si la serie tiene ocurrencias futuras
-     * vigentes, esta consulta ya las encuentra. Si el día de mañana los turnos fijos
+     * puntual, no de todo el establecimiento, y considerando "viva" no solo CONFIRMADA sino
+     * también PENDIENTE_SENA todavía no vencida: usado por CanchaEliminacionService para la
+     * precondición "sin reservas futuras vivas" de ESA cancha. Antes solo miraba CONFIRMADA,
+     * lo que dejaba pasar una PENDIENTE_SENA futura -- esa reserva queda colgada sobre una
+     * cancha eliminada, y confirmarReserva no chequeaba deletedAt, así que se podía confirmar
+     * igual (ver el chequeo defensivo agregado ahí).
+     *
+     * <p>Mismo criterio de "PENDIENTE_SENA vencida no cuenta" que findSuperpuestas /
+     * findFuturasPorCanchaIds: si expiraEn ya pasó, la reserva está libre en la práctica
+     * aunque ReservaExpiracionService todavía no haya corrido (corre cada 1 minuto) para
+     * pasarla a CANCELADA_PRERESERVA. Bloquear la eliminación por una reserva que ya está
+     * efectivamente vencida no tiene sentido.
+     *
+     * <p>Cubre también las ocurrencias de un turno fijo activo: TurnoFijoService.crearInterno
+     * las persiste como Reserva CONFIRMADA en la misma transacción que la regla, así que no
+     * hace falta una precondición separada para turnos fijos -- si la serie tiene ocurrencias
+     * futuras vigentes, esta consulta ya las encuentra. Si el día de mañana los turnos fijos
      * empezaran a materializar ocurrencias de forma diferida (no todas de una), esta
      * garantía deja de valer y hay que revisar la precondición.
      */
     @Query("SELECT COUNT(r), MAX(r.fechaHoraInicio) FROM Reserva r WHERE r.cancha.id = :canchaId " +
-           "AND r.estado = 'CONFIRMADA' AND r.fechaHoraInicio > :ahora")
-    List<Object[]> resumenReservasFuturasConfirmadasPorCancha(@Param("canchaId") Long canchaId, @Param("ahora") LocalDateTime ahora);
+           "AND r.fechaHoraInicio > :ahora " +
+           "AND (r.estado = 'CONFIRMADA' " +
+           "     OR (r.estado = 'PENDIENTE_SENA' AND (r.expiraEn IS NULL OR r.expiraEn > :ahora)))")
+    List<Object[]> resumenReservasFuturasVivasPorCancha(@Param("canchaId") Long canchaId, @Param("ahora") LocalDateTime ahora);
 
     // ===== Reportes agregados (panel del dueño) =====
     // Solo cuentan reservas FINALIZADA: es el único estado que representa dinero/turno

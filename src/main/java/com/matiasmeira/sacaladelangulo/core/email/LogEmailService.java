@@ -7,6 +7,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Implementación de EmailService que simula el envío logueando el mensaje por consola.
@@ -32,6 +38,11 @@ import org.springframework.stereotype.Service;
 @ConditionalOnProperty(prefix = "resend", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class LogEmailService implements EmailTransport {
 
+    // Acotada a los <a href="..."> que emiten nuestros propios templates (ver
+    // src/main/resources/templates/email/): no parsea HTML de terceros ni de usuarios, así
+    // que una regex alcanza sin sumar un parser HTML como dependencia.
+    private static final Pattern HREF_PATTERN = Pattern.compile("href\\s*=\\s*\"([^\"]*)\"", Pattern.CASE_INSENSITIVE);
+
     private final Environment environment;
 
     @PostConstruct
@@ -45,7 +56,18 @@ public class LogEmailService implements EmailTransport {
 
     @Override
     public void enviar(String destinatario, String asunto, String htmlBody) {
-        log.info("[EMAIL SIMULADO] Para: {} | Asunto: {} | Preview: {}", destinatario, asunto, preview(htmlBody));
+        // El truncado de preview() deja afuera el link de verificación/recuperación (ver
+        // layout.html: antepone cientos de caracteres de estilos antes del contenido real),
+        // así que en dev/test se loguean también los links completos, aparte del preview.
+        // En prod (sólo llega acá si alguien optó explícitamente por resend.enabled=false)
+        // NO se extraen: son links con token y no pueden terminar en logs de producción.
+        String links = environment.acceptsProfiles(Profiles.of("prod")) ? "" : extraerLinks(htmlBody);
+        if (links.isEmpty()) {
+            log.info("[EMAIL SIMULADO] Para: {} | Asunto: {} | Preview: {}", destinatario, asunto, preview(htmlBody));
+        } else {
+            log.info("[EMAIL SIMULADO] Para: {} | Asunto: {} | Preview: {} | Links: {}",
+                    destinatario, asunto, preview(htmlBody), links);
+        }
     }
 
     private String preview(String htmlBody) {
@@ -53,5 +75,19 @@ public class LogEmailService implements EmailTransport {
             return "";
         }
         return htmlBody.length() > 120 ? htmlBody.substring(0, 120) + "..." : htmlBody;
+    }
+
+    private String extraerLinks(String htmlBody) {
+        if (htmlBody == null) {
+            return "";
+        }
+        // LinkedHashSet: deduplica preservando el orden de aparición (los templates repiten
+        // el mismo link en el botón y en el texto de fallback).
+        Set<String> links = new LinkedHashSet<>();
+        Matcher matcher = HREF_PATTERN.matcher(htmlBody);
+        while (matcher.find()) {
+            links.add(HtmlUtils.htmlUnescape(matcher.group(1)));
+        }
+        return String.join(", ", links);
     }
 }

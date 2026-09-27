@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,5 +59,27 @@ class ResendEmailServiceTest {
         // subir para que la capture el AsyncUncaughtExceptionHandler de AsyncConfig.
         assertThrows(RuntimeException.class,
                 () -> resendEmailService.enviar("jugador@test.com", "Verificá tu cuenta", "<p>Hola</p>"));
+    }
+
+    @Test
+    @DisplayName("constructor_ApiKeyVacia_LanzaIllegalStateExceptionAlArrancar")
+    void constructor_ApiKeyVacia_LanzaIllegalStateExceptionAlArrancar() {
+        // El SDK de Resend no valida la key al construirse (ver Resend/Emails): sin este
+        // guard, una RESEND_API_KEY="" pasaría el arranque y recién fallaría en el primer
+        // envío real, encolado en silencio para reintento.
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> new ResendEmailService("", "Canchear <onboarding@resend.dev>"));
+
+        assertTrue(ex.getMessage().contains("RESEND_API_KEY"));
+        assertTrue(ex.getMessage().contains("RESEND_ENABLED"));
+    }
+
+    @Test
+    @DisplayName("constructor_ApiKeySoloEspacios_LanzaIllegalStateExceptionIgualQueVacia")
+    void constructor_ApiKeySoloEspacios_LanzaIllegalStateExceptionIgualQueVacia() {
+        // El guard usa isBlank() (no isEmpty()): una key de solo espacios es tan inútil
+        // como "" y tiene que fallar igual, no pasar como si fuera una key real.
+        assertThrows(IllegalStateException.class,
+                () -> new ResendEmailService("   ", "Canchear <onboarding@resend.dev>"));
     }
 }

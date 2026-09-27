@@ -17,6 +17,13 @@ import org.springframework.stereotype.Service;
  * Se invoca siempre de forma asíncrona y después del commit de la transacción que la
  * origina (ver RegistroVerificacionEmailListener y AsyncConfig, A12 en la auditoría), así
  * que una excepción acá nunca hace rollback de nada: la captura AsyncConfig.
+ *
+ * <p>En prod, resend.enabled es true por default (ver application-prod.properties) y
+ * resend.api-key no tiene default, así que la sola ausencia de RESEND_API_KEY ya tumba el
+ * arranque por placeholder sin resolver. Pero el SDK de Resend (Resend/Emails) no valida la
+ * key al construirse — con RESEND_API_KEY="" el cliente se construiría igual y el fallo
+ * recién aparecería en el primer envío real, encolado silenciosamente para reintento. El
+ * guard de este constructor cierra ese hueco fallando también al arrancar.
  */
 @Slf4j
 @Service
@@ -29,12 +36,21 @@ public class ResendEmailService implements EmailTransport {
     @Autowired
     public ResendEmailService(@Value("${resend.api-key}") String apiKey,
                                @Value("${app.mail.from}") String remitente) {
-        this(new Resend(apiKey), remitente);
+        this(new Resend(validarApiKey(apiKey)), remitente);
     }
 
     ResendEmailService(Resend resendClient, String remitente) {
         this.resendClient = resendClient;
         this.remitente = remitente;
+    }
+
+    private static String validarApiKey(String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "resend.enabled=true pero resend.api-key está vacío: seteá RESEND_API_KEY con una key "
+                            + "válida, o RESEND_ENABLED=false si querés volver a mails simulados.");
+        }
+        return apiKey;
     }
 
     @Override

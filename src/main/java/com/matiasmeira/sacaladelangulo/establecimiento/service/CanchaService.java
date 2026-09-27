@@ -192,9 +192,13 @@ public class CanchaService {
      * Desactiva una cancha (baja lógica, isActive=false): sin este método no había forma
      * de dar de baja una cancha, solo de crearla o editarla (ver B19 en la auditoría).
      * Misma validación de ownership que actualizarCancha. isActive es reversible: se puede
-     * volver a activar desde actualizarCancha.
+     * volver a activar desde actualizarCancha o desde reactivarCancha.
+     *
+     * <p>Devuelve la entidad guardada (no void) para que CanchaEstadoService pueda armar su
+     * response sin una lectura extra -- lo consume tanto el PATCH /estado nuevo como el DELETE
+     * viejo, que sigue llamando a este método e ignorando el valor de retorno.
      */
-    public void desactivarCancha(Long establecimientoId, Long canchaId, String email) {
+    public Cancha desactivarCancha(Long establecimientoId, Long canchaId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
@@ -206,8 +210,35 @@ public class CanchaService {
 
         validarDesactivacion(cancha);
         cancha.setIsActive(false);
-        canchaRepository.save(cancha);
+        Cancha canchaGuardada = canchaRepository.save(cancha);
         complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
+        return canchaGuardada;
+    }
+
+    /**
+     * Reactiva una cancha (isActive=true) sin pasar por el PUT general: mismo criterio de
+     * ownership y de búsqueda que desactivarCancha (buscarCanchaNoEliminada es lo que impide
+     * que esto resucite una cancha con eliminación DEFINITIVA -- no cambiar esa búsqueda por un
+     * findById creyendo que da lo mismo). Corre validarConfiguracionDePool, no
+     * validarDesactivacion: el riesgo acá no es dejar una reserva futura sin cupo (eso ya pasó
+     * al desactivar), sino que otra lógica se haya creado con un pool parcialmente superpuesto
+     * mientras ésta estaba inactiva (ver el javadoc de validarConfiguracionDePool).
+     */
+    public Cancha reactivarCancha(Long establecimientoId, Long canchaId, String email) {
+        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+
+        Cancha cancha = buscarCanchaNoEliminada(canchaId);
+
+        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
+            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
+        }
+
+        validarConfiguracionDePool(establecimientoId, canchaId, cancha.getCanchasFisicas());
+        cancha.setIsActive(true);
+        Cancha canchaGuardada = canchaRepository.save(cancha);
+        complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
+        return canchaGuardada;
     }
 
     /**

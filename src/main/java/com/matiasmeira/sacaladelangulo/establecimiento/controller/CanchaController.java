@@ -1,9 +1,13 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.controller;
 
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.CambiarEstadoCanchaRequest;
+import com.matiasmeira.sacaladelangulo.establecimiento.dto.CambiarEstadoCanchaResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.CanchaEliminacionService;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.CanchaEstadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.CanchaService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +29,7 @@ public class CanchaController {
 
     private final CanchaService canchaService;
     private final CanchaEliminacionService canchaEliminacionService;
+    private final CanchaEstadoService canchaEstadoService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
@@ -68,14 +73,52 @@ public class CanchaController {
         return ResponseEntity.ok(cancha);
     }
 
+    /**
+     * @deprecated Este DELETE en realidad nunca eliminó nada: hace una baja lógica reversible
+     * (isActive=false, ver CanchaService.desactivarCancha), y el verbo DELETE no correspondía a
+     * un toggle reversible -- ver también el javadoc de {@link #eliminarCancha}, que tuvo que
+     * sumarse como "/definitiva" por este motivo. Lo reemplaza {@link #cambiarEstado} (PATCH
+     * /estado con {@code { "activo": false }} ), que además habilita reactivar sin pasar por el
+     * PUT completo. Delega en el mismo CanchaEstadoService que la ruta nueva -- no hay lógica
+     * duplicada entre las dos. Se borra cuando el frontend termine de migrar a /estado.
+     */
+    @Deprecated(forRemoval = true)
+    @Operation(deprecated = true,
+            summary = "Desactivar cancha (deprecado)",
+            description = "Reemplazado por PATCH /{canchaId}/estado con { \"activo\": false }. Se elimina cuando el front migre.")
     @DeleteMapping("/{canchaId}")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<Void> desactivarCancha(
             @PathVariable Long establecimientoId,
             @PathVariable Long canchaId,
             @AuthenticationPrincipal UserDetails userDetails) {
-        canchaService.desactivarCancha(establecimientoId, canchaId, userDetails.getUsername());
+        canchaEstadoService.cambiarEstado(establecimientoId, canchaId,
+                new CambiarEstadoCanchaRequest(false), userDetails.getUsername());
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Habilita o deshabilita esta cancha (isActive) sin eliminar nada -- análogo a
+     * EstablecimientoController.cambiarEstado, con dos diferencias deliberadas: acá se mantiene
+     * hasAnyRole('OWNER', 'ADMIN') (el mismo criterio que ya regía sobre canchas) en vez del
+     * hasRole('OWNER') puro de establecimientos, para no sacarle a ADMIN un permiso que nadie
+     * pidió sacar -- no quedó claro en la migración si esa diferencia entre ambos endpoints es
+     * deliberada o un descuido, queda pendiente decidirlo aparte. Y, a diferencia del análogo de
+     * establecimientos (que no bloquea nada), acá desactivar sigue pudiendo rechazarse si deja
+     * una reserva futura del pool sin cupo (ver CanchaService.validarDesactivacion), y reactivar
+     * sigue validando que no rompa el pool de otra cancha (validarConfiguracionDePool): esos
+     * guards no se tocan con esta migración.
+     */
+    @PatchMapping("/{canchaId}/estado")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<CambiarEstadoCanchaResponse> cambiarEstado(
+            @PathVariable Long establecimientoId,
+            @PathVariable Long canchaId,
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody @Valid CambiarEstadoCanchaRequest request) {
+        CambiarEstadoCanchaResponse response =
+                canchaEstadoService.cambiarEstado(establecimientoId, canchaId, request, userDetails.getUsername());
+        return ResponseEntity.ok(response);
     }
 
     /**

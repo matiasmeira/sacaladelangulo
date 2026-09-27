@@ -17,6 +17,17 @@
             Para que no pierdas acceso a tus canchas, reservas y turnos, contactanos antes de
             que termine tu período de prueba para seguir usando la app sin interrupciones.
         </p>
+
+        <div th:if="${not #lists.isEmpty(canchasPorDebajoDelMinimo)}">
+            <p style="margin:0 0 8px 0;">
+                Cuando termine tu prueba vas a pasar al plan FREE, que exige una seña
+                obligatoria mínima. Estas canchas hoy están por debajo de ese mínimo y les
+                vamos a ajustar la seña automáticamente:
+            </p>
+            <ul style="margin:0 0 24px 0;">
+                <li th:each="nombre : ${canchasPorDebajoDelMinimo}" th:text="${nombre}">Cancha</li>
+            </ul>
+        </div>
     </div>
 
 </div>

@@ -4,6 +4,10 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.email.EmailRenderer;
 import com.matiasmeira.sacaladelangulo.core.email.EmailService;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
+import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,10 +16,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -30,6 +37,12 @@ class AvisoFinPruebaEmailListenerTest {
 
     @Mock
     private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private EstablecimientoRepository establecimientoRepository;
+
+    @Mock
+    private CanchaRepository canchaRepository;
 
     @Mock
     private EmailRenderer emailRenderer;
@@ -58,6 +71,7 @@ class AvisoFinPruebaEmailListenerTest {
         verify(emailRenderer).render(eq("fin-prueba"), modeloCaptor.capture());
         assertEquals("Juan", modeloCaptor.getValue().get("nombre"));
         assertEquals(3, modeloCaptor.getValue().get("diasRestantes"));
+        assertEquals(List.of(), modeloCaptor.getValue().get("canchasPorDebajoDelMinimo"));
 
         verify(emailService).enviar(eq("jugador@test.com"), eq("Tu prueba gratuita termina en 3 días"), eq("<html>fin-prueba</html>"));
     }
@@ -88,5 +102,62 @@ class AvisoFinPruebaEmailListenerTest {
 
         verify(emailService, never()).enviar(anyString(), anyString(), anyString());
         verifyNoInteractions(emailRenderer);
+    }
+
+    @Test
+    @DisplayName("enviarAvisoFinPrueba_ConCanchaPorDebajoDelMinimo_IncluyeSuNombreEnElModelo")
+    void enviarAvisoFinPrueba_ConCanchaPorDebajoDelMinimo_IncluyeSuNombreEnElModelo() {
+        Usuario usuario = Usuario.builder()
+                .email("dueno@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .build();
+        usuario.setId(20L);
+        when(usuarioRepository.findById(20L)).thenReturn(Optional.of(usuario));
+
+        Establecimiento establecimiento = Establecimiento.builder()
+                .nombre("Complejo Sur")
+                .direccion("Calle 1")
+                .latitud(0.0)
+                .longitud(0.0)
+                .requiereSena(false)
+                .slug("complejo-sur")
+                .build();
+        establecimiento.setId(500L);
+        when(establecimientoRepository.findByDuenoIdAndDeletedAtIsNull(20L)).thenReturn(List.of(establecimiento));
+
+        Cancha canchaBaja = Cancha.builder().nombre("Cancha 1").precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.ZERO).build();
+        canchaBaja.setId(600L);
+        Cancha canchaOk = Cancha.builder().nombre("Cancha 2").precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(500)).build();
+        canchaOk.setId(601L);
+        when(canchaRepository.findByEstablecimientoIdIn(List.of(500L))).thenReturn(List.of(canchaBaja, canchaOk));
+        when(emailRenderer.render(eq("fin-prueba"), anyMap())).thenReturn("<html>fin-prueba</html>");
+
+        listener.enviarAvisoFinPrueba(new AvisoFinPruebaEvent(20L, 7));
+
+        ArgumentCaptor<Map<String, Object>> modeloCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailRenderer).render(eq("fin-prueba"), modeloCaptor.capture());
+        assertEquals(List.of("Cancha 1"), modeloCaptor.getValue().get("canchasPorDebajoDelMinimo"));
+    }
+
+    @Test
+    @DisplayName("enviarAvisoFinPrueba_SinEstablecimientos_ElModeloTraeListaVacia")
+    void enviarAvisoFinPrueba_SinEstablecimientos_ElModeloTraeListaVacia() {
+        Usuario usuario = Usuario.builder()
+                .email("dueno@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .build();
+        usuario.setId(21L);
+        when(usuarioRepository.findById(21L)).thenReturn(Optional.of(usuario));
+        when(establecimientoRepository.findByDuenoIdAndDeletedAtIsNull(21L)).thenReturn(List.of());
+        when(emailRenderer.render(eq("fin-prueba"), anyMap())).thenReturn("<html>fin-prueba</html>");
+
+        listener.enviarAvisoFinPrueba(new AvisoFinPruebaEvent(21L, 7));
+
+        ArgumentCaptor<Map<String, Object>> modeloCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailRenderer).render(eq("fin-prueba"), modeloCaptor.capture());
+        assertTrue(((List<?>) modeloCaptor.getValue().get("canchasPorDebajoDelMinimo")).isEmpty());
+        verifyNoInteractions(canchaRepository);
     }
 }

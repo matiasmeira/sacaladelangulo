@@ -20,6 +20,16 @@
             PREMIUM cuando quieras.
         </p>
 
+        <div th:if="${not #lists.isEmpty(canchasAjustadas)}">
+            <p style="margin:0 0 8px 0;">
+                Para que tus canchas ya cumplan con esa seña mínima, ajustamos automáticamente
+                estas al valor mínimo obligatorio:
+            </p>
+            <ul style="margin:0 0 24px 0;">
+                <li th:each="nombre : ${canchasAjustadas}" th:text="${nombre}">Cancha</li>
+            </ul>
+        </div>
+
         <table role="presentation" cellpadding="0" cellspacing="0" border="0">
             <tr>
                 <td style="border-radius:10px;background-color:#0e56c9;">

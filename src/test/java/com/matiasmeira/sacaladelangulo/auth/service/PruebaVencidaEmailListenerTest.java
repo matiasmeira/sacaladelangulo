@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -58,14 +59,36 @@ class PruebaVencidaEmailListenerTest {
         when(usuarioRepository.findById(10L)).thenReturn(Optional.of(usuario));
         when(emailRenderer.render(eq("prueba-vencida"), anyMap())).thenReturn("<html>prueba-vencida</html>");
 
-        listener.enviarAvisoDeDegradacion(new PruebaVencidaEvent(10L));
+        listener.enviarAvisoDeDegradacion(new PruebaVencidaEvent(10L, List.of()));
 
         ArgumentCaptor<Map<String, Object>> modeloCaptor = ArgumentCaptor.forClass(Map.class);
         verify(emailRenderer).render(eq("prueba-vencida"), modeloCaptor.capture());
         assertEquals("Carlos", modeloCaptor.getValue().get("nombre"));
         assertEquals(FRONTEND_URL + "/panel/configuracion", modeloCaptor.getValue().get("ctaUrl"));
+        assertEquals(List.of(), modeloCaptor.getValue().get("canchasAjustadas"));
 
         verify(emailService).enviar(eq("dueno@test.com"), eq("Tu prueba gratuita terminó"), eq("<html>prueba-vencida</html>"));
+    }
+
+    @Test
+    @DisplayName("enviarAvisoDeDegradacion_ConCanchasAjustadas_LasIncluyeEnElModelo")
+    void enviarAvisoDeDegradacion_ConCanchasAjustadas_LasIncluyeEnElModelo() {
+        ReflectionTestUtils.setField(listener, "frontendUrl", FRONTEND_URL);
+
+        Usuario usuario = Usuario.builder()
+                .email("dueno@test.com")
+                .password("hash")
+                .nombre("Carlos")
+                .build();
+        usuario.setId(12L);
+        when(usuarioRepository.findById(12L)).thenReturn(Optional.of(usuario));
+        when(emailRenderer.render(eq("prueba-vencida"), anyMap())).thenReturn("<html>prueba-vencida</html>");
+
+        listener.enviarAvisoDeDegradacion(new PruebaVencidaEvent(12L, List.of("Cancha 1", "Cancha 2")));
+
+        ArgumentCaptor<Map<String, Object>> modeloCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailRenderer).render(eq("prueba-vencida"), modeloCaptor.capture());
+        assertEquals(List.of("Cancha 1", "Cancha 2"), modeloCaptor.getValue().get("canchasAjustadas"));
     }
 
     @Test
@@ -73,7 +96,7 @@ class PruebaVencidaEmailListenerTest {
     void enviarAvisoDeDegradacion_UsuarioNoEncontrado_NoEnviaEmailNiLanzaExcepcion() {
         when(usuarioRepository.findById(99L)).thenReturn(Optional.empty());
 
-        listener.enviarAvisoDeDegradacion(new PruebaVencidaEvent(99L));
+        listener.enviarAvisoDeDegradacion(new PruebaVencidaEvent(99L, List.of()));
 
         verify(emailService, never()).enviar(anyString(), anyString(), anyString());
         verifyNoInteractions(emailRenderer);
@@ -91,7 +114,7 @@ class PruebaVencidaEmailListenerTest {
         usuario.setId(11L);
         when(usuarioRepository.findById(11L)).thenReturn(Optional.of(usuario));
 
-        listener.enviarAvisoDeDegradacion(new PruebaVencidaEvent(11L));
+        listener.enviarAvisoDeDegradacion(new PruebaVencidaEvent(11L, List.of()));
 
         verify(emailService, never()).enviar(anyString(), anyString(), anyString());
         verifyNoInteractions(emailRenderer);

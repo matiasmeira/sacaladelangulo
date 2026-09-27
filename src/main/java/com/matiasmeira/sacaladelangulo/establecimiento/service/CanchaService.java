@@ -1,6 +1,7 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcionLimites;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
@@ -41,7 +42,6 @@ import java.util.stream.Collectors;
 @Transactional
 public class CanchaService {
 
-    private static final BigDecimal SENA_MINIMA_PLAN_LIMITADO = BigDecimal.valueOf(500);
     private static final List<Integer> DURACIONES_POR_DEFECTO = List.of(60, 90, 120);
 
     private final CanchaRepository canchaRepository;
@@ -381,8 +381,8 @@ public class CanchaService {
     private BigDecimal validarMontoSena(BigDecimal montoSena, PlanSuscripcion plan) {
         boolean planLimitado = plan == PlanSuscripcion.FREE;
         if (planLimitado) {
-            if (montoSena == null || montoSena.compareTo(SENA_MINIMA_PLAN_LIMITADO) < 0) {
-                throw new IllegalArgumentException("El plan actual requiere configurar una seña obligatoria de mínimo $" + SENA_MINIMA_PLAN_LIMITADO);
+            if (montoSena == null || montoSena.compareTo(PlanSuscripcionLimites.SENA_MINIMA_PLAN_LIMITADO) < 0) {
+                throw new IllegalArgumentException("El plan actual requiere configurar una seña obligatoria de mínimo $" + PlanSuscripcionLimites.SENA_MINIMA_PLAN_LIMITADO);
             }
             return montoSena;
         }

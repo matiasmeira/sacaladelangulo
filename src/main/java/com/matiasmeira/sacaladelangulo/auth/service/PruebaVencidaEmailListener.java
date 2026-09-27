@@ -52,7 +52,8 @@ public class PruebaVencidaEmailListener {
 
         String html = emailRenderer.render("prueba-vencida", Map.of(
                 "nombre", usuario.getNombre(),
-                "ctaUrl", frontendUrl + "/panel/configuracion"
+                "ctaUrl", frontendUrl + "/panel/configuracion",
+                "canchasAjustadas", evento.canchasAjustadas()
         ));
 
         emailService.enviar(usuario.getEmail(), ASUNTO, html);

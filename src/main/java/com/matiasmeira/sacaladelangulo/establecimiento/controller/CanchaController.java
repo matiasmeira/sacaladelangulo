@@ -7,7 +7,6 @@ import com.matiasmeira.sacaladelangulo.establecimiento.dto.CanchaResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.CanchaEliminacionService;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.CanchaEstadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.CanchaService;
-import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -74,30 +73,6 @@ public class CanchaController {
     }
 
     /**
-     * @deprecated Este DELETE en realidad nunca eliminó nada: hace una baja lógica reversible
-     * (isActive=false, ver CanchaService.desactivarCancha), y el verbo DELETE no correspondía a
-     * un toggle reversible -- ver también el javadoc de {@link #eliminarCancha}, que tuvo que
-     * sumarse como "/definitiva" por este motivo. Lo reemplaza {@link #cambiarEstado} (PATCH
-     * /estado con {@code { "activo": false }} ), que además habilita reactivar sin pasar por el
-     * PUT completo. Delega en el mismo CanchaEstadoService que la ruta nueva -- no hay lógica
-     * duplicada entre las dos. Se borra cuando el frontend termine de migrar a /estado.
-     */
-    @Deprecated(forRemoval = true)
-    @Operation(deprecated = true,
-            summary = "Desactivar cancha (deprecado)",
-            description = "Reemplazado por PATCH /{canchaId}/estado con { \"activo\": false }. Se elimina cuando el front migre.")
-    @DeleteMapping("/{canchaId}")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
-    public ResponseEntity<Void> desactivarCancha(
-            @PathVariable Long establecimientoId,
-            @PathVariable Long canchaId,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        canchaEstadoService.cambiarEstado(establecimientoId, canchaId,
-                new CambiarEstadoCanchaRequest(false), userDetails.getUsername());
-        return ResponseEntity.noContent().build();
-    }
-
-    /**
      * Habilita o deshabilita esta cancha (isActive) sin eliminar nada -- análogo a
      * EstablecimientoController.cambiarEstado, con dos diferencias deliberadas: acá se mantiene
      * hasAnyRole('OWNER', 'ADMIN') (el mismo criterio que ya regía sobre canchas) en vez del
@@ -122,17 +97,11 @@ public class CanchaController {
     }
 
     /**
-     * Baja lógica (soft delete, deletedAt) de la cancha, no la simple desactivación de arriba
-     * -- distinta del DELETE de arriba a propósito: ese verbo+ruta ya lo ocupa
-     * desactivarCancha (isActive=false, reversible), y el frontend ya depende de ese
-     * contrato. El sufijo "/definitiva" es la forma de sumar la baja real sin pisarlo; la
-     * causa de fondo es que ese DELETE debería haber sido un PATCH /estado desde el
-     * principio (como el análogo de Establecimiento), pero migrarlo es aparte, no algo a
-     * resolver en esta feature.
+     * Baja lógica (soft delete, deletedAt) de la cancha, no la simple desactivación de arriba.
      *
      * <p>Sólo el dueño real: ni ADMIN ni EMPLOYEE (ver CanchaEliminacionService).
      */
-    @DeleteMapping("/{canchaId}/definitiva")
+    @DeleteMapping("/{canchaId}")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Void> eliminarCancha(
             @PathVariable Long establecimientoId,

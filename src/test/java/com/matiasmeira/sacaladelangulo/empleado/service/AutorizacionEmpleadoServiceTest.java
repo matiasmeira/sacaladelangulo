@@ -287,4 +287,105 @@ class AutorizacionEmpleadoServiceTest {
         assertFalse(autorizacionEmpleadoService.tieneAccesoDePanel(
                 establecimiento, "fantasma@test.com", AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA));
     }
+
+    @Test
+    @DisplayName("validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoActivo")
+    void validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoActivo() {
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        Usuario resultado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail());
+
+        assertEquals(dueno.getId(), resultado.getId());
+    }
+
+    @Test
+    @DisplayName("validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoDeshabilitado")
+    void validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoDeshabilitado() {
+        Establecimiento deshabilitado = Establecimientos.establecimientoDeshabilitado(b -> b
+                .id(10L).nombre("Establecimiento Test").dueno(dueno));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        Usuario resultado = autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail());
+
+        assertEquals(dueno.getId(), resultado.getId());
+    }
+
+    @Test
+    @DisplayName("validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoEliminado_PendienteDecisionDeProducto")
+    void validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoEliminado_PendienteDecisionDeProducto() {
+        // Pendiente decisión de producto: ¿el dueño debe ver reportes de un establecimiento
+        // eliminado? Este test documenta el comportamiento ACTUAL (permite), no que sea la
+        // regla deseada -- validarPropietarioOAdmin no chequea deletedAt.
+        Establecimiento eliminado = Establecimientos.establecimientoEliminado(b -> b
+                .id(10L).nombre("Establecimiento Test").dueno(dueno));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        Usuario resultado = autorizacionEmpleadoService.validarPropietarioOAdmin(eliminado, dueno.getEmail());
+
+        assertEquals(dueno.getId(), resultado.getId());
+    }
+
+    @Test
+    @DisplayName("validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoNoVerificado")
+    void validarPropietarioOAdmin_Exito_EsDuenoReal_EstablecimientoNoVerificado() {
+        Establecimiento pendiente = Establecimientos.establecimientoPendiente(b -> b
+                .id(10L).nombre("Establecimiento Test").dueno(dueno));
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+
+        Usuario resultado = autorizacionEmpleadoService.validarPropietarioOAdmin(pendiente, dueno.getEmail());
+
+        assertEquals(dueno.getId(), resultado.getId());
+    }
+
+    @Test
+    @DisplayName("validarPropietarioOAdmin_Fallo_DuenoDeOtroEstablecimiento")
+    void validarPropietarioOAdmin_Fallo_DuenoDeOtroEstablecimiento() {
+        Usuario otroDueno = Usuario.builder().id(3L).email("otro@test.com").rol(Role.OWNER).build();
+        when(usuarioRepository.findByEmail(otroDueno.getEmail())).thenReturn(Optional.of(otroDueno));
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail())
+        );
+    }
+
+    @Test
+    @DisplayName("validarPropietarioOAdmin_Exito_EsAdmin")
+    void validarPropietarioOAdmin_Exito_EsAdmin() {
+        Usuario admin = Usuario.builder().id(99L).email("admin@test.com").rol(Role.ADMIN).build();
+        when(usuarioRepository.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+
+        Usuario resultado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, admin.getEmail());
+
+        assertEquals(admin.getId(), resultado.getId());
+    }
+
+    @Test
+    @DisplayName("validarPropietarioOAdmin_Fallo_EmpleadoDelEstablecimiento")
+    void validarPropietarioOAdmin_Fallo_EmpleadoDelEstablecimiento() {
+        Usuario empleado = Usuario.builder()
+                .id(5L)
+                .email("empleado-uuid@empleados.interno")
+                .rol(Role.EMPLOYEE)
+                .establecimiento(establecimiento)
+                .permisos(Set.of(PermisoEmpleado.CANCELAR_RESERVA))
+                .build();
+        when(usuarioRepository.findByEmail(empleado.getEmail())).thenReturn(Optional.of(empleado));
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, empleado.getEmail())
+        );
+    }
+
+    @Test
+    @DisplayName("validarPropietarioOAdmin_Fallo_UsuarioNoEncontrado")
+    void validarPropietarioOAdmin_Fallo_UsuarioNoEncontrado() {
+        when(usuarioRepository.findByEmail("fantasma@test.com")).thenReturn(Optional.empty());
+
+        assertThrows(
+                EntityNotFoundException.class,
+                () -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, "fantasma@test.com")
+        );
+    }
 }

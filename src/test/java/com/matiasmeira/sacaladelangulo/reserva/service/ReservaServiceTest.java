@@ -945,7 +945,7 @@ class ReservaServiceTest {
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaPendiente.getId()))
                 .thenReturn(Optional.of(reservaPendiente));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -977,7 +977,7 @@ class ReservaServiceTest {
 
         when(reservaRepository.findByIdConEstablecimientoYDueno(reservaYaConfirmada.getId()))
                 .thenReturn(Optional.of(reservaYaConfirmada));
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
         // Act
         ReservaResponse response = assertDoesNotThrow(
@@ -985,6 +985,81 @@ class ReservaServiceTest {
 
         // Assert
         assert response.estado().equals("CONFIRMADA");
+        verify(reservaRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("confirmarReserva_Delega_ValidaPropietarioOAdmin")
+    void confirmarReserva_Delega_ValidaPropietarioOAdmin() {
+        // Arrange: la autorización de confirmarReserva pasó a delegar en
+        // AutorizacionEmpleadoService.validarPropietarioOAdmin (igual que revertirAusencia y
+        // moverReservaDeCancha), en vez del chequeo inline que tenía antes.
+        Reserva reservaPendiente = Reserva.builder()
+                .id(42L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.PENDIENTE_SENA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .expiraEn(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaPendiente.getId()))
+                .thenReturn(Optional.of(reservaPendiente));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        assertDoesNotThrow(() -> reservaService.confirmarReserva(reservaPendiente.getId(), dueno.getEmail()));
+
+        // Assert
+        verify(autorizacionEmpleadoService).validarPropietarioOAdmin(establecimiento, dueno.getEmail());
+    }
+
+    @Test
+    @DisplayName("confirmarReserva_AccesoDenegado_PropagaExcepcionYNoConfirma")
+    void confirmarReserva_AccesoDenegado_PropagaExcepcionYNoConfirma() {
+        // Arrange
+        Reserva reservaPendiente = Reserva.builder()
+                .id(43L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .deporteSeleccionado(Deporte.FUTBOL_5)
+                .fechaHoraInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
+                .fechaHoraFin(LocalDateTime.of(2030, 1, 15, 11, 0))
+                .estado(EstadoReserva.PENDIENTE_SENA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .expiraEn(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        Usuario otroDueno = Usuario.builder()
+                .id(99L)
+                .email("otro-dueno@test.com")
+                .password("password")
+                .nombre("Roberto")
+                .rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL)
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build();
+
+        when(reservaRepository.findByIdConEstablecimientoYDueno(reservaPendiente.getId()))
+                .thenReturn(Optional.of(reservaPendiente));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
+
+        // Act & Assert
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> reservaService.confirmarReserva(reservaPendiente.getId(), otroDueno.getEmail()));
+
+        assertEquals(EstadoReserva.PENDIENTE_SENA, reservaPendiente.getEstado());
         verify(reservaRepository, never()).save(any());
         verify(eventPublisher, never()).publishEvent(any());
     }

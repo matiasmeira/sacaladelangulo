@@ -554,14 +554,7 @@ public class ReservaService {
                 .orElseThrow(() -> new EntityNotFoundException("Reserva no encontrada"));
         log.debug("Reserva encontrada. Estado actual: {}", reserva.getEstado());
 
-        Usuario usuarioAutenticado = buscarUsuarioPorEmail(email);
-
-        Long duenioEstablecimientoId = reserva.getCancha().getEstablecimiento().getDueno().getId();
-        if (usuarioAutenticado.getRol() != Role.ADMIN &&
-                !usuarioAutenticado.getId().equals(duenioEstablecimientoId)) {
-            log.warn("Acceso denegado. Usuario: {}, Dueño: {}", usuarioAutenticado.getId(), duenioEstablecimientoId);
-            throw new AccessDeniedException("No está autorizado para confirmar esta reserva");
-        }
+        autorizacionEmpleadoService.validarPropietarioOAdmin(reserva.getCancha().getEstablecimiento(), email);
 
         if (reserva.getEstado() == EstadoReserva.CONFIRMADA) {
             log.info("Reserva ya se encontraba confirmada. ID: {}", reservaId);

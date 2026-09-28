@@ -232,7 +232,9 @@ class ReservaControllerEstablecimientoNoVerificadoIntegrationTest {
         Usuario dueno = crearUsuario(emailDueno, Role.OWNER);
         Establecimiento establecimiento = crearEstablecimientoConCancha("complejo-finalizar-nv", dueno, EstadoVerificacion.EN_REVISION);
         Usuario jugador = crearUsuario("jugador-finalizar-nv@test.com", Role.PLAYER);
-        Reserva reserva = sembrarReservaConfirmada(establecimiento, jugador);
+        // A diferencia del resto de los sembrados de este archivo, acá el turno tiene que
+        // haber empezado: finalizarReserva ahora lo exige (mismo criterio que marcarAusente).
+        Reserva reserva = sembrarReservaConfirmada(establecimiento, jugador, LocalDateTime.now().minusHours(2));
 
         mockMvc.perform(patch("/api/v1/reservas/" + reserva.getId() + "/finalizar")
                         .with(user(emailDueno).roles("OWNER"))

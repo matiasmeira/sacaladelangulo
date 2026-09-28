@@ -299,6 +299,37 @@ class ReservaServiceMatrizTransicionesTest {
     }
 
     @Test
+    @DisplayName("finalizarReserva: turno futuro falla")
+    void finalizarReserva_TurnoFuturo_Falla() {
+        Reserva reserva = reservaEn(EstadoReserva.CONFIRMADA);
+        reserva.setFechaHoraInicio(LocalDateTime.now().plusHours(1));
+        reserva.setFechaHoraFin(LocalDateTime.now().plusHours(2));
+        when(reservaRepository.findByIdConEstablecimientoYDueno(RESERVA_ID)).thenReturn(Optional.of(reserva));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> reservaService.finalizarReserva(RESERVA_ID, MetodoPago.EFECTIVO, dueno.getEmail()));
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("todavía no empezó"));
+        org.mockito.Mockito.verify(turnoCajaService, org.mockito.Mockito.never())
+                .registrarMovimientoSiCorresponde(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("finalizarReserva: borde exacto en la hora de inicio (ya se puede cobrar)")
+    void finalizarReserva_BordeExactoHoraInicio_Permitido() {
+        // Mismo truco que marcarAusente_BordeExactoHoraInicio_Permitido: al fijar
+        // fechaHoraInicio ANTES de invocar al service, el now() que el service evalúa
+        // nunca puede ser anterior a este valor ya capturado -> el borde exacto pasa,
+        // sin necesidad de un Clock inyectable.
+        LocalDateTime inicioExacto = LocalDateTime.now();
+        Reserva reserva = reservaEn(EstadoReserva.CONFIRMADA);
+        reserva.setFechaHoraInicio(inicioExacto);
+        reserva.setFechaHoraFin(inicioExacto.plusHours(1));
+        when(reservaRepository.findByIdConEstablecimientoYDueno(RESERVA_ID)).thenReturn(Optional.of(reserva));
+
+        assertDoesNotThrow(() -> reservaService.finalizarReserva(RESERVA_ID, MetodoPago.EFECTIVO, dueno.getEmail()));
+    }
+
+    @Test
     @DisplayName("confirmarReserva: un segundo antes de expirar, todavía confirma")
     void confirmarReserva_UnSegundoAntesDeExpirar_Confirma() {
         Reserva reserva = reservaEn(EstadoReserva.PENDIENTE_SENA);

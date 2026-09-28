@@ -716,6 +716,13 @@ public class ReservaService {
                                 + "deshacer la ausencia si el jugador sí se presentó.");
             }
 
+            // Mismo mecanismo y umbral que marcarAusente: FINALIZADA significa "servicio
+            // completado", no sólo "cobrado" (ver EstadoReserva.FINALIZADA), así que no puede
+            // alcanzarse antes de que el turno empiece.
+            if (LocalDateTime.now().isBefore(reserva.getFechaHoraInicio())) {
+                throw new IllegalArgumentException("No se puede cobrar un turno que todavía no empezó.");
+            }
+
             reserva.setEstado(EstadoReserva.FINALIZADA);
             reserva.setMetodoPago(metodoPago);
             Reserva reservaActualizada = reservaRepository.save(reserva);

@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.caja.dto.EmparejarRequest;
 import com.matiasmeira.sacaladelangulo.caja.dto.EmparejarResponse;
 import com.matiasmeira.sacaladelangulo.caja.service.DispositivoCajaService;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,7 +36,7 @@ public class DispositivoCajaController {
     public ResponseEntity<ActivarLocalResponse> activarLocal(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody(required = false) ActivarLocalRequest request,
+            @RequestBody(required = false) @Valid ActivarLocalRequest request,
             HttpServletResponse response) {
         return ResponseEntity.ok(dispositivoCajaService.activarLocal(establecimientoId, userDetails.getUsername(), request, response));
     }
@@ -49,7 +50,7 @@ public class DispositivoCajaController {
     public ResponseEntity<EmparejarResponse> emparejar(
             @PathVariable Long establecimientoId,
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody(required = false) EmparejarRequest request) {
+            @RequestBody(required = false) @Valid EmparejarRequest request) {
         return ResponseEntity.ok(dispositivoCajaService.emparejar(establecimientoId, userDetails.getUsername(), request));
     }
 

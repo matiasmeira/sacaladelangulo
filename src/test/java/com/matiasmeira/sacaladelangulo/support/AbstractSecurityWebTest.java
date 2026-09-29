@@ -153,6 +153,21 @@ public abstract class AbstractSecurityWebTest {
         return "Bearer " + token;
     }
 
+    /**
+     * Empleado extra del establecimiento indicado con los permisos indicados (para los casos que el
+     * escenario base no siembra: empleado de B, empleado con todos los permisos). Alias único por llamada.
+     */
+    protected Usuario empleado(Establecimiento establecimiento, Set<PermisoEmpleado> permisos) {
+        return guardarUsuario("empleado-extra-" + SECUENCIA.incrementAndGet(), Role.EMPLOYEE, establecimiento, permisos);
+    }
+
+    /** Permisos persistidos del usuario, leídos por JDBC (la colección es lazy y no hay sesión abierta en el test). */
+    protected Set<PermisoEmpleado> permisosPersistidos(Usuario usuario) {
+        return new java.util.HashSet<>(jdbcTemplate.queryForList(
+                "SELECT permiso FROM usuario_permisos WHERE usuario_id = ?", String.class, usuario.getId())
+                .stream().map(PermisoEmpleado::valueOf).toList());
+    }
+
     private Usuario guardarUsuario(String alias, Role rol, Establecimiento establecimiento, Set<PermisoEmpleado> permisos) {
         return usuarioRepository.save(Usuario.builder()
                 .email(alias + "@seguridad-http-test.com")

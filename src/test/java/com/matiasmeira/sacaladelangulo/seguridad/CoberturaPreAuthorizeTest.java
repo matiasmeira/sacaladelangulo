@@ -37,7 +37,7 @@ class CoberturaPreAuthorizeTest extends AbstractSecurityWebTest {
      * Agregar una entrada acá es una decisión de seguridad: el motivo tiene que explicar quién
      * puede llamar al endpoint y dónde se hace la validación real.
      */
-    private static final Map<String, String> SIN_PREAUTHORIZE = Map.ofEntries(
+    static final Map<String, String> SIN_PREAUTHORIZE = Map.ofEntries(
             // --- Públicos por la chain: permitAll en SecurityConfig, sin sesión ---
             Map.entry("POST /api/v1/auth/login", "Público (permitAll /api/v1/auth/**): login; rate limit por IP."),
             Map.entry("POST /api/v1/auth/empleados/login", "Público (permitAll /api/v1/auth/**): login de mostrador por PIN; rate limit por IP."),
@@ -113,7 +113,7 @@ class CoberturaPreAuthorizeTest extends AbstractSecurityWebTest {
         assertTrue(problemas.isEmpty(), () -> "\n" + String.join("\n", problemas));
     }
 
-    private static List<String> claves(RequestMappingInfo info) {
+    static List<String> claves(RequestMappingInfo info) {
         Set<String> rutas = info.getPathPatternsCondition() != null
                 ? info.getPathPatternsCondition().getPatternValues() : Set.of();
         Set<String> verbos = new TreeSet<>();

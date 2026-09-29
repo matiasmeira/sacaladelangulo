@@ -27,18 +27,18 @@ import org.springframework.web.bind.annotation.RestController;
  * establecimiento (EN_REVISION -> VERIFICADO o RECHAZADO).
  *
  * <p><b>Por qué usa {@code @PreAuthorize("hasRole('ADMIN')")} en vez del chequeo manual de
- * AdminUsuarioController/AdminMailsController.</b> Esos dos controllers deliberadamente NO
- * usan {@code @PreAuthorize}: validan el rol a mano dentro del service. Acá se aparta de ese
- * precedente a propósito, no por descuido: en este endpoint la autorización ES la feature --
- * todo el punto de exigir un admin es que un OWNER no pueda autoverificar su propio
- * establecimiento ni auto-otorgarse el inicio del trial. Un chequeo manual es una línea de
- * código dentro del service que se puede borrar, comentar o saltear por accidente en un
- * refactor sin que ningún test de compilación lo note; una anotación declarativa en el
- * controller no se puede sortear desde el service que la implementa. Además, los otros 24
- * usos de {@code @PreAuthorize} del repo son todos {@code hasAnyRole('OWNER', 'ADMIN')} --
- * ese vocabulario deja pasar al OWNER en todos lados, y copiarlo tal cual acá reproduciría
- * exactamente el bug que esta feature existe para evitar. Por eso se usa {@code hasRole}
- * puro, no {@code hasAnyRole}, y se lee distinto a propósito.
+ * AdminUsuarioController/AdminMailsController.</b> Esos dos controllers son la excepción
+ * (ver CoberturaPreAuthorizeTest, pendiente 44): validan el rol a mano dentro del service y no
+ * declaran {@code @PreAuthorize}. Acá la anotación es obligatoria: en este endpoint la
+ * autorización ES la feature -- todo el punto de exigir un admin es que un OWNER no pueda
+ * autoverificar su propio establecimiento ni auto-otorgarse el inicio del trial. Un chequeo
+ * manual es una línea de código dentro del service que se puede borrar, comentar o saltear
+ * por accidente en un refactor sin que ningún test de compilación lo note; una anotación
+ * declarativa en el controller no se puede sortear desde el service que la implementa.
+ * Además, la mayoría de los usos de {@code @PreAuthorize} del repo son
+ * {@code hasAnyRole('OWNER', 'ADMIN')} -- ese vocabulario deja pasar al OWNER, y copiarlo
+ * tal cual acá reproduciría exactamente el bug que esta feature existe para evitar. Por eso
+ * se usa {@code hasRole} puro, no {@code hasAnyRole}, y se lee distinto a propósito.
  */
 @RestController
 @RequestMapping("/api/v1/admin/establecimientos")

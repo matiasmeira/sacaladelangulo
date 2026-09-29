@@ -15,7 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
  * Endpoint de administración para eliminar/anonimizar cualquier cuenta (PLAYER/OWNER/ADMIN).
  * Requiere autenticación (cae bajo el anyRequest().authenticated() de SecurityConfig) y la
  * autorización de rol ADMIN se valida a mano dentro del service, mismo patrón que
- * AdminMailsController/OfertaMarketingService (no se usa @PreAuthorize en este repo).
+ * AdminMailsController/OfertaMarketingService. Es una excepción: el resto de los endpoints
+ * protegidos por rol declara @PreAuthorize (ver CoberturaPreAuthorizeTest, que lista las
+ * excepciones; agregarlo acá es el pendiente 44).
  */
 @RestController
 @RequestMapping("/api/v1/admin/usuarios")

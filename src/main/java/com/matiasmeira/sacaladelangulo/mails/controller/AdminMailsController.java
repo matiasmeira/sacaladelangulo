@@ -17,7 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
  * Endpoint de administración para disparar un broadcast de oferta de marketing a todos
  * los usuarios con opt-in. Requiere autenticación (cae bajo el anyRequest().authenticated()
  * de SecurityConfig) y la autorización de rol ADMIN se valida manualmente dentro del
- * servicio, mismo patrón que el resto del código (no se usa @PreAuthorize en este repo).
+ * servicio. Es una excepción: el resto de los endpoints protegidos por rol declara
+ * @PreAuthorize (ver CoberturaPreAuthorizeTest, que lista las excepciones; agregarlo acá es
+ * el pendiente 44).
  */
 @RestController
 @RequestMapping("/api/v1/admin/mails")

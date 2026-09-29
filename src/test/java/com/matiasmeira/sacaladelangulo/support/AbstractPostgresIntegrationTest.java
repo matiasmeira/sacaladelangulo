@@ -2,6 +2,7 @@ package com.matiasmeira.sacaladelangulo.support;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,8 +23,9 @@ import java.util.List;
  * producción (incluye el índice único parcial de V1 y los ajustes de V2-V8).
  *
  * <p>Requiere Docker disponible en la máquina donde corre el build (Testcontainers arranca
- * el contenedor de Postgres). Si Docker no está disponible, estos tests fallan al arrancar
- * el contexto de Spring.
+ * el contenedor de Postgres). {@link DockerDisponibleCondition} decide antes de arrancar
+ * nada: sin Docker y fuera del CI las clases se saltean con un mensaje; en el CI (CI=true)
+ * nunca se saltean, así que sin Docker fallan en rojo.
  *
  * <p><b>Contenedor singleton:</b> el Postgres se arranca UNA sola vez para toda la JVM (bloque
  * static) y NO se detiene entre clases de test. Antes se usaba @Container + @Testcontainers,
@@ -34,6 +36,7 @@ import java.util.List;
  * Testcontainers) lo elimina al terminar la JVM.
  */
 @Tag("testcontainers")
+@ExtendWith(DockerDisponibleCondition.class)
 @SpringBootTest
 @ActiveProfiles("test")
 public abstract class AbstractPostgresIntegrationTest {

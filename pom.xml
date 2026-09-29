@@ -254,7 +254,9 @@
 					     igual que antes de agregarlos. Para correrlos explicitamente (con Docker activo):
 					     ./mvnw test -Dsurefire.excludedGroups= -Dgroups=testcontainers
 					     o, para correr TODO (suite normal + testcontainers) en una sola pasada:
-					     ./mvnw test -Dsurefire.excludedGroups= -->
+					     ./mvnw test -Dsurefire.excludedGroups=
+					     Si se las incluye sin Docker, DockerDisponibleCondition las saltea con un
+					     mensaje, salvo con CI=true, donde fallan en rojo. -->
 					<excludedGroups>${surefire.excludedGroups}</excludedGroups>
 				</configuration>
 			</plugin>

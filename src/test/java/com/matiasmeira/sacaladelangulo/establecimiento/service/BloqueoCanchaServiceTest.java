@@ -1,9 +1,9 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.BloqueoCanchaRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.BloqueoCanchaResponse;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoCancha;
@@ -28,19 +28,24 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,9 +63,6 @@ class BloqueoCanchaServiceTest {
 
     @Mock
     private ReservaMapper reservaMapper;
-
-    @Mock
-    private UsuarioRepository usuarioRepository;
 
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
@@ -417,53 +419,60 @@ class BloqueoCanchaServiceTest {
         verify(bloqueoCanchaRepository).delete(bloqueo);
     }
 
-    @Test
-    @DisplayName("listarPorEstablecimientoYFecha_ConPlayer_OcultaElMotivo")
-    void listarPorEstablecimientoYFecha_ConPlayer_OcultaElMotivo() {
-        // Arrange
-        BloqueoCancha bloqueo = BloqueoCancha.builder()
+    private BloqueoCancha bloqueoConMotivo() {
+        return BloqueoCancha.builder()
                 .id(1L)
                 .cancha(cancha5A)
                 .fechaInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
                 .fechaFin(LocalDateTime.of(2030, 1, 15, 12, 0))
                 .motivo("Reclamo del proveedor de mantenimiento")
                 .build();
-
-        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
-        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
-                .thenReturn(List.of(bloqueo));
-
-        // Act
-        List<BloqueoCanchaResponse> respuesta = bloqueoCanchaService.listarPorEstablecimientoYFecha(
-                establecimiento.getId(), java.time.LocalDate.of(2030, 1, 15), jugador.getEmail());
-
-        // Assert
-        assert respuesta.size() == 1;
-        assert respuesta.get(0).motivo() == null;
     }
 
     @Test
-    @DisplayName("listarPorEstablecimientoYFecha_ConDueno_IncluyeElMotivo")
-    void listarPorEstablecimientoYFecha_ConDueno_IncluyeElMotivo() {
-        // Arrange
-        BloqueoCancha bloqueo = BloqueoCancha.builder()
-                .id(1L)
-                .cancha(cancha5A)
-                .fechaInicio(LocalDateTime.of(2030, 1, 15, 10, 0))
-                .fechaFin(LocalDateTime.of(2030, 1, 15, 12, 0))
-                .motivo("Reclamo del proveedor de mantenimiento")
-                .build();
-
-        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+    @DisplayName("listarPorEstablecimientoYFecha_ConAccesoDePanel_IncluyeElMotivo")
+    void listarPorEstablecimientoYFecha_ConAccesoDePanel_IncluyeElMotivo() {
         when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
-                .thenReturn(List.of(bloqueo));
+                .thenReturn(List.of(bloqueoConMotivo()));
+        when(autorizacionEmpleadoService.tieneAccesoDePanel(
+                eq(establecimiento), eq(dueno.getEmail()), eq(EnumSet.allOf(PermisoEmpleado.class))))
+                .thenReturn(true);
 
-        // Act
         List<BloqueoCanchaResponse> respuesta = bloqueoCanchaService.listarPorEstablecimientoYFecha(
-                establecimiento.getId(), java.time.LocalDate.of(2030, 1, 15), dueno.getEmail());
+                establecimiento.getId(), LocalDate.of(2030, 1, 15), dueno.getEmail());
 
-        // Assert
-        assert respuesta.size() == 1;
-        assert respuesta.get(0).motivo().equals("Reclamo del proveedor de mantenimiento");
+        assertEquals(1, respuesta.size());
+        assertEquals("Reclamo del proveedor de mantenimiento", respuesta.get(0).motivo());
+    }
+
+    @Test
+    @DisplayName("listarPorEstablecimientoYFecha_SinAccesoDePanel_OcultaElMotivo")
+    void listarPorEstablecimientoYFecha_SinAccesoDePanel_OcultaElMotivo() {
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
+                .thenReturn(List.of(bloqueoConMotivo()));
+        when(autorizacionEmpleadoService.tieneAccesoDePanel(
+                eq(establecimiento), eq(jugador.getEmail()), eq(EnumSet.allOf(PermisoEmpleado.class))))
+                .thenReturn(false);
+
+        List<BloqueoCanchaResponse> respuesta = bloqueoCanchaService.listarPorEstablecimientoYFecha(
+                establecimiento.getId(), LocalDate.of(2030, 1, 15), jugador.getEmail());
+
+        assertEquals(1, respuesta.size());
+        assertNull(respuesta.get(0).motivo());
+        verify(autorizacionEmpleadoService).tieneAccesoDePanel(
+                establecimiento, jugador.getEmail(), EnumSet.allOf(PermisoEmpleado.class));
+    }
+
+    @Test
+    @DisplayName("listarPorEstablecimientoYFecha_SinBloqueos_DevuelveVacioSinConsultarLaRegla")
+    void listarPorEstablecimientoYFecha_SinBloqueos_DevuelveVacioSinConsultarLaRegla() {
+        when(bloqueoCanchaRepository.findByEstablecimientoAndRango(eq(establecimiento.getId()), any(), any()))
+                .thenReturn(List.of());
+
+        List<BloqueoCanchaResponse> respuesta = bloqueoCanchaService.listarPorEstablecimientoYFecha(
+                establecimiento.getId(), LocalDate.of(2030, 1, 15), dueno.getEmail());
+
+        assertEquals(List.of(), respuesta);
+        verifyNoInteractions(autorizacionEmpleadoService);
     }
 }

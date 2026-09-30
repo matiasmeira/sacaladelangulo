@@ -1,8 +1,6 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
-import com.matiasmeira.sacaladelangulo.auth.model.Role;
-import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
+import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.BloqueoCanchaRequest;
 import com.matiasmeira.sacaladelangulo.establecimiento.dto.BloqueoCanchaResponse;
@@ -25,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.EnumSet;
 import java.util.List;
 
 @Service
@@ -36,7 +35,6 @@ public class BloqueoCanchaService {
     private final CanchaRepository canchaRepository;
     private final ReservaRepository reservaRepository;
     private final ReservaMapper reservaMapper;
-    private final UsuarioRepository usuarioRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
 
@@ -173,19 +171,28 @@ public class BloqueoCanchaService {
      * Bloqueos de todas las canchas de un establecimiento que se superponen con el día dado.
      * Accesible a cualquier usuario autenticado: sirve para que la grilla de disponibilidad
      * del jugador refleje los horarios bloqueados por el dueño. El motivo (texto libre,
-     * puede contener notas operativas internas) no se incluye si quien consulta es PLAYER
-     * (ver M30 en la auditoría).
+     * puede contener notas operativas internas) sólo se incluye si quien consulta tiene
+     * acceso de panel al establecimiento (ADMIN, su dueño o un empleado suyo con cualquier
+     * permiso, el mismo criterio que la disponibilidad); para el resto es null (ver M30 en
+     * la auditoría). El establecimiento se toma de los bloqueos devueltos; si no hay
+     * ninguno se responde [] sin consultar la regla.
      */
     @Transactional(readOnly = true)
     public List<BloqueoCanchaResponse> listarPorEstablecimientoYFecha(Long establecimientoId, LocalDate fecha, String email) {
         LocalDateTime inicioDia = fecha.atStartOfDay();
         LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
 
-        Usuario usuarioAutenticado = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        boolean ocultarMotivo = usuarioAutenticado.getRol() == Role.PLAYER;
+        List<BloqueoCancha> bloqueos = bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, inicioDia, finDia);
+        if (bloqueos.isEmpty()) {
+            return List.of();
+        }
 
-        return bloqueoCanchaRepository.findByEstablecimientoAndRango(establecimientoId, inicioDia, finDia).stream()
+        // Todos los bloqueos son del mismo establecimiento (lo filtra la query): la regla se calcula una vez.
+        Establecimiento establecimiento = bloqueos.get(0).getCancha().getEstablecimiento();
+        boolean ocultarMotivo = !autorizacionEmpleadoService.tieneAccesoDePanel(
+                establecimiento, email, EnumSet.allOf(PermisoEmpleado.class));
+
+        return bloqueos.stream()
                 .map(bloqueo -> mapSinReservasAfectadas(bloqueo, ocultarMotivo))
                 .toList();
     }

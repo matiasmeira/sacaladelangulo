@@ -12,19 +12,27 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.mails.service.OfertaMarketingBatchSender;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Base de los tests de autorización HTTP (pendiente 17): levanta la aplicación completa con
@@ -74,6 +82,12 @@ public abstract class AbstractSecurityWebTest {
 
     private static final AtomicInteger SECUENCIA = new AtomicInteger();
 
+    /** Nombre de la cookie de dispositivo de caja (DispositivoCajaGate.COOKIE_NAME, privado). */
+    protected static final String COOKIE_DISPOSITIVO = "saque_caja_device";
+
+    /** Contador de IPs de prueba: ver {@link #ipUnica()}. */
+    private static final AtomicInteger SECUENCIA_IP = new AtomicInteger();
+
     /** Duración del token de empleado de mostrador en los tests (mismo orden que en producción). */
     private static final long EXPIRACION_EMPLEADO_MILLIS = 60_000L;
 
@@ -94,6 +108,10 @@ public abstract class AbstractSecurityWebTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    /** El mismo BCrypt que usa el login: los empleados con PIN real se siembran con él. */
+    @Autowired
+    protected PasswordEncoder passwordEncoder;
 
     /** Efecto externo: ningún test manda mails de verdad. */
     @MockitoBean
@@ -166,6 +184,73 @@ public abstract class AbstractSecurityWebTest {
         return new java.util.HashSet<>(jdbcTemplate.queryForList(
                 "SELECT permiso FROM usuario_permisos WHERE usuario_id = ?", String.class, usuario.getId())
                 .stream().map(PermisoEmpleado::valueOf).toList());
+    }
+
+    /**
+     * Cookie de dispositivo de caja real: activa el local por HTTP (POST activar-local con el token del
+     * dueño) y devuelve la cookie que el browser guardaría, tomada del Set-Cookie de la respuesta.
+     * {@code dueno} tiene que ser el dueño de {@code establecimiento} (o un admin).
+     */
+    protected Cookie cookieDispositivo(Establecimiento establecimiento, Usuario dueno) throws Exception {
+        MvcResult resultado = mockMvc.perform(post("/api/v1/establecimientos/" + establecimiento.getId()
+                        + "/caja/dispositivos/activar-local")
+                        .header("Authorization", bearer(dueno))
+                        .contentType("application/json")
+                        .content("{\"label\":\"Caja " + SECUENCIA.incrementAndGet() + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return cookieDeSetCookie(resultado.getResponse().getHeader("Set-Cookie"));
+    }
+
+    /** Convierte un header Set-Cookie de dispositivo en la {@link Cookie} que el cliente reenviaría. */
+    protected static Cookie cookieDeSetCookie(String setCookie) {
+        assertNotNull(setCookie, "la respuesta tenía que traer Set-Cookie");
+        return new Cookie(COOKIE_DISPOSITIVO, setCookie.substring(setCookie.indexOf('=') + 1, setCookie.indexOf(';')));
+    }
+
+    /**
+     * Empleado de mostrador con PIN real: la contraseña se guarda hasheada con el PasswordEncoder del
+     * proyecto (los del escenario base tienen "hash" y no sirven para el login por PIN). El email es
+     * único por llamada; el nombre lo elige el test (usar {@link #nombreUnico()}).
+     */
+    protected Usuario empleadoConPin(Establecimiento establecimiento, String nombre, String pin) {
+        return usuarioRepository.save(Usuario.builder()
+                .email("empleado-pin-" + SECUENCIA.incrementAndGet() + "@seguridad-http-test.com")
+                .password(passwordEncoder.encode(pin))
+                .nombre(nombre)
+                .rol(Role.EMPLOYEE)
+                .establecimiento(establecimiento)
+                .permisos(new java.util.HashSet<>(Set.of(PermisoEmpleado.OPERAR_CAJA)))
+                .isActive(true)
+                .emailVerified(true)
+                .telefonoVerificado(false)
+                .build());
+    }
+
+    /** Fija la IP de origen del request (RateLimitFilter y el service usan getRemoteAddr). */
+    protected static RequestPostProcessor desdeIp(String ip) {
+        return req -> {
+            req.setRemoteAddr(ip);
+            return req;
+        };
+    }
+
+    /**
+     * IP de prueba que ningún otro test usa: los buckets por IP de RateLimitFilter viven en el contexto
+     * compartido y no se resetean, así que cada test que pega a /auth/empleados/login o a
+     * /caja/emparejar necesita la suya.
+     */
+    protected static String ipUnica() {
+        int n = SECUENCIA_IP.incrementAndGet();
+        return "10.99." + (n / 250) + "." + (n % 250 + 1);
+    }
+
+    /**
+     * Nombre de empleado único en toda la corrida: el bucket "login-empleado:{estId}:{nombre}" vive en
+     * el contexto compartido y el estId se repite entre tests (RESTART IDENTITY).
+     */
+    protected static String nombreUnico() {
+        return "cajero" + SECUENCIA.incrementAndGet();
     }
 
     private Usuario guardarUsuario(String alias, Role rol, Establecimiento establecimiento, Set<PermisoEmpleado> permisos) {

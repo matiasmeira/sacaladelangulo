@@ -26,6 +26,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -115,6 +117,10 @@ public class RegistroVerificacionService {
         tokenVerificacionEmailRepository.save(tokenVerificacion);
 
         String linkVerificacion = UrlUtils.quitarSlashFinal(frontendUrl) + "/verificar?token=" + token;
+        // volverA viene del cliente: si no es una ruta interna segura se ignora (nunca da 400).
+        if (UrlUtils.esRutaInternaSegura(request.volverA())) {
+            linkVerificacion += "&volverA=" + URLEncoder.encode(request.volverA(), StandardCharsets.UTF_8);
+        }
         eventPublisher.publishEvent(new VerificacionEmailSolicitadaEvent(email, linkVerificacion, codigo));
         log.info("Token de verificación de registro generado para {}", email);
     }

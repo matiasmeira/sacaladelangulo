@@ -133,7 +133,7 @@ class RegistroVerificacionFlujoCompletoIntegrationTest {
     }
 
     private String extraerToken(String link) {
-        String marcador = "token=";
-        return link.substring(link.indexOf(marcador) + marcador.length());
+        return org.springframework.web.util.UriComponentsBuilder.fromUriString(link).build()
+                .getQueryParams().getFirst("token");
     }
 }

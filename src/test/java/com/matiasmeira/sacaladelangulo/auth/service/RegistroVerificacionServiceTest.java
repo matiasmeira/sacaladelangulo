@@ -31,6 +31,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -106,6 +107,71 @@ class RegistroVerificacionServiceTest {
         assertTrue(eventoCaptor.getValue().linkVerificacion().startsWith(prefijoLink));
         String tokenCrudo = eventoCaptor.getValue().linkVerificacion().substring(prefijoLink.length());
         assertEquals(TokenHasher.sha256Hex(tokenCrudo), tokenGuardado.getTokenHash());
+    }
+
+    private static final String VOLVER_A = "/reservar/x?cancha=3&inicio=2026-01-01T10:00:00-03:00";
+
+    private VerificacionEmailSolicitadaEvent iniciarYCapturarEvento(IniciarRegistroRequest request) {
+        when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
+        registroVerificacionService.iniciarRegistro(request);
+        ArgumentCaptor<VerificacionEmailSolicitadaEvent> captor = ArgumentCaptor.forClass(VerificacionEmailSolicitadaEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_ConVolverAValido_LoAgregaEncodeadoAlLink")
+    void iniciarRegistro_ConVolverAValido_LoAgregaEncodeadoAlLink() {
+        VerificacionEmailSolicitadaEvent evento = iniciarYCapturarEvento(new IniciarRegistroRequest("nuevo@test.com", VOLVER_A));
+
+        String link = evento.linkVerificacion();
+        String prefijo = "http://localhost:5173/verificar?token=";
+        assertTrue(link.startsWith(prefijo));
+        int corte = link.indexOf("&volverA=");
+        assertTrue(corte > prefijo.length(), "El link debe llevar token y luego volverA");
+        String encodeado = link.substring(corte + "&volverA=".length());
+        assertFalse(encodeado.contains("&") || encodeado.contains("?") || encodeado.contains("/"),
+                "volverA debe ir URL-encoded");
+        assertEquals(VOLVER_A, java.net.URLDecoder.decode(encodeado, java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_SinVolverA_LinkIdenticoAlActual")
+    void iniciarRegistro_SinVolverA_LinkIdenticoAlActual() {
+        String link = iniciarYCapturarEvento(new IniciarRegistroRequest("nuevo@test.com")).linkVerificacion();
+
+        assertFalse(link.contains("volverA"));
+        assertTrue(link.matches("http://localhost:5173/verificar\\?token=[0-9a-f-]{36}"));
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_ConVolverAInvalido_LoIgnoraSinError")
+    void iniciarRegistro_ConVolverAInvalido_LoIgnoraSinError() {
+        String link = iniciarYCapturarEvento(new IniciarRegistroRequest("nuevo@test.com", "//evil.com")).linkVerificacion();
+
+        assertFalse(link.contains("volverA"));
+        assertTrue(link.matches("http://localhost:5173/verificar\\?token=[0-9a-f-]{36}"));
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_ConVolverA_LoPersistidoEsElMismoQueSinVolverA")
+    void iniciarRegistro_ConVolverA_LoPersistidoEsElMismoQueSinVolverA() {
+        when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
+
+        registroVerificacionService.iniciarRegistro(new IniciarRegistroRequest("nuevo@test.com", VOLVER_A));
+
+        ArgumentCaptor<TokenVerificacionEmail> tokenCaptor = ArgumentCaptor.forClass(TokenVerificacionEmail.class);
+        verify(tokenVerificacionEmailRepository).save(tokenCaptor.capture());
+        ArgumentCaptor<VerificacionEmailSolicitadaEvent> eventoCaptor = ArgumentCaptor.forClass(VerificacionEmailSolicitadaEvent.class);
+        verify(eventPublisher).publishEvent(eventoCaptor.capture());
+        TokenVerificacionEmail guardado = tokenCaptor.getValue();
+
+        String link = eventoCaptor.getValue().linkVerificacion();
+        String tokenCrudo = link.substring(link.indexOf("token=") + 6, link.indexOf("&volverA="));
+        // El hash es el del token solo (sin volverA): lo persistido no cambia con volverA.
+        assertEquals(TokenHasher.sha256Hex(tokenCrudo), guardado.getTokenHash());
+        assertEquals(TokenHasher.sha256Hex(eventoCaptor.getValue().codigo()), guardado.getCodigoHash());
+        assertEquals("nuevo@test.com", guardado.getEmail());
     }
 
     @Test

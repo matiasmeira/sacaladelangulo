@@ -11,11 +11,13 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugadorRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import com.matiasmeira.sacaladelangulo.support.Establecimientos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -28,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +46,9 @@ class BloqueoJugadorServiceTest {
 
     @Mock
     private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private ReservaRepository reservaRepository;
 
     @Mock
     private AutorizacionEmpleadoService autorizacionEmpleadoService;
@@ -91,6 +97,8 @@ class BloqueoJugadorServiceTest {
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.findById(jugador.getId())).thenReturn(Optional.of(jugador));
+        when(reservaRepository.existsByJugador_IdAndCancha_Establecimiento_Id(jugador.getId(), establecimiento.getId()))
+                .thenReturn(true);
         when(bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(establecimiento.getId(), jugador.getId()))
                 .thenReturn(false);
         when(bloqueoJugadorRepository.save(any(BloqueoJugador.class))).thenAnswer(invocation -> {
@@ -106,7 +114,11 @@ class BloqueoJugadorServiceTest {
         // Assert
         assertEquals(jugador.getId(), response.jugadorId());
         assertEquals("No-show reiterado", response.motivo());
-        verify(bloqueoJugadorRepository).save(any(BloqueoJugador.class));
+        ArgumentCaptor<BloqueoJugador> captor = ArgumentCaptor.forClass(BloqueoJugador.class);
+        verify(bloqueoJugadorRepository).save(captor.capture());
+        assertEquals(jugador, captor.getValue().getJugador());
+        assertEquals(establecimiento, captor.getValue().getEstablecimiento());
+        assertEquals("No-show reiterado", captor.getValue().getMotivo());
     }
 
     @Test
@@ -134,6 +146,8 @@ class BloqueoJugadorServiceTest {
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.findById(jugador.getId())).thenReturn(Optional.of(jugador));
+        when(reservaRepository.existsByJugador_IdAndCancha_Establecimiento_Id(jugador.getId(), establecimiento.getId()))
+                .thenReturn(true);
         when(bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(establecimiento.getId(), jugador.getId()))
                 .thenReturn(true);
 
@@ -145,22 +159,48 @@ class BloqueoJugadorServiceTest {
         verify(bloqueoJugadorRepository, never()).save(any());
     }
 
-    @Test
-    @DisplayName("crearBloqueo_Fallo_UsuarioIndicadoNoEsRolPlayer")
-    void crearBloqueo_Fallo_UsuarioIndicadoNoEsRolPlayer() {
-        // Arrange
-        BloqueoJugadorRequest request = new BloqueoJugadorRequest(dueno.getId(), "Motivo cualquiera");
+    private static final String MENSAJE_UNICO = "Jugador no encontrado en este establecimiento";
 
+    private void autorizarDueno() {
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+    }
+
+    private void assertNoEncontrado(Long jugadorId) {
+        EntityNotFoundException ex = assertThrows(EntityNotFoundException.class,
+                () -> bloqueoJugadorService.crearBloqueo(establecimiento.getId(),
+                        new BloqueoJugadorRequest(jugadorId, "Motivo"), dueno.getEmail()));
+        assertEquals(MENSAJE_UNICO, ex.getMessage());
+        verify(bloqueoJugadorRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crearBloqueo_Fallo_JugadorSinReservasEnElComplejo_404")
+    void crearBloqueo_Fallo_JugadorSinReservasEnElComplejo() {
+        autorizarDueno();
+        when(usuarioRepository.findById(jugador.getId())).thenReturn(Optional.of(jugador));
+        when(reservaRepository.existsByJugador_IdAndCancha_Establecimiento_Id(jugador.getId(), establecimiento.getId()))
+                .thenReturn(false);
+
+        assertNoEncontrado(jugador.getId());
+    }
+
+    @Test
+    @DisplayName("crearBloqueo_Fallo_IdInexistente_MismoMensaje")
+    void crearBloqueo_Fallo_IdInexistente() {
+        autorizarDueno();
+        when(usuarioRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertNoEncontrado(999L);
+    }
+
+    @Test
+    @DisplayName("crearBloqueo_Fallo_UsuarioIndicadoNoEsRolPlayer_MismoMensaje")
+    void crearBloqueo_Fallo_UsuarioIndicadoNoEsRolPlayer() {
+        autorizarDueno();
         when(usuarioRepository.findById(dueno.getId())).thenReturn(Optional.of(dueno));
 
-        // Act & Assert
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> bloqueoJugadorService.crearBloqueo(establecimiento.getId(), request, dueno.getEmail())
-        );
-        verify(bloqueoJugadorRepository, never()).save(any());
+        assertNoEncontrado(dueno.getId());
     }
 
     @Test
@@ -185,6 +225,7 @@ class BloqueoJugadorServiceTest {
                 () -> bloqueoJugadorService.crearBloqueo(establecimiento.getId(), request, otroDueno.getEmail())
         );
         verify(bloqueoJugadorRepository, never()).save(any());
+        verifyNoInteractions(usuarioRepository, reservaRepository);
     }
 
     @Test

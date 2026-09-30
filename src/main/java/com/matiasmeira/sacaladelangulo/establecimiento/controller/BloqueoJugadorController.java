@@ -16,7 +16,8 @@ import java.util.List;
 
 /**
  * Controlador REST para el bloqueo de jugadores por establecimiento.
- * Protegido: solo propietarios de establecimientos y administradores.
+ * Protegido: solo propietarios de establecimientos y administradores. El POST exige que el jugador tenga
+ * al menos una reserva en el establecimiento; si no (o si el id no existe / no es jugador) responde un 404 único.
  */
 @RestController
 @RequestMapping("/api/v1/establecimientos/{establecimientoId}/jugadores-bloqueados")

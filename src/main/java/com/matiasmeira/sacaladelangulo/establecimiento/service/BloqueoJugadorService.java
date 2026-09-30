@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugadorRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
+import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,15 +22,22 @@ import java.util.List;
 /**
  * Gestiona el bloqueo de jugadores por establecimiento (ver BloqueoJugador). Solo el
  * dueño real del establecimiento o un administrador pueden bloquear/desbloquear/listar.
+ *
+ * <p>Sólo se puede bloquear a un jugador con al menos una reserva (en cualquier estado, igual que la ficha
+ * de Clientes) en el establecimiento. Se autoriza antes de consultar al jugador, y cualquier otro id
+ * responde el mismo 404 sin distinguir si existe, para no filtrar nombre/email ni permitir enumerar ids.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class BloqueoJugadorService {
 
+    static final String MENSAJE_JUGADOR_NO_ENCONTRADO = "Jugador no encontrado en este establecimiento";
+
     private final BloqueoJugadorRepository bloqueoJugadorRepository;
     private final EstablecimientoRepository establecimientoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ReservaRepository reservaRepository;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final EstablecimientoOperativoGuard establecimientoOperativoGuard;
 
@@ -39,11 +47,13 @@ public class BloqueoJugadorService {
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
+        // Criterio unico: jugador (PLAYER) con al menos una reserva en este establecimiento. Cualquier otro
+        // id (inexistente, no jugador, sin reservas aca) responde el mismo 404 para no filtrar datos ni
+        // permitir enumerar ids.
         Usuario jugador = usuarioRepository.findById(request.jugadorId())
-                .orElseThrow(() -> new EntityNotFoundException("Jugador no encontrado"));
-        if (jugador.getRol() != Role.PLAYER) {
-            throw new IllegalArgumentException("El usuario indicado no corresponde a un jugador (rol PLAYER)");
-        }
+                .filter(u -> u.getRol() == Role.PLAYER)
+                .filter(u -> reservaRepository.existsByJugador_IdAndCancha_Establecimiento_Id(u.getId(), establecimientoId))
+                .orElseThrow(() -> new EntityNotFoundException(MENSAJE_JUGADOR_NO_ENCONTRADO));
 
         if (bloqueoJugadorRepository.existsByEstablecimientoIdAndJugadorId(establecimientoId, jugador.getId())) {
             throw new IllegalArgumentException("Este jugador ya está bloqueado en este establecimiento");

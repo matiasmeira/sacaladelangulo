@@ -720,7 +720,9 @@ class ReservaServiceTest {
         );
 
         // Assert
-        assert exception.getMessage().contains("La cancha se encuentra bloqueada en ese horario");
+        // El motivo del bloqueo son notas internas del local: no viaja en el error del jugador
+        assertEquals("La cancha se encuentra bloqueada en ese horario", exception.getMessage());
+        assertFalse(exception.getMessage().contains("Mantenimiento"));
     }
 
     @Test

@@ -408,7 +408,7 @@ public class ReservaService {
         List<BloqueoCancha> bloqueos = bloqueoCanchaRepository.findOverlappingBloqueos(
                 cancha.getId(), fechaHoraInicio, fechaHoraFin);
         if (!bloqueos.isEmpty()) {
-            throw new IllegalArgumentException("La cancha se encuentra bloqueada en ese horario. Motivo: " + bloqueos.get(0).getMotivo());
+            throw new IllegalArgumentException("La cancha se encuentra bloqueada en ese horario");
         }
     }
 
@@ -423,7 +423,7 @@ public class ReservaService {
                 .filter(b -> seSuperponen(b.getFechaInicio(), b.getFechaFin(), fechaHoraInicio, fechaHoraFin))
                 .findFirst();
         if (bloqueo.isPresent()) {
-            throw new IllegalArgumentException("La cancha se encuentra bloqueada en ese horario. Motivo: " + bloqueo.get().getMotivo());
+            throw new IllegalArgumentException("La cancha se encuentra bloqueada en ese horario");
         }
     }
 

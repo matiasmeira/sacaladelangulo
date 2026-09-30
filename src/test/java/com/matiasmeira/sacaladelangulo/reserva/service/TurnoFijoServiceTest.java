@@ -63,6 +63,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -632,6 +633,7 @@ class TurnoFijoServiceTest {
         // Assert: todo-o-nada, no debe guardarse ninguna reserva aunque las 2 primeras fechas eran válidas
         assert exception.getMessage().contains("2030-01-22");
         assert exception.getMessage().contains("bloqueada");
+        assertFalse(exception.getMessage().contains("Mantenimiento"));
         verify(reservaRepository, never()).saveAll(any());
     }
 

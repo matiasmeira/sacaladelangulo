@@ -179,6 +179,14 @@ public abstract class AbstractSecurityWebTest {
         return guardarUsuario("empleado-extra-" + SECUENCIA.incrementAndGet(), Role.EMPLOYEE, establecimiento, permisos);
     }
 
+    /**
+     * Jugador extra (rol PLAYER, sin establecimiento), para los escenarios que necesitan más de uno
+     * además de {@link #jugador}. Alias único por llamada.
+     */
+    protected Usuario jugadorExtra() {
+        return guardarUsuario("jugador-extra-" + SECUENCIA.incrementAndGet(), Role.PLAYER, null, Set.of());
+    }
+
     /** Permisos persistidos del usuario, leídos por JDBC (la colección es lazy y no hay sesión abierta en el test). */
     protected Set<PermisoEmpleado> permisosPersistidos(Usuario usuario) {
         return new java.util.HashSet<>(jdbcTemplate.queryForList(

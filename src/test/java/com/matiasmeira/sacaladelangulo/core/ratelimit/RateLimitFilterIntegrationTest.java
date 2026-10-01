@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Verifica el status HTTP que efectivamente recibe un cliente real cuando se agota el
- * límite de /api/v1/auth/register/owner (5 cada 10 minutos, ver
+ * límite de /api/v1/auth/registro/iniciar (10 cada 10 minutos, ver
  * RateLimitFilter.LIMITES_POR_RUTA).
  *
  * MockMvc no sirve para esto: RateLimitFilter corre como servlet filter dentro de la
@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb-ratelimit-register-owner;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.url=jdbc:h2:mem:testdb-ratelimit-registro-iniciar;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
@@ -47,15 +47,15 @@ class RateLimitFilterIntegrationTest {
     private TestRestTemplate restTemplate;
 
     @Test
-    @DisplayName("post_registerOwner_sextaSolicitudDevuelve429")
-    void post_registerOwner_sextaSolicitudDevuelve429() {
+    @DisplayName("post_registroIniciar_undecimaSolicitudDevuelve429")
+    void post_registroIniciar_undecimaSolicitudDevuelve429() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> body = new HttpEntity<>("{}", headers);
 
         ResponseEntity<String> ultima = null;
-        for (int i = 1; i <= 6; i++) {
-            ultima = restTemplate.postForEntity("/api/v1/auth/register/owner", body, String.class);
+        for (int i = 1; i <= 11; i++) {
+            ultima = restTemplate.postForEntity("/api/v1/auth/registro/iniciar", body, String.class);
             System.out.println("MEDICION intento " + i + " -> status=" + ultima.getStatusCode()
                     + " body=" + ultima.getBody());
         }

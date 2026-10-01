@@ -3,7 +3,6 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.EmpleadoLoginRequest;
-import com.matiasmeira.sacaladelangulo.auth.dto.RegisterRequest;
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
@@ -208,58 +207,6 @@ class AuthServiceTest {
                 () -> authService.authenticate(request)
         );
         verify(authenticationManager, never()).authenticate(any());
-    }
-
-    @Test
-    @DisplayName("registerOwner_Fallo_LimiteDeIntentosSuperado")
-    void registerOwner_Fallo_LimiteDeIntentosSuperado() {
-        RegisterRequest request = new RegisterRequest("dueno@test.com", "Password123", "Carlos");
-        when(rateLimiterService.tryConsume(eq("register-owner:dueno@test.com"), anyInt(), anyLong())).thenReturn(false);
-
-        assertThrows(
-                RateLimitExceededException.class,
-                () -> authService.registerOwner(request)
-        );
-        verify(usuarioRepository, never()).existsByEmail(anyString());
-        verify(usuarioRepository, never()).saveAndFlush(any());
-    }
-
-    @Test
-    @DisplayName("registerOwner_Exito_CreaUsuarioConFechaFinPruebaNula")
-    void registerOwner_Exito_CreaUsuarioConFechaFinPruebaNula() {
-        RegisterRequest request = new RegisterRequest("dueno@test.com", "Password123", "Carlos");
-        when(usuarioRepository.existsByEmail("dueno@test.com")).thenReturn(false);
-        when(passwordEncoder.encode("Password123")).thenReturn("hash");
-        when(usuarioRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(jwtService.generateToken(any())).thenReturn("jwt-token");
-
-        authService.registerOwner(request);
-
-        org.mockito.ArgumentCaptor<Usuario> captor = org.mockito.ArgumentCaptor.forClass(Usuario.class);
-        verify(usuarioRepository).saveAndFlush(captor.capture());
-        Usuario creado = captor.getValue();
-
-        // El trial arranca recién cuando un admin verifica el primer establecimiento (ver
-        // AdminEstablecimientoVerificacionService.iniciarPruebaAlVerificar), no acá.
-        assertNull(creado.getFechaFinPrueba());
-        assertEquals(PlanSuscripcion.TRIAL, creado.getPlanSuscripcion());
-        assertEquals(Role.OWNER, creado.getRol());
-    }
-
-    @Test
-    @DisplayName("registerOwner_Fallo_CarreraDeInsercion_TraduceAExcepcionDeNegocio")
-    void registerOwner_Fallo_CarreraDeInsercion_TraduceAExcepcionDeNegocio() {
-        RegisterRequest request = new RegisterRequest("dueno@test.com", "Password123", "Carlos");
-        when(usuarioRepository.existsByEmail("dueno@test.com")).thenReturn(false);
-        when(usuarioRepository.saveAndFlush(any()))
-                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
-
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> authService.registerOwner(request)
-        );
-
-        assertEquals("El email ya está registrado", exception.getMessage());
     }
 
     @Test

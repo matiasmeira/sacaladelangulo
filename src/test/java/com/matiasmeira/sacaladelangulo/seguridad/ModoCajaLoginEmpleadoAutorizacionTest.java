@@ -336,7 +336,7 @@ class ModoCajaLoginEmpleadoAutorizacionTest extends AbstractSecurityWebTest {
     void porIp_ElRequest31DesdeLaMismaIpDevuelve429_YOtraIpNoSeAfecta() throws Exception {
         // Límite por IP de RateLimitFilter:44 (30 cada 5 min); el cuerpo sale de RateLimitFilter.responder429.
         // No estaba cubierto: RateLimitFilterTest sólo prueba /auth/login y /registro/iniciar con el limitador
-        // mockeado, y el test de integración sólo /register/owner.
+        // mockeado, y el test de integración sólo /registro/iniciar.
         String ip = ipUnica();
         String body = cuerpo(establecimientoA.getId(), "Julian", PIN);
         for (int i = 1; i <= 30; i++) {

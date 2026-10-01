@@ -129,7 +129,7 @@ class ExpiracionPruebaServiceIntegrationTest {
     @Test
     @DisplayName("degradarPruebasVencidas_UsuarioTrialSinFechaFinPruebaIniciada_NoLoDegradaNiMandaEmail")
     void degradarPruebasVencidas_UsuarioTrialSinFechaFinPruebaIniciada_NoLoDegradaNiMandaEmail() {
-        // fechaFinPrueba=null es "trial no iniciado todavía" (ver AuthService.registerOwner /
+        // fechaFinPrueba=null es "trial no iniciado todavía" (ver RegistroVerificacionService.completarRegistro /
         // AdminEstablecimientoVerificacionService.iniciarPruebaAlVerificar), no "vencido hace
         // mucho": si la query de buscarVencidos alguna vez dejara de excluir explícitamente
         // este caso, este dueño perdería el plan TRIAL sin haber arrancado nunca su prueba,

@@ -5,7 +5,6 @@ import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.CompletarRegistroRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.EmpleadoLoginRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.IniciarRegistroRequest;
-import com.matiasmeira.sacaladelangulo.auth.dto.RegisterRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.ResetPasswordRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.SolicitarRecuperacionPasswordRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarCodigoRegistroRequest;
@@ -55,10 +54,17 @@ public class AuthController {
         ));
     }
 
+    /**
+     * Alta de dueños en 1 solo paso, deprecada: creaba el usuario sin verificar el email.
+     * El alta de dueño pasa por el registro con verificación (tipo=DUENO). Misma razón y
+     * mismo patrón que /register/player.
+     */
     @PostMapping("/register/owner")
-    public ResponseEntity<AuthResponse> registerOwner(@RequestBody @Valid RegisterRequest request) {
-        AuthResponse response = authService.registerOwner(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<Map<String, String>> registerOwnerDeprecado() {
+        return ResponseEntity.status(HttpStatus.GONE).body(Map.of(
+                "error", "Este endpoint fue dado de baja. Registrate con verificación de email: " +
+                        "POST /api/v1/auth/registro/iniciar con tipo=DUENO, luego POST /api/v1/auth/registro/completar."
+        ));
     }
 
     @PostMapping("/login")

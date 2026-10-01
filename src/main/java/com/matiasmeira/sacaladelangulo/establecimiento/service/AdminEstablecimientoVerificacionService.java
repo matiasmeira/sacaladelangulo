@@ -94,7 +94,7 @@ public class AdminEstablecimientoVerificacionService {
 
     /**
      * Arranca la prueba gratuita del dueño en el momento en que se VERIFICA un
-     * establecimiento, no cuando se registra (ver AuthService.registerOwner): un dueño puede
+     * establecimiento, no cuando se registra (ver RegistroVerificacionService.completarRegistro): un dueño puede
      * tardar en juntar los datos de verificación o esperar a que un admin lo revise, y ese
      * tiempo no debería descontarse de su mes de prueba.
      *

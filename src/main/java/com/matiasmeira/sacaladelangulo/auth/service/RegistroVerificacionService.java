@@ -203,7 +203,7 @@ public class RegistroVerificacionService {
 
         // El rol sale del token pendiente (lo fijó iniciarRegistro), nunca del cliente. Un dueño
         // arranca en TRIAL con fechaFinPrueba null: la prueba corre recién cuando un admin
-        // verifica su primer establecimiento (ver AuthService.registerOwner).
+        // verifica su primer establecimiento (ver RegistroVerificacionService.completarRegistro).
         Role rol = tokenVerificacion.getRol();
         Usuario usuario = Usuario.builder()
                 .email(email)

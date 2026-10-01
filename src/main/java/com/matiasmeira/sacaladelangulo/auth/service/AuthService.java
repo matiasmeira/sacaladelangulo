@@ -3,7 +3,6 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.EmpleadoLoginRequest;
-import com.matiasmeira.sacaladelangulo.auth.dto.RegisterRequest;
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
 import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
@@ -42,9 +41,6 @@ public class AuthService {
     private static final long LOGIN_VENTANA_MILLIS = Duration.ofMinutes(5).toMillis();
     private static final int LOGIN_EMPLEADO_INTENTOS_MAXIMOS = 5;
     private static final long LOGIN_EMPLEADO_VENTANA_MILLIS = Duration.ofMinutes(5).toMillis();
-    /** Mismo criterio que RegistroVerificacionService.iniciarRegistro para el registro de jugadores. */
-    private static final int REGISTER_OWNER_INTENTOS_MAXIMOS = 3;
-    private static final long REGISTER_OWNER_VENTANA_MILLIS = Duration.ofMinutes(15).toMillis();
 
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
@@ -54,44 +50,6 @@ public class AuthService {
 
     @Value("${jwt.empleado-expiration-millis:900000}")
     private long empleadoExpirationMillis;
-
-    public AuthResponse registerOwner(RegisterRequest request) {
-        String email = normalizarEmail(request.email());
-        if (!rateLimiterService.tryConsume("register-owner:" + email, REGISTER_OWNER_INTENTOS_MAXIMOS, REGISTER_OWNER_VENTANA_MILLIS)) {
-            throw new RateLimitExceededException("Demasiadas solicitudes de registro. Intentá nuevamente en unos minutos.");
-        }
-        if (usuarioRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("El email ya está registrado");
-        }
-
-        // fechaFinPrueba queda null a propósito: el trial arranca recién cuando un admin
-        // verifica el primer establecimiento del dueño (ver
-        // AdminEstablecimientoVerificacionService.iniciarPruebaAlVerificar), no al
-        // registrarse -- un dueño no debería perder días de prueba mientras junta los datos
-        // de verificación o espera que un admin lo revise.
-        Usuario usuario = Usuario.builder()
-                .email(email)
-                .password(passwordEncoder.encode(request.password()))
-                .nombre(request.nombre())
-                .telefono(null)
-                .rol(Role.OWNER)
-                .planSuscripcion(PlanSuscripcion.TRIAL)
-                .isActive(true)
-                .emailVerified(false)
-                .telefonoVerificado(false)
-                .build();
-
-        try {
-            usuarioRepository.saveAndFlush(usuario);
-        } catch (DataIntegrityViolationException ex) {
-            // existsByEmail + save no es atómico: dos registros casi simultáneos con el
-            // mismo email pueden pasar ambos el chequeo antes de que cualquiera inserte
-            // (ver M8 en la auditoría). El constraint único de "usuarios.email" lo traduce acá.
-            throw new IllegalArgumentException("El email ya está registrado");
-        }
-        var userDetails = UsuarioUserDetailsMapper.map(usuario);
-        return new AuthResponse(jwtService.generateToken(userDetails));
-    }
 
     public AuthResponse authenticate(AuthRequest request) {
         String email = normalizarEmail(request.email());

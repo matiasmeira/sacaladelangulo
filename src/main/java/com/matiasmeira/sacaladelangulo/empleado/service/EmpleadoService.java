@@ -99,7 +99,7 @@ public class EmpleadoService {
             // mostrador (ver AuthServiceEmpleadoHomonimoTest). El índice único parcial de V23
             // lo frena en la base; acá se traduce al mismo mensaje de negocio que el guard,
             // en vez de dejar salir el 409 genérico de GlobalExceptionHandler. Mismo patrón
-            // que AuthService.registerOwner con el único de usuarios.email.
+            // que RegistroVerificacionService.completarRegistro con el único de usuarios.email.
             log.debug("Carrera al crear un empleado de nombre duplicado en el establecimiento {}", establecimientoId);
             throw new IllegalArgumentException("Ya existe un empleado con ese nombre en este establecimiento");
         }

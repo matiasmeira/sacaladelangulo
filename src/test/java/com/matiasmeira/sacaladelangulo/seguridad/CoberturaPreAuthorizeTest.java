@@ -41,7 +41,7 @@ class CoberturaPreAuthorizeTest extends AbstractSecurityWebTest {
             // --- Públicos por la chain: permitAll en SecurityConfig, sin sesión ---
             Map.entry("POST /api/v1/auth/login", "Público (permitAll /api/v1/auth/**): login; rate limit por IP."),
             Map.entry("POST /api/v1/auth/empleados/login", "Público (permitAll /api/v1/auth/**): login de mostrador por PIN; rate limit por IP."),
-            Map.entry("POST /api/v1/auth/register/owner", "Público (permitAll /api/v1/auth/**): alta de dueños; rate limit por IP."),
+            Map.entry("POST /api/v1/auth/register/owner", "Público (permitAll /api/v1/auth/**): alta de dueños (endpoint deprecado, 410)."),
             Map.entry("POST /api/v1/auth/register/player", "Público (permitAll /api/v1/auth/**): alta de jugadores (endpoint deprecado)."),
             Map.entry("POST /api/v1/auth/registro/iniciar", "Público (permitAll /api/v1/auth/**): paso 1 del registro de jugadores; rate limit por IP."),
             Map.entry("POST /api/v1/auth/registro/verificar-codigo", "Público (permitAll /api/v1/auth/**): paso 2 del registro de jugadores."),

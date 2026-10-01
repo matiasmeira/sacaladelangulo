@@ -80,7 +80,7 @@ class UsuarioRepositoryFinPruebaTest {
     @Test
     @DisplayName("findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull_FechaFinPruebaNula_NoLoDevuelve")
     void findByFechaFinPruebaBetweenAndAvisoFinPrueba7EnviadoFalseAndDeletedAtIsNull_FechaFinPruebaNula_NoLoDevuelve() {
-        // fechaFinPrueba=null es "trial no iniciado todavía" (ver AuthService.registerOwner),
+        // fechaFinPrueba=null es "trial no iniciado todavía" (ver RegistroVerificacionService.completarRegistro),
         // no una fecha que pueda caer dentro de ningún rango: NULL BETWEEN x AND y es UNKNOWN
         // en SQL, así que este finder ya lo excluye por construcción. Se deja explícito acá
         // (mismo criterio que UsuarioRepositoryExpiracionPruebaTest) para que un futuro

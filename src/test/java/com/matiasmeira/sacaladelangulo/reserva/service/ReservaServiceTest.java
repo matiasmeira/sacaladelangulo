@@ -2214,7 +2214,8 @@ class ReservaServiceTest {
                 reserva.getPrecioTotal(), reserva.getSenaPagada(), null, null, null, null, null, null);
 
         when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
-        when(reservaRepository.findByJugadorId(jugador.getId(), pageable)).thenReturn(pageReservas);
+        when(reservaRepository.findByJugadorIdAndEstadoNot(jugador.getId(), EstadoReserva.CANCELADA_PRERESERVA, pageable))
+                .thenReturn(pageReservas);
         when(reservaMapper.mapToResponse(reserva)).thenReturn(response);
 
         // Act
@@ -2223,7 +2224,7 @@ class ReservaServiceTest {
         // Assert
         assert resultado.getTotalElements() == 1;
         assert resultado.getContent().get(0).id().equals(70L);
-        verify(reservaRepository).findByJugadorId(jugador.getId(), pageable);
+        verify(reservaRepository).findByJugadorIdAndEstadoNot(jugador.getId(), EstadoReserva.CANCELADA_PRERESERVA, pageable);
         verify(reservaRepository, never()).findByJugadorIdAndEstado(any(), any(), any());
     }
 
@@ -2244,7 +2245,23 @@ class ReservaServiceTest {
         // Assert
         assert resultado.getTotalElements() == 0;
         verify(reservaRepository).findByJugadorIdAndEstado(jugador.getId(), EstadoReserva.CANCELADA, pageable);
-        verify(reservaRepository, never()).findByJugadorId(any(), any());
+        verify(reservaRepository, never()).findByJugadorIdAndEstadoNot(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("obtenerMisReservas_FiltroExplicitoCanceladaPrereserva_RespetaLoPedido")
+    void obtenerMisReservas_FiltroExplicitoCanceladaPrereserva_RespetaLoPedido() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Reserva> pageVacia = new PageImpl<>(List.of(), pageable, 0);
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(reservaRepository.findByJugadorIdAndEstado(jugador.getId(), EstadoReserva.CANCELADA_PRERESERVA, pageable))
+                .thenReturn(pageVacia);
+
+        reservaService.obtenerMisReservas(jugador.getEmail(), EstadoReserva.CANCELADA_PRERESERVA, pageable);
+
+        verify(reservaRepository).findByJugadorIdAndEstado(jugador.getId(), EstadoReserva.CANCELADA_PRERESERVA, pageable);
+        verify(reservaRepository, never()).findByJugadorIdAndEstadoNot(any(), any(), any());
     }
 
     /**

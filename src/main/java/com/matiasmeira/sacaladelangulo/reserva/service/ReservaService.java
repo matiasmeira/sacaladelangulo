@@ -978,13 +978,19 @@ public class ReservaService {
 
     /**
      * Lista las reservas del jugador autenticado, opcionalmente filtradas por estado.
+     * Sin filtro se omiten las pre-reservas vencidas (CANCELADA_PRERESERVA: la seña no se
+     * pagó a tiempo y el job las liberó), que no son una reserva que el jugador haya tenido;
+     * las CANCELADA y las PENDIENTE_SENA sí aparecen. Con filtro explícito se respeta lo
+     * pedido, incluso CANCELADA_PRERESERVA. Una PENDIENTE_SENA recién vencida que el job
+     * (cada 60 s) todavía no marcó se sigue listando hasta la próxima corrida.
      */
     @Transactional(readOnly = true)
     public Page<ReservaResponse> obtenerMisReservas(String email, EstadoReserva estado, Pageable pageable) {
         Usuario jugador = buscarUsuarioPorEmail(email);
         Pageable pageableFinal = capPageSize(pageable);
         Page<Reserva> reservas = (estado == null)
-                ? reservaRepository.findByJugadorId(jugador.getId(), pageableFinal)
+                ? reservaRepository.findByJugadorIdAndEstadoNot(
+                        jugador.getId(), EstadoReserva.CANCELADA_PRERESERVA, pageableFinal)
                 : reservaRepository.findByJugadorIdAndEstado(jugador.getId(), estado, pageableFinal);
         return reservas.map(reservaMapper::mapToResponse);
     }

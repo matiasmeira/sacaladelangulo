@@ -133,13 +133,17 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     );
 
     /**
-     * "Mis reservas" del jugador. El @EntityGraph acá evita sobre todo las consultas por
+     * "Mis reservas" del jugador sin filtro: todos los estados salvo el dado (el service pasa
+     * CANCELADA_PRERESERVA). El @EntityGraph acá evita sobre todo las consultas por
      * `cancha` (una por cada cancha distinta de la página); `jugador` es siempre el mismo
      * para todas las filas, pero se incluye igual para que la garantía sea explícita y no
      * dependa del caché de primer nivel.
      */
     @EntityGraph(attributePaths = {"jugador", "cancha", "turnoFijo"})
-    org.springframework.data.domain.Page<Reserva> findByJugadorId(Long jugadorId, org.springframework.data.domain.Pageable pageable);
+    org.springframework.data.domain.Page<Reserva> findByJugadorIdAndEstadoNot(
+            Long jugadorId,
+            com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva estado,
+            org.springframework.data.domain.Pageable pageable);
 
     /**
      * Reservas futuras (fechaHoraInicio posterior a "ahora") de un jugador en los estados

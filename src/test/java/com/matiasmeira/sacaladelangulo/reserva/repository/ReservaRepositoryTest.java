@@ -634,6 +634,51 @@ class ReservaRepositoryTest {
                 ((LocalDateTime) fila[2]).truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
     }
 
+    @Test
+    @DisplayName("findByJugadorIdAndEstadoNot_ExcluyeSoloElEstadoDadoYSoloDelJugador")
+    void findByJugadorIdAndEstadoNot_ExcluyeSoloElEstadoDadoYSoloDelJugador() {
+        Usuario dueno = entityManager.persist(Usuario.builder()
+                .email("dueno-mis@test.com").password("hash").nombre("Dueno").rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.TRIAL).isActive(true).emailVerified(true)
+                .telefonoVerificado(false).build());
+        Usuario jugador = entityManager.persist(Usuario.builder()
+                .email("jugador-mis@test.com").password("hash").nombre("Jugador").rol(Role.PLAYER)
+                .planSuscripcion(PlanSuscripcion.TRIAL).isActive(true).emailVerified(true)
+                .telefonoVerificado(false).build());
+        Usuario otro = entityManager.persist(Usuario.builder()
+                .email("otro-mis@test.com").password("hash").nombre("Otro").rol(Role.PLAYER)
+                .planSuscripcion(PlanSuscripcion.TRIAL).isActive(true).emailVerified(true)
+                .telefonoVerificado(false).build());
+        Establecimiento establecimiento = entityManager.persist(Establecimientos.establecimientoOperativo(b -> b
+                .nombre("Complejo Mis").direccion("Calle Mis 123").slug("complejo-mis")
+                .latitud(-34.6).longitud(-58.4).requiereSena(false).dueno(dueno)));
+        Cancha cancha = entityManager.persist(Cancha.builder()
+                .nombre("Cancha 1").deportes(Set.of(Deporte.PADEL)).isActive(true)
+                .precioBase(BigDecimal.valueOf(1000)).montoSena(BigDecimal.valueOf(200))
+                .establecimiento(establecimiento).build());
+        LocalDateTime base = LocalDateTime.now().plusDays(1);
+        int hora = 0;
+        for (EstadoReserva estado : EstadoReserva.values()) {
+            Reserva r = reservaDe(cancha, estado, base.plusHours(hora++));
+            r.setJugador(jugador);
+            entityManager.persist(r);
+        }
+        Reserva ajena = reservaDe(cancha, EstadoReserva.CONFIRMADA, base.plusHours(hora));
+        ajena.setJugador(otro);
+        entityManager.persist(ajena);
+        entityManager.flush();
+        entityManager.clear();
+
+        var pagina = reservaRepository.findByJugadorIdAndEstadoNot(
+                jugador.getId(), EstadoReserva.CANCELADA_PRERESERVA, org.springframework.data.domain.PageRequest.of(0, 50));
+
+        assertEquals(EstadoReserva.values().length - 1, pagina.getTotalElements());
+        assertEquals(false, pagina.getContent().stream()
+                .anyMatch(r -> r.getEstado() == EstadoReserva.CANCELADA_PRERESERVA));
+        assertEquals(true, pagina.getContent().stream()
+                .allMatch(r -> r.getJugador().getId().equals(jugador.getId())));
+    }
+
     private Reserva reservaDeTurnoFijo(Cancha cancha, TurnoFijo turnoFijo, EstadoReserva estado, LocalDateTime fechaHoraInicio) {
         return Reserva.builder()
                 .cancha(cancha)

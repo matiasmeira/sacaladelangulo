@@ -75,4 +75,35 @@ class MisReservasAutorizacionTest extends AbstractReservaSecurityTest {
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].id").value(delOtroJugador.getId()));
     }
+
+    @Test
+    @DisplayName("sinFiltro_ExcluyePreReservasVencidas_YMuestraElRestoDeLosEstados")
+    void sinFiltro_ExcluyePreReservasVencidas_YMuestraElRestoDeLosEstados() throws Exception {
+        Reserva vencida = reserva(canchaA, jugador, EstadoReserva.CANCELADA_PRERESERVA, maniana().atTime(11, 0), 60);
+        Reserva cancelada = reserva(canchaA, jugador, EstadoReserva.CANCELADA, maniana().atTime(12, 0), 60);
+        Reserva pendiente = reserva(canchaA, jugador, EstadoReserva.PENDIENTE_SENA, maniana().atTime(13, 0), 60);
+        Reserva finalizada = reserva(canchaA, jugador, EstadoReserva.FINALIZADA, maniana().atTime(14, 0), 60);
+        Reserva ausente = reserva(canchaA, jugador, EstadoReserva.AUSENTE, maniana().atTime(15, 0), 60);
+
+        misReservas(jugador).andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(6))
+                .andExpect(jsonPath("$.content[*].id", containsInAnyOrder(
+                        delJugadorEnA.getId().intValue(), delJugadorEnB.getId().intValue(),
+                        cancelada.getId().intValue(), pendiente.getId().intValue(),
+                        finalizada.getId().intValue(), ausente.getId().intValue())))
+                .andExpect(jsonPath("$.content[?(@.id == " + vencida.getId() + ")]").isEmpty());
+    }
+
+    @Test
+    @DisplayName("conFiltroExplicitoCanceladaPrereserva_RespetaLoPedido")
+    void conFiltroExplicitoCanceladaPrereserva_RespetaLoPedido() throws Exception {
+        Reserva vencida = reserva(canchaA, jugador, EstadoReserva.CANCELADA_PRERESERVA, maniana().atTime(11, 0), 60);
+
+        mockMvc.perform(get("/api/v1/reservas/mis-reservas")
+                        .param("estado", "CANCELADA_PRERESERVA")
+                        .header("Authorization", bearer(jugador)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(vencida.getId()));
+    }
 }

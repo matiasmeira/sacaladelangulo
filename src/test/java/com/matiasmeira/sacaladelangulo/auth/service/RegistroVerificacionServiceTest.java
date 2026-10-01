@@ -3,8 +3,11 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.CompletarRegistroRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.IniciarRegistroRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.TipoRegistro;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarCodigoRegistroResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarTokenResponse;
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
+import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.TokenVerificacionEmail;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.TokenVerificacionEmailRepository;
@@ -32,6 +35,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -473,5 +477,120 @@ class RegistroVerificacionServiceTest {
                 () -> registroVerificacionService.verificarCodigo("nuevo@test.com", "123456"));
 
         verify(tokenVerificacionEmailRepository, never()).findByEmail(anyString());
+    }
+
+    // ---- Tipo de registro (jugador / dueño) ----
+
+    private TokenVerificacionEmail iniciarYCapturarToken(IniciarRegistroRequest request) {
+        when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
+        registroVerificacionService.iniciarRegistro(request);
+        ArgumentCaptor<TokenVerificacionEmail> captor = ArgumentCaptor.forClass(TokenVerificacionEmail.class);
+        verify(tokenVerificacionEmailRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_TipoDueno_GuardaRolOwnerEnElTokenYLoLlevaEnElEvento")
+    void iniciarRegistro_TipoDueno_GuardaRolOwnerEnElTokenYLoLlevaEnElEvento() {
+        TokenVerificacionEmail guardado = iniciarYCapturarToken(
+                new IniciarRegistroRequest("nuevo@test.com", null, TipoRegistro.DUENO));
+
+        assertEquals(Role.OWNER, guardado.getRol());
+        ArgumentCaptor<VerificacionEmailSolicitadaEvent> eventoCaptor = ArgumentCaptor.forClass(VerificacionEmailSolicitadaEvent.class);
+        verify(eventPublisher).publishEvent(eventoCaptor.capture());
+        assertEquals(Role.OWNER, eventoCaptor.getValue().rol());
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_TipoJugador_GuardaRolPlayer")
+    void iniciarRegistro_TipoJugador_GuardaRolPlayer() {
+        TokenVerificacionEmail guardado = iniciarYCapturarToken(
+                new IniciarRegistroRequest("nuevo@test.com", null, TipoRegistro.JUGADOR));
+
+        assertEquals(Role.PLAYER, guardado.getRol());
+    }
+
+    @Test
+    @DisplayName("iniciarRegistro_SinTipo_GuardaRolPlayerYElEventoLoLleva")
+    void iniciarRegistro_SinTipo_GuardaRolPlayerYElEventoLoLleva() {
+        TokenVerificacionEmail guardado = iniciarYCapturarToken(new IniciarRegistroRequest("nuevo@test.com"));
+
+        assertEquals(Role.PLAYER, guardado.getRol());
+        ArgumentCaptor<VerificacionEmailSolicitadaEvent> eventoCaptor = ArgumentCaptor.forClass(VerificacionEmailSolicitadaEvent.class);
+        verify(eventPublisher).publishEvent(eventoCaptor.capture());
+        assertEquals(Role.PLAYER, eventoCaptor.getValue().rol());
+    }
+
+    @Test
+    @DisplayName("verificarCodigo_RotaElTokenYConservaElRolDelPendiente")
+    void verificarCodigo_RotaElTokenYConservaElRolDelPendiente() {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .tokenHash(TokenHasher.sha256Hex("token-original"))
+                .codigoHash(TokenHasher.sha256Hex("123456"))
+                .rol(Role.OWNER)
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        when(tokenVerificacionEmailRepository.findByEmail("nuevo@test.com")).thenReturn(Optional.of(token));
+
+        VerificarCodigoRegistroResponse response = registroVerificacionService.verificarCodigo("nuevo@test.com", "123456");
+
+        ArgumentCaptor<TokenVerificacionEmail> tokenCaptor = ArgumentCaptor.forClass(TokenVerificacionEmail.class);
+        verify(tokenVerificacionEmailRepository).save(tokenCaptor.capture());
+        assertEquals(TokenHasher.sha256Hex(response.token()), tokenCaptor.getValue().getTokenHash());
+        assertEquals(Role.OWNER, tokenCaptor.getValue().getRol());
+    }
+
+    private Usuario completarConPendiente(Role rolDelToken) {
+        TokenVerificacionEmail token = TokenVerificacionEmail.builder()
+                .id(1L)
+                .email("nuevo@test.com")
+                .tokenHash(TokenHasher.sha256Hex("token-valido"))
+                .rol(rolDelToken)
+                .fechaExpiracion(LocalDateTime.now().plusMinutes(10))
+                .build();
+        when(tokenVerificacionEmailRepository.findByTokenHash(TokenHasher.sha256Hex("token-valido"))).thenReturn(Optional.of(token));
+        when(usuarioRepository.existsByEmail("nuevo@test.com")).thenReturn(false);
+        when(passwordEncoder.encode("Password123")).thenReturn("encoded-password");
+        when(jwtService.generateToken(any(UserDetails.class))).thenReturn("jwt-token");
+
+        registroVerificacionService.completarRegistro(
+                new CompletarRegistroRequest("token-valido", "Juan", "1122334455", "Password123"));
+
+        ArgumentCaptor<Usuario> usuarioCaptor = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).saveAndFlush(usuarioCaptor.capture());
+        return usuarioCaptor.getValue();
+    }
+
+    @Test
+    @DisplayName("completarRegistro_PendienteOwner_CreaOwnerConTrialSinFechaFinYEmailVerificado")
+    void completarRegistro_PendienteOwner_CreaOwnerConTrialSinFechaFinYEmailVerificado() {
+        Usuario guardado = completarConPendiente(Role.OWNER);
+
+        assertEquals(Role.OWNER, guardado.getRol());
+        assertEquals(PlanSuscripcion.TRIAL, guardado.getPlanSuscripcion());
+        assertNull(guardado.getFechaFinPrueba());
+        assertTrue(guardado.getEmailVerified());
+        assertTrue(guardado.getIsActive());
+
+        ArgumentCaptor<RegistroCompletadoEvent> eventoCaptor = ArgumentCaptor.forClass(RegistroCompletadoEvent.class);
+        verify(eventPublisher).publishEvent(eventoCaptor.capture());
+        assertEquals(Role.OWNER, eventoCaptor.getValue().rol());
+    }
+
+    @Test
+    @DisplayName("completarRegistro_PendientePlayer_CreaPlayerConPlanFree")
+    void completarRegistro_PendientePlayer_CreaPlayerConPlanFree() {
+        Usuario guardado = completarConPendiente(Role.PLAYER);
+
+        assertEquals(Role.PLAYER, guardado.getRol());
+        assertEquals(PlanSuscripcion.FREE, guardado.getPlanSuscripcion());
+        assertNull(guardado.getFechaFinPrueba());
+        assertTrue(guardado.getEmailVerified());
+
+        ArgumentCaptor<RegistroCompletadoEvent> eventoCaptor = ArgumentCaptor.forClass(RegistroCompletadoEvent.class);
+        verify(eventPublisher).publishEvent(eventoCaptor.capture());
+        assertEquals(Role.PLAYER, eventoCaptor.getValue().rol());
     }
 }

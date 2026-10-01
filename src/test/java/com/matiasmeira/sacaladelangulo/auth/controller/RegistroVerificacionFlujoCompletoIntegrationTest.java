@@ -1,6 +1,8 @@
 package com.matiasmeira.sacaladelangulo.auth.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
+import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.auth.service.VerificacionEmailSolicitadaEvent;
@@ -17,6 +19,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -123,6 +127,62 @@ class RegistroVerificacionFlujoCompletoIntegrationTest {
 
         assertTrue(usuarioRepository.findByEmail(email).isEmpty(),
                 "Un token adulterado no debe permitir crear la cuenta");
+    }
+
+    @Test
+    @DisplayName("tipoDueno_IniciarVerificarPorCodigoYCompletar_CreaOwnerTrialVerificadoYElJwtLoIdentificaComoOwner")
+    void tipoDueno_IniciarVerificarPorCodigoYCompletar_CreaOwnerTrialVerificadoYElJwtLoIdentificaComoOwner() throws Exception {
+        String email = "dueno-e2e@test.com";
+
+        mockMvc.perform(post("/api/v1/auth/registro/iniciar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("email", email, "tipo", "DUENO"))))
+                .andExpect(status().isOk());
+
+        VerificacionEmailSolicitadaEvent evento = events.stream(VerificacionEmailSolicitadaEvent.class)
+                .reduce((primero, ultimo) -> ultimo).orElseThrow();
+        assertEquals(Role.OWNER, evento.rol());
+
+        // Camino por código: verificar-codigo rota el token y el rol tiene que sobrevivir.
+        String respuestaCodigo = mockMvc.perform(post("/api/v1/auth/registro/verificar-codigo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("email", email, "codigo", evento.codigo()))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String token = objectMapper.readTree(respuestaCodigo).get("token").asText();
+
+        String respuestaCompletar = mockMvc.perform(post("/api/v1/auth/registro/completar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "token", token,
+                                "nombre", "Ana",
+                                "telefono", "1122334455",
+                                "password", "Password123"
+                        ))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String jwt = objectMapper.readTree(respuestaCompletar).get("token").asText();
+
+        Usuario usuario = usuarioRepository.findByEmail(email).orElseThrow();
+        assertEquals(Role.OWNER, usuario.getRol());
+        assertEquals(PlanSuscripcion.TRIAL, usuario.getPlanSuscripcion());
+        assertNull(usuario.getFechaFinPrueba());
+        assertTrue(usuario.getEmailVerified());
+
+        mockMvc.perform(get("/api/v1/usuarios/me").header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rol").value("OWNER"))
+                .andExpect(jsonPath("$.planSuscripcion").value("TRIAL"))
+                .andExpect(jsonPath("$.emailVerified").value(true));
+    }
+
+    @Test
+    @DisplayName("iniciar_TipoDesconocido_Rechaza400")
+    void iniciar_TipoDesconocido_Rechaza400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/registro/iniciar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("email", "tipo-raro@test.com", "tipo", "ADMIN"))))
+                .andExpect(status().isBadRequest());
     }
 
     private String ultimoLinkPublicado() {

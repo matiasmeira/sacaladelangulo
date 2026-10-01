@@ -47,4 +47,13 @@ public class TokenVerificacionEmail {
     @Column(nullable = false)
     @Builder.Default
     private Integer intentos = 0;
+
+    /**
+     * Rol con el que se crea la cuenta al completar el registro (PLAYER u OWNER, ver
+     * TipoRegistro). Sobrevive a la rotación de token de verificarCodigo.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private Role rol = Role.PLAYER;
 }

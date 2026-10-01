@@ -1,5 +1,6 @@
 package com.matiasmeira.sacaladelangulo.auth.service;
 
+import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.core.email.EmailRenderer;
 import com.matiasmeira.sacaladelangulo.core.email.EmailService;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +33,8 @@ public class RegistroVerificacionEmailListener {
     public void enviarEmailDeVerificacion(VerificacionEmailSolicitadaEvent evento) {
         String html = emailRenderer.render("verificacion", Map.of(
                 "linkVerificacion", evento.linkVerificacion(),
-                "codigo", evento.codigo()
+                "codigo", evento.codigo(),
+                "esDueno", evento.rol() == Role.OWNER
         ));
         emailService.enviar(evento.email(), ASUNTO_VERIFICACION, html);
     }
@@ -40,7 +42,8 @@ public class RegistroVerificacionEmailListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void enviarEmailDeBienvenida(RegistroCompletadoEvent evento) {
-        String html = emailRenderer.render("bienvenida", Map.of("nombre", evento.nombre()));
+        String plantilla = evento.rol() == Role.OWNER ? "bienvenida-dueno" : "bienvenida";
+        String html = emailRenderer.render(plantilla, Map.of("nombre", evento.nombre()));
         emailService.enviar(evento.email(), ASUNTO_BIENVENIDA, html);
     }
 }

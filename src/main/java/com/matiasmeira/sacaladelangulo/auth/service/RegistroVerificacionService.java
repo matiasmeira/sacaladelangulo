@@ -3,6 +3,7 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 import com.matiasmeira.sacaladelangulo.auth.dto.AuthResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.CompletarRegistroRequest;
 import com.matiasmeira.sacaladelangulo.auth.dto.IniciarRegistroRequest;
+import com.matiasmeira.sacaladelangulo.auth.dto.TipoRegistro;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarCodigoRegistroResponse;
 import com.matiasmeira.sacaladelangulo.auth.dto.VerificarTokenResponse;
 import com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion;
@@ -34,7 +35,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Servicio de negocio para el registro de jugadores en 2 pasos: primero se verifica el
+ * Servicio de negocio para el registro de jugadores y dueños en 2 pasos: primero se verifica el
  * email mediante un link (token opaco con expiración), y recién al confirmarlo se piden
  * el resto de los datos personales y la contraseña. Separado de AuthService igual que
  * UsuarioService lo está para la verificación de teléfono por OTP: es un flujo propio,
@@ -103,6 +104,7 @@ public class RegistroVerificacionService {
         }
 
         tokenVerificacionEmailRepository.deleteByEmail(email);
+        Role rol = TipoRegistro.rolDe(request.tipo());
 
         String token = UUID.randomUUID().toString();
         String codigo = String.format("%06d", random.nextInt(1000000));
@@ -113,6 +115,7 @@ public class RegistroVerificacionService {
                 .tokenHash(TokenHasher.sha256Hex(token))
                 .codigoHash(TokenHasher.sha256Hex(codigo))
                 .fechaExpiracion(LocalDateTime.now().plusMinutes(TOKEN_EXPIRACION_MINUTOS))
+                .rol(rol)
                 .build();
         tokenVerificacionEmailRepository.save(tokenVerificacion);
 
@@ -121,7 +124,7 @@ public class RegistroVerificacionService {
         if (UrlUtils.esRutaInternaSegura(request.volverA())) {
             linkVerificacion += "&volverA=" + URLEncoder.encode(request.volverA(), StandardCharsets.UTF_8);
         }
-        eventPublisher.publishEvent(new VerificacionEmailSolicitadaEvent(email, linkVerificacion, codigo));
+        eventPublisher.publishEvent(new VerificacionEmailSolicitadaEvent(email, linkVerificacion, codigo, rol));
         log.info("Token de verificación de registro generado para {}", email);
     }
 
@@ -183,7 +186,7 @@ public class RegistroVerificacionService {
     }
 
     /**
-     * Paso 3: vuelve a validar el token por seguridad, crea el Usuario (rol PLAYER, email
+     * Paso 3: vuelve a validar el token por seguridad, crea el Usuario (con el rol del token: PLAYER u OWNER, email
      * ya verificado), invalida el token utilizado y devuelve el JWT de sesión.
      *
      * @param request DTO con el token y los datos personales/contraseña del jugador
@@ -198,13 +201,17 @@ public class RegistroVerificacionService {
             throw new IllegalArgumentException("El email ya está registrado");
         }
 
+        // El rol sale del token pendiente (lo fijó iniciarRegistro), nunca del cliente. Un dueño
+        // arranca en TRIAL con fechaFinPrueba null: la prueba corre recién cuando un admin
+        // verifica su primer establecimiento (ver AuthService.registerOwner).
+        Role rol = tokenVerificacion.getRol();
         Usuario usuario = Usuario.builder()
                 .email(email)
                 .password(passwordEncoder.encode(request.password()))
                 .nombre(request.nombre())
                 .telefono(request.telefono())
-                .rol(Role.PLAYER)
-                .planSuscripcion(PlanSuscripcion.FREE)
+                .rol(rol)
+                .planSuscripcion(rol == Role.OWNER ? PlanSuscripcion.TRIAL : PlanSuscripcion.FREE)
                 .isActive(true)
                 .emailVerified(true)
                 .telefonoVerificado(false)
@@ -222,7 +229,7 @@ public class RegistroVerificacionService {
         tokenVerificacionEmailRepository.delete(tokenVerificacion);
         log.info("Registro completado para {}", email);
 
-        eventPublisher.publishEvent(new RegistroCompletadoEvent(email, usuario.getNombre()));
+        eventPublisher.publishEvent(new RegistroCompletadoEvent(email, usuario.getNombre(), usuario.getRol()));
 
         // Se construye el UserDetails a partir del Usuario recién guardado en vez de
         // volver a consultar la base con loadUserByUsername (ver M4 en la auditoría).

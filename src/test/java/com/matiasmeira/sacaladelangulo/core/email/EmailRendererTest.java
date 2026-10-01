@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("EmailRenderer - Motor de plantillas Thymeleaf")
@@ -88,5 +89,36 @@ class EmailRendererTest {
         assertTrue(html.contains("15/01/2030"), "falta la 2ª fecha");
         assertTrue(html.contains("22/01/2030"), "falta la 3ª fecha");
         assertTrue(html.contains("Cancha A"));
+    }
+
+    @Test
+    @DisplayName("render_VerificacionDueno_HablaDeCargarElComplejo")
+    void render_VerificacionDueno_HablaDeCargarElComplejo() {
+        String html = new EmailRenderer().render("verificacion", Map.of(
+                "linkVerificacion", "http://x/verificar?token=t", "codigo", "123456", "esDueno", true));
+
+        assertTrue(html.contains("cargar tu complejo"));
+        assertFalse(html.contains("reservar canchas"));
+        assertTrue(html.contains("123456"));
+    }
+
+    @Test
+    @DisplayName("render_VerificacionJugador_HablaDeReservarCanchas")
+    void render_VerificacionJugador_HablaDeReservarCanchas() {
+        String html = new EmailRenderer().render("verificacion", Map.of(
+                "linkVerificacion", "http://x/verificar?token=t", "codigo", "123456", "esDueno", false));
+
+        assertTrue(html.contains("reservar canchas"));
+        assertFalse(html.contains("cargar tu complejo"));
+    }
+
+    @Test
+    @DisplayName("render_BienvenidaDueno_InvitaACargarElComplejoYNoHablaDePruebaGratis")
+    void render_BienvenidaDueno_InvitaACargarElComplejoYNoHablaDePruebaGratis() {
+        String html = new EmailRenderer().render("bienvenida-dueno", Map.of("nombre", "Ana"));
+
+        assertTrue(html.contains("Ana"));
+        assertTrue(html.contains("solicitud de verificación"));
+        assertFalse(html.toLowerCase().contains("prueba"));
     }
 }

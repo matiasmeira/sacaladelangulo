@@ -29,9 +29,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("GET /api/v1/turnos-fijos")
 class TurnoFijoListarAutorizacionTest extends AbstractTurnoFijoSecurityTest {
 
-    private static final String PERMISOS_OPERATIVOS =
-            "CREAR_RESERVA_MANUAL|FINALIZAR_RESERVA|CANCELAR_RESERVA|MARCAR_AUSENTE";
-
     private TurnoFijo serieA;
 
     @BeforeEach

@@ -30,6 +30,7 @@
 		<java.version>21</java.version>
 		<maven.compiler.source>21</maven.compiler.source>
 		<maven.compiler.target>21</maven.compiler.target>
+		<build.dir>${project.basedir}/target</build.dir>
 		<!-- Indirección a través de una property propia (en vez de hardcodear el valor
 		     directo en <excludedGroups> del plugin) para que sí se pueda overridear desde la
 		     línea de comandos: un valor de plugin fijado literal en el XML no es
@@ -194,6 +195,8 @@
 	</dependencies>
 
 	<build>
+		<!-- Permite correr el build/tests en otra carpeta (-Dbuild.dir=target-tests) sin pisar target/. -->
+		<directory>${build.dir}</directory>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>

@@ -59,7 +59,7 @@ class CoberturaPreAuthorizeTest extends AbstractSecurityWebTest {
             // --- Cuenta propia: cualquier rol autenticado opera sobre sí mismo, la identidad sale del token ---
             Map.entry("POST /api/v1/auth/logout", "Cuenta propia: authenticated() en la chain; invalida los tokens del usuario del token."),
             Map.entry("GET /api/v1/usuarios/me", "Cuenta propia: cualquier rol autenticado ve su perfil; el usuario sale del token."),
-            Map.entry("DELETE /api/v1/usuarios/me", "Cuenta propia: cualquier rol autenticado da de baja su propia cuenta; el usuario sale del token."),
+            Map.entry("DELETE /api/v1/usuarios/me", "Cuenta propia: PLAYER y OWNER dan de baja su propia cuenta (EMPLOYEE y ADMIN reciben 403 en UsuarioEliminacionService.autoeliminar); el usuario sale del token."),
             Map.entry("POST /api/v1/usuarios/telefono/solicitar-codigo", "Cuenta propia: verificación del teléfono del usuario del token."),
             Map.entry("POST /api/v1/usuarios/telefono/verificar-codigo", "Cuenta propia: verificación del teléfono del usuario del token."),
             // --- Admin con el rol validado en el service: ver pendiente 44 ---

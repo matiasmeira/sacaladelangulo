@@ -62,6 +62,14 @@ class GastoListarAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        mockMvc.perform(get("/api/v1/establecimientos/987654321/gastos").header("Authorization", bearer(duenoA)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("No autorizado en este establecimiento"));
+    }
+
+    @Test
     @DisplayName("jugador_Devuelve403")
     void jugador_Devuelve403() throws Exception {
         listar(jugador).andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(ERROR_PREAUTHORIZE));

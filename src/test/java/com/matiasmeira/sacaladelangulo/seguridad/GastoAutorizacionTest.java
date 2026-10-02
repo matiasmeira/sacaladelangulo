@@ -38,6 +38,18 @@ class GastoAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        mockMvc.perform(post("/api/v1/establecimientos/987654321/gastos")
+                        .header("Authorization", bearer(duenoA)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fecha\":\"" + LocalDate.now() + "\",\"monto\":500,\"categoria\":\"INSUMOS\","
+                                + "\"descripcion\":\"Pelotas\",\"metodoPago\":\"TRANSFERENCIA\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("No autorizado en este establecimiento"));
+        assertEquals(0, gastoRepository.count());
+    }
+
+    @Test
     @DisplayName("sinToken_Devuelve401")
     void sinToken_Devuelve401() throws Exception {
         registrar(null)

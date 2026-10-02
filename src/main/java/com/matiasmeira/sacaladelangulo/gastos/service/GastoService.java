@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService
 import com.matiasmeira.sacaladelangulo.core.pago.MetodoPago;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoMapper;
 import com.matiasmeira.sacaladelangulo.gastos.dto.GastoRequest;
@@ -51,9 +52,9 @@ public class GastoService {
 
     @Transactional
     public GastoResponse registrarGasto(Long establecimientoId, GastoRequest request, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
         validarMonto(request.monto());
         validarCamposObligatorios(request);
@@ -86,9 +87,12 @@ public class GastoService {
 
     @Transactional
     public GastoResponse editarGasto(Long establecimientoId, Long gastoId, GastoRequest request, String email) {
+        // Primero se autoriza contra el establecimiento del path; el gasto se busca acotado a él
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         Gasto gasto = gastoRepository.findByIdAndEstablecimientoId(gastoId, establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Gasto no encontrado"));
-        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(gasto.getEstablecimiento(), email);
         if (Boolean.FALSE.equals(gasto.getIsActive())) {
             throw new IllegalArgumentException("No se puede editar un gasto eliminado");
         }
@@ -148,9 +152,12 @@ public class GastoService {
      */
     @Transactional
     public void eliminarGasto(Long establecimientoId, Long gastoId, String email) {
+        // Primero se autoriza contra el establecimiento del path; el gasto se busca acotado a él
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         Gasto gasto = gastoRepository.findByIdAndEstablecimientoId(gastoId, establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Gasto no encontrado"));
-        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(gasto.getEstablecimiento(), email);
 
         if (Boolean.FALSE.equals(gasto.getIsActive())) {
             log.info("Gasto ya se encontraba eliminado. ID: {}", gastoId);
@@ -180,9 +187,9 @@ public class GastoService {
     @Transactional(readOnly = true)
     public Page<GastoResponse> listarGastos(Long establecimientoId, String email, LocalDate desde, LocalDate hasta,
                                              CategoriaGasto categoria, Pageable pageable) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         return gastoRepository.buscar(establecimientoId, desde, hasta, categoria, capPageSize(pageable))
                 .map(gastoMapper::mapToResponse);

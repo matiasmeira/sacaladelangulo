@@ -26,11 +26,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * PUT /api/v1/establecimientos/{id}/gastos/{gastoId}. @PreAuthorize OWNER/ADMIN
- * (GastoController:52). En el service, GastoService.editarGasto busca el gasto con
- * findByIdAndEstablecimientoId (línea 86: un gasto de otro complejo da 404 "Gasto no
- * encontrado", línea 87) y después AutorizacionEmpleadoService.validarPropietarioOAdmin
- * (GastoService:88; AutorizacionEmpleadoService:130-137) rechaza al dueño ajeno con
- * AccessDeniedException -> 403.
+ * (GastoController:52). En el service, GastoService.editarGasto autoriza PRIMERO contra el establecimiento
+ * del path con validarPropietarioOAdmin (pendiente 69): el dueño ajeno y el establecimiento inexistente
+ * reciben el mismo 403 (AccessDeniedException), aunque el gasto no exista. Recién después busca el gasto con
+ * findByIdAndEstablecimientoId: inexistente o de otro complejo, el mismo 404 "Gasto no encontrado".
  */
 @DisplayName("PUT /api/v1/establecimientos/{id}/gastos/{gastoId}")
 class GastoEditarAutorizacionTest extends AbstractSecurityWebTest {
@@ -114,7 +113,6 @@ class GastoEditarAutorizacionTest extends AbstractSecurityWebTest {
     @Test
     @DisplayName("duenoDeOtroEstablecimientoConPathAjeno_Devuelve403")
     void duenoDeOtroEstablecimientoConPathAjeno_Devuelve403() throws Exception {
-        // AutorizacionEmpleadoService:135 (invocado desde GastoService:88)
         editar(establecimientoA.getId(), gastoA.getId(), duenoB)
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
         assertSinCambios(gastoA);
@@ -124,11 +122,36 @@ class GastoEditarAutorizacionTest extends AbstractSecurityWebTest {
     @Test
     @DisplayName("duenoDeOtroEstablecimientoConPathPropioEIdAjeno_Devuelve404")
     void duenoDeOtroEstablecimientoConPathPropioEIdAjeno_Devuelve404() throws Exception {
-        // GastoService:87: findByIdAndEstablecimientoId (línea 86) no encuentra el gasto de A bajo B
+        // findByIdAndEstablecimientoId no encuentra el gasto de A bajo B: el mismo 404 que un gasto inexistente
         editar(establecimientoB.getId(), gastoA.getId(), duenoB)
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Gasto no encontrado"));
         assertSinCambios(gastoA);
         assertSinCambios(gastoB);
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        editar(987654321L, gastoA.getId(), duenoA)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertSinCambios(gastoA);
+    }
+
+    @Test
+    @DisplayName("duenoAjenoConGastoInexistente_Devuelve403IgualQueConGastoExistente")
+    void duenoAjenoConGastoInexistente_Devuelve403() throws Exception {
+        // Antes: 404 si el gasto no existía y 403 si existía (oráculo de existencia del gasto)
+        editar(establecimientoA.getId(), 987654321L, duenoB)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        editar(establecimientoA.getId(), gastoA.getId(), duenoB)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+    }
+
+    @Test
+    @DisplayName("duenoPropioConGastoInexistente_Devuelve404")
+    void duenoPropioConGastoInexistente_Devuelve404() throws Exception {
+        editar(establecimientoA.getId(), 987654321L, duenoA)
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Gasto no encontrado"));
     }
 
     @Test

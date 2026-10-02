@@ -197,6 +197,7 @@ class GastoServiceTest {
     void editarGasto_Fallo_NoPertenceAlEstablecimiento() {
         GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(500), CategoriaGasto.OTROS, "Otro", MetodoPago.EFECTIVO, null);
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(gastoRepository.findByIdAndEstablecimientoId(999L, establecimiento.getId())).thenReturn(Optional.empty());
 
         assertThrows(EntityNotFoundException.class,
@@ -220,6 +221,7 @@ class GastoServiceTest {
 
         GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(999), CategoriaGasto.MARKETING, "Nueva", MetodoPago.TRANSFERENCIA, "http://x");
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(gastoRepository.findByIdAndEstablecimientoId(50L, establecimiento.getId())).thenReturn(Optional.of(gasto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(gastoRepository.save(any(Gasto.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -266,6 +268,7 @@ class GastoServiceTest {
 
         GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(200), CategoriaGasto.MARKETING, "Nueva descripción", MetodoPago.EFECTIVO, null);
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(gastoRepository.findByIdAndEstablecimientoId(51L, establecimiento.getId())).thenReturn(Optional.of(gasto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(gastoRepository.save(any(Gasto.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -297,6 +300,7 @@ class GastoServiceTest {
                 .usuarioRegistro(dueno)
                 .build();
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(gastoRepository.findByIdAndEstablecimientoId(60L, establecimiento.getId())).thenReturn(Optional.of(gasto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(gastoRepository.save(any(Gasto.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -332,6 +336,7 @@ class GastoServiceTest {
                 .isActive(false)
                 .build();
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(gastoRepository.findByIdAndEstablecimientoId(61L, establecimiento.getId())).thenReturn(Optional.of(gastoYaEliminado));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
@@ -362,6 +367,7 @@ class GastoServiceTest {
 
         GastoRequest request = new GastoRequest(LocalDate.now(), BigDecimal.valueOf(200), CategoriaGasto.OTROS, "Intento de edición", MetodoPago.EFECTIVO, null);
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(gastoRepository.findByIdAndEstablecimientoId(62L, establecimiento.getId())).thenReturn(Optional.of(gastoEliminado));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 

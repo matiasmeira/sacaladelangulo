@@ -109,11 +109,30 @@ class GastoEliminarAutorizacionTest extends AbstractSecurityWebTest {
     @Test
     @DisplayName("duenoDeOtroEstablecimientoConPathPropioEIdAjeno_Devuelve404")
     void duenoDeOtroEstablecimientoConPathPropioEIdAjeno_Devuelve404() throws Exception {
-        // GastoService:149: findByIdAndEstablecimientoId (línea 148) no encuentra el gasto de A bajo B
+        // findByIdAndEstablecimientoId no encuentra el gasto de A bajo B: el mismo 404 que un gasto inexistente
         eliminar(establecimientoB.getId(), gastoA.getId(), duenoB)
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Gasto no encontrado"));
         assertEquals(true, activo(gastoA));
         assertEquals(true, activo(gastoB));
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        eliminar(987654321L, gastoA.getId(), duenoA)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertEquals(true, activo(gastoA));
+    }
+
+    @Test
+    @DisplayName("duenoAjenoConGastoInexistente_Devuelve403IgualQueConGastoExistente")
+    void duenoAjenoConGastoInexistente_Devuelve403() throws Exception {
+        // Antes: 404 si el gasto no existía y 403 si existía (oráculo de existencia del gasto)
+        eliminar(establecimientoA.getId(), 987654321L, duenoB)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        eliminar(establecimientoA.getId(), gastoA.getId(), duenoB)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertEquals(true, activo(gastoA));
     }
 
     @Test

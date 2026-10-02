@@ -37,6 +37,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -464,7 +465,8 @@ class ReservaServiceTest {
     @Test
     @DisplayName("crearReserva_Fallo_TelefonoNoVerificado")
     void crearReserva_Fallo_TelefonoNoVerificado() {
-        // Arrange
+        // Arrange: con la verificación de teléfono encendida (app.telefono.verificacion-habilitada)
+        ReflectionTestUtils.setField(reservaService, "verificacionTelefonoHabilitada", true);
         establecimiento.setRequiereTelefonoVerificado(true);
         jugador.setTelefonoVerificado(false);
         LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
@@ -486,7 +488,8 @@ class ReservaServiceTest {
     @Test
     @DisplayName("crearReserva_Exito_TelefonoVerificadoCuandoEsRequerido")
     void crearReserva_Exito_TelefonoVerificadoCuandoEsRequerido() {
-        // Arrange
+        // Arrange: verificación encendida; con teléfono verificado se crea
+        ReflectionTestUtils.setField(reservaService, "verificacionTelefonoHabilitada", true);
         establecimiento.setRequiereTelefonoVerificado(true);
         jugador.setTelefonoVerificado(true);
         LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
@@ -515,6 +518,40 @@ class ReservaServiceTest {
 
         // Assert
         assert response != null;
+        verify(reservaRepository).save(any(Reserva.class));
+    }
+
+    @Test
+    @DisplayName("crearReserva_Exito_VerificacionTelefonoApagada_NoExigeTelefonoVerificado")
+    void crearReserva_Exito_VerificacionTelefonoApagada_NoExigeTelefonoVerificado() {
+        // Arrange: propiedad en su default (false, sin setear); el establecimiento lo exige y el jugador no
+        establecimiento.setRequiereTelefonoVerificado(true);
+        jugador.setTelefonoVerificado(false);
+        LocalDateTime fechaInicio = FECHA_BASE.atTime(10, 0);
+        LocalDateTime fechaFin = FECHA_BASE.atTime(11, 0);
+        ReservaRequest request = new ReservaRequest(cancha.getId(), fechaInicio, fechaFin, Deporte.FUTBOL_5);
+
+        Reserva reservaGuardada = Reserva.builder()
+                .id(6L)
+                .jugador(jugador)
+                .cancha(cancha)
+                .fechaHoraInicio(fechaInicio)
+                .fechaHoraFin(fechaFin)
+                .estado(EstadoReserva.PENDIENTE_SENA)
+                .precioTotal(BigDecimal.valueOf(1500))
+                .senaPagada(BigDecimal.ZERO)
+                .build();
+
+        when(usuarioRepository.findByEmail(jugador.getEmail())).thenReturn(Optional.of(jugador));
+        when(canchaRepository.findById(cancha.getId())).thenReturn(Optional.of(cancha));
+        when(reservaRepository.findSuperpuestas(eq(establecimiento.getId()), eq(fechaInicio), eq(fechaFin), any())).thenReturn(List.of());
+        when(canchaRepository.findByEstablecimientoId(establecimiento.getId())).thenReturn(List.of(cancha));
+        when(reservaRepository.save(any(Reserva.class))).thenReturn(reservaGuardada);
+
+        // Act
+        assertDoesNotThrow(() -> reservaService.crearReserva(request, jugador.getEmail()));
+
+        // Assert
         verify(reservaRepository).save(any(Reserva.class));
     }
 

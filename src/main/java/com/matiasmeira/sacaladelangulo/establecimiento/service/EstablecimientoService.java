@@ -17,6 +17,7 @@ import com.matiasmeira.sacaladelangulo.feedback.model.Feedback;
 import com.matiasmeira.sacaladelangulo.feedback.repository.FeedbackRepository;
 import com.matiasmeira.sacaladelangulo.publico.service.ComplejoDetalleCache;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +46,9 @@ public class EstablecimientoService {
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
     private final SlugGenerator slugGenerator;
     private final ComplejoDetalleCache complejoDetalleCache;
+
+    @Value("${app.telefono.verificacion-habilitada:false}")
+    private boolean verificacionTelefonoHabilitada;
 
     /**
      * El límite cuenta los establecimientos del dueño que NO están eliminados
@@ -77,7 +81,7 @@ public class EstablecimientoService {
                 .latitud(request.latitud())
                 .longitud(request.longitud())
                 .requiereSena(requiereSenaForzada || request.requiereSena())
-                .requiereTelefonoVerificado(request.requiereTelefonoVerificado())
+                .requiereTelefonoVerificado(requiereTelefonoVerificadoEfectivo(request))
                 .isActive(true)
                 .slug(slugGenerator.generarSlugUnico(request.nombre()))
                 .dueno(dueno)
@@ -110,7 +114,7 @@ public class EstablecimientoService {
         establecimiento.setLatitud(request.latitud());
         establecimiento.setLongitud(request.longitud());
         establecimiento.setRequiereSena(esPlanLimitado(establecimiento.getDueno().getPlanSuscripcion()) || request.requiereSena());
-        establecimiento.setRequiereTelefonoVerificado(request.requiereTelefonoVerificado());
+        establecimiento.setRequiereTelefonoVerificado(requiereTelefonoVerificadoEfectivo(request));
 
         if (request.servicios() != null) {
             establecimiento.getServicios().clear();
@@ -126,6 +130,15 @@ public class EstablecimientoService {
         Establecimiento establecimientoActualizado = establecimientoRepository.save(establecimiento);
         complejoDetalleCache.invalidarPorEstablecimientoId(establecimiento.getId());
         return mapToResponse(establecimientoActualizado);
+    }
+
+    /**
+     * Con la verificación de teléfono apagada ({@code app.telefono.verificacion-habilitada}
+     * en false, el default) el dato se guarda siempre en false, sin importar el request:
+     * así no queda prometiendo una exigencia que no existe.
+     */
+    private Boolean requiereTelefonoVerificadoEfectivo(EstablecimientoRequest request) {
+        return verificacionTelefonoHabilitada ? request.requiereTelefonoVerificado() : Boolean.FALSE;
     }
 
     private boolean esPlanLimitado(PlanSuscripcion plan) {

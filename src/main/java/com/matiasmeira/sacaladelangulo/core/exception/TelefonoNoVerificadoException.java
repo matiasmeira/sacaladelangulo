@@ -7,6 +7,9 @@ package com.matiasmeira.sacaladelangulo.core.exception;
  * JugadorBloqueadoException: es una restricción de autorización sobre una acción puntual,
  * modelada como excepción propia para que el frontend pueda distinguir este caso de un
  * bloqueo por parte del dueño.
+ *
+ * <p>Sólo se lanza con {@code app.telefono.verificacion-habilitada=true}; con la propiedad
+ * apagada (default) ReservaService no exige teléfono verificado.
  */
 public class TelefonoNoVerificadoException extends RuntimeException {
 

@@ -38,6 +38,7 @@ import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -106,6 +107,14 @@ public class ReservaService {
     private final TurnoCajaService turnoCajaService;
 
     /**
+     * Mientras la verificación de teléfono esté apagada ({@code app.telefono.verificacion-habilitada}
+     * en false, el default), no se exige teléfono verificado para reservar aunque el
+     * establecimiento tenga requiereTelefonoVerificado en true.
+     */
+    @Value("${app.telefono.verificacion-habilitada:false}")
+    private boolean verificacionTelefonoHabilitada;
+
+    /**
      * Crea una nueva reserva con validación de solapamientos y disponibilidad de pool.
      * Nace PENDIENTE_SENA sólo si {@link #correspondeSena} es true para esta cancha; en
      * caso contrario nace directamente CONFIRMADA (sin ventana de expiración), igual que
@@ -129,7 +138,8 @@ public class ReservaService {
             throw new JugadorBloqueadoException("No tenés permitido realizar reservas en este establecimiento");
         }
 
-        if (Boolean.TRUE.equals(cancha.getEstablecimiento().getRequiereTelefonoVerificado())
+        if (verificacionTelefonoHabilitada
+                && Boolean.TRUE.equals(cancha.getEstablecimiento().getRequiereTelefonoVerificado())
                 && !Boolean.TRUE.equals(jugador.getTelefonoVerificado())) {
             log.warn("Jugador sin teléfono verificado intentó reservar. Jugador: {}, Establecimiento: {}", jugador.getId(), cancha.getEstablecimiento().getId());
             throw new TelefonoNoVerificadoException("Este establecimiento requiere que verifiques tu teléfono antes de reservar");

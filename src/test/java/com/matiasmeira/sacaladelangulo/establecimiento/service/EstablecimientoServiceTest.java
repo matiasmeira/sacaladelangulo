@@ -20,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -100,6 +101,7 @@ class EstablecimientoServiceTest {
     @Test
     @DisplayName("crearEstablecimiento_Exito_PersisteRequiereTelefonoVerificado")
     void crearEstablecimiento_Exito_PersisteRequiereTelefonoVerificado() {
+        ReflectionTestUtils.setField(establecimientoService, "verificacionTelefonoHabilitada", true);
         Usuario dueno = Usuario.builder()
                 .id(1L)
                 .email("dueno@test.com")
@@ -199,8 +201,75 @@ class EstablecimientoServiceTest {
     }
 
     @Test
+    @DisplayName("crearEstablecimiento_VerificacionTelefonoApagada_GuardaFalseAunqueElRequestPidaTrue")
+    void crearEstablecimiento_VerificacionTelefonoApagada_GuardaFalse() {
+        assertEquals(false, crearConRequestQuePideTelefonoVerificado().getRequiereTelefonoVerificado());
+    }
+
+    @Test
+    @DisplayName("crearEstablecimiento_VerificacionTelefonoEncendida_GuardaLoQuePideElRequest")
+    void crearEstablecimiento_VerificacionTelefonoEncendida_GuardaTrue() {
+        ReflectionTestUtils.setField(establecimientoService, "verificacionTelefonoHabilitada", true);
+        assertEquals(true, crearConRequestQuePideTelefonoVerificado().getRequiereTelefonoVerificado());
+    }
+
+    @Test
+    @DisplayName("actualizarEstablecimiento_VerificacionTelefonoApagada_GuardaFalseAunqueElRequestPidaTrue")
+    void actualizarEstablecimiento_VerificacionTelefonoApagada_GuardaFalse() {
+        assertEquals(false, actualizarConRequestQuePideTelefonoVerificado().getRequiereTelefonoVerificado());
+    }
+
+    @Test
+    @DisplayName("actualizarEstablecimiento_VerificacionTelefonoEncendida_GuardaLoQuePideElRequest")
+    void actualizarEstablecimiento_VerificacionTelefonoEncendida_GuardaTrue() {
+        ReflectionTestUtils.setField(establecimientoService, "verificacionTelefonoHabilitada", true);
+        assertEquals(true, actualizarConRequestQuePideTelefonoVerificado().getRequiereTelefonoVerificado());
+    }
+
+    /** Crea con un request que pide requiereTelefonoVerificado=true y devuelve lo que se pasó a save. */
+    private Establecimiento crearConRequestQuePideTelefonoVerificado() {
+        Usuario dueno = Usuario.builder().id(1L).email("dueno@test.com").rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM).build();
+        EstablecimientoRequest request = new EstablecimientoRequest(
+                "Complejo Test", "Calle Falsa 123", -34.6, -58.4, false, true, List.of(), null);
+
+        when(usuarioRepository.findByEmail(dueno.getEmail())).thenReturn(Optional.of(dueno));
+        when(establecimientoRepository.countByDuenoIdAndDeletedAtIsNull(dueno.getId())).thenReturn(0L);
+        when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        establecimientoService.crearEstablecimiento(request, dueno.getEmail());
+
+        ArgumentCaptor<Establecimiento> captor = ArgumentCaptor.forClass(Establecimiento.class);
+        verify(establecimientoRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    /** Edita con un request que pide requiereTelefonoVerificado=true y devuelve lo que se pasó a save. */
+    private Establecimiento actualizarConRequestQuePideTelefonoVerificado() {
+        Usuario dueno = Usuario.builder().id(1L).email("dueno@test.com").rol(Role.OWNER)
+                .planSuscripcion(PlanSuscripcion.PREMIUM).build();
+        Establecimiento existente = Establecimientos.establecimientoOperativo(b -> b
+                .id(11L).nombre("Nombre").direccion("Direccion").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).requiereTelefonoVerificado(false)
+                .dueno(dueno).horariosAtencion(new ArrayList<>()));
+        EstablecimientoRequest request = new EstablecimientoRequest(
+                "Nombre", "Direccion", -34.6, -58.4, false, true, List.of(), null);
+
+        when(establecimientoRepository.findById(11L)).thenReturn(Optional.of(existente));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(existente, dueno.getEmail())).thenReturn(dueno);
+        when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        establecimientoService.actualizarEstablecimiento(11L, request, dueno.getEmail());
+
+        ArgumentCaptor<Establecimiento> captor = ArgumentCaptor.forClass(Establecimiento.class);
+        verify(establecimientoRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
     @DisplayName("actualizarEstablecimiento_Exito_ActualizaRequiereTelefonoVerificado")
     void actualizarEstablecimiento_Exito_ActualizaRequiereTelefonoVerificado() {
+        ReflectionTestUtils.setField(establecimientoService, "verificacionTelefonoHabilitada", true);
         Usuario dueno = Usuario.builder()
                 .id(1L)
                 .email("dueno@test.com")

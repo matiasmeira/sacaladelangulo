@@ -27,7 +27,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Cuenta propia: GET/DELETE /api/v1/usuarios/me y POST /api/v1/usuarios/telefono/{solicitar,verificar}-codigo
- * (UsuarioController:27, :36, :45, :51). Ninguno lleva @PreAuthorize (CoberturaPreAuthorizeTest los lista como
+ * (UsuarioController). Los de teléfono responden 410 mientras app.telefono.verificacion-habilitada esté en false
+ * (default, pendiente 99); su flujo encendido se prueba en CuentaPropiaTelefonoHabilitadoTest. Ninguno lleva @PreAuthorize (CoberturaPreAuthorizeTest los lista como
  * "cuenta propia"): la chain exige estar autenticado (anyRequest().authenticated(), SecurityConfig:97) y el
  * usuario sale SIEMPRE del token (userDetails.getUsername()), nunca del body, del path ni de la query. Ninguna
  * de estas rutas tiene rate limit (no figuran en RateLimitFilter.LIMITES_POR_RUTA ni son /mails); el login de
@@ -208,81 +209,41 @@ class CuentaPropiaAutorizacionTest extends AbstractSecurityWebTest {
         assertNull(recargar(jugador).getDeletedAt());
     }
 
-    // ---- POST telefono/solicitar-codigo ----
+    // ---- POST telefono/{solicitar,verificar}-codigo: verificación apagada (default, pendiente 99) ----
+    // Los casos con la verificación encendida están en CuentaPropiaTelefonoHabilitadoTest.
 
     @Test
-    @DisplayName("solicitarCodigo_cualquierRolAutenticado_Devuelve200YGuardaElCodigoParaSuPropioEmail")
-    void solicitarCodigo_cualquierRol_Devuelve200() throws Exception {
+    @DisplayName("solicitarCodigo_verificacionApagada_cualquierRolAutenticado_Devuelve410YNoGuardaCodigo")
+    void solicitarCodigo_verificacionApagada_Devuelve410() throws Exception {
         Usuario[] todos = {jugador, duenoA, admin, empleadoConPermiso, empleadoSinPermiso};
         for (Usuario u : todos) {
-            solicitar(u, "{\"telefono\":\"+5491100000000\"}").andExpect(status().isOk());
-            CodigoVerificacion c = codigoVerificacionRepository.findByEmail(u.getEmail()).orElseThrow();
-            assertEquals("+5491100000000", c.getTelefonoPendiente());
+            solicitar(u, "{\"telefono\":\"+5491100000000\"}")
+                    .andExpect(status().isGone())
+                    .andExpect(jsonPath("$.error").value("La verificación por teléfono todavía no está disponible."));
+            assertTrue(codigoVerificacionRepository.findByEmail(u.getEmail()).isEmpty());
         }
+        assertEquals(0, codigoVerificacionRepository.count());
     }
 
     @Test
-    @DisplayName("solicitarCodigo_conEmailAjenoEnElBody_GuardaElCodigoParaElDelToken")
-    void solicitarCodigo_conEmailAjenoEnElBody_GuardaParaElDelToken() throws Exception {
-        solicitar(jugador, "{\"telefono\":\"+5491100000001\",\"email\":\"" + duenoB.getEmail() + "\"}")
-                .andExpect(status().isOk());
-        assertTrue(codigoVerificacionRepository.findByEmail(jugador.getEmail()).isPresent());
-        assertTrue(codigoVerificacionRepository.findByEmail(duenoB.getEmail()).isEmpty());
-    }
-
-    @Test
-    @DisplayName("solicitarCodigo_noPisaElCodigoPendienteDeOtroUsuario")
-    void solicitarCodigo_noPisaElCodigoDeOtro() throws Exception {
-        sembrarCodigo(duenoB, "+5491100000002");
-        solicitar(jugador, "{\"telefono\":\"+5491199999999\"}").andExpect(status().isOk());
-        assertEquals("+5491100000002",
-                codigoVerificacionRepository.findByEmail(duenoB.getEmail()).orElseThrow().getTelefonoPendiente());
-    }
-
-    @Test
-    @DisplayName("solicitarCodigo_telefonoVacio_Devuelve400")
-    void solicitarCodigo_telefonoVacio_Devuelve400() throws Exception {
-        solicitar(jugador, "{\"telefono\":\" \"}").andExpect(status().isBadRequest());
-        assertTrue(codigoVerificacionRepository.findByEmail(jugador.getEmail()).isEmpty());
-    }
-
-    // ---- POST telefono/verificar-codigo ----
-
-    @Test
-    @DisplayName("verificarCodigo_propio_Devuelve200YVinculaElTelefonoSoloAEseUsuario")
-    void verificarCodigo_propio_Devuelve200() throws Exception {
+    @DisplayName("verificarCodigo_verificacionApagada_conCodigoValidoPendiente_Devuelve410YNoVerificaNada")
+    void verificarCodigo_verificacionApagada_Devuelve410() throws Exception {
         sembrarCodigo(jugador, "+5491100000003");
-        verificar(jugador, CODIGO).andExpect(status().isOk());
+        verificar(jugador, CODIGO).andExpect(status().isGone())
+                .andExpect(jsonPath("$.error").value("La verificación por teléfono todavía no está disponible."));
 
         Usuario j = recargar(jugador);
-        assertEquals("+5491100000003", j.getTelefono());
-        assertTrue(j.getTelefonoVerificado());
-        assertFalse(recargar(duenoB).getTelefonoVerificado());
-        assertTrue(codigoVerificacionRepository.findByEmail(jugador.getEmail()).isEmpty());
+        assertNull(j.getTelefono());
+        assertFalse(j.getTelefonoVerificado());
+        assertTrue(codigoVerificacionRepository.findByEmail(jugador.getEmail()).isPresent());
     }
 
     @Test
-    @DisplayName("verificarCodigo_empleadoConTokenDeMostradorReal_Devuelve200")
-    void verificarCodigo_empleadoMostradorReal_Devuelve200() throws Exception {
-        Usuario cajero = empleadoConPin(establecimientoA, nombreUnico(), PIN);
-        sembrarCodigo(cajero, "+5491100000004");
-        mockMvc.perform(post(VERIFICAR).header("Authorization", tokenMostradorReal(cajero))
-                        .contentType("application/json").content("{\"codigo\":\"" + CODIGO + "\"}"))
-                .andExpect(status().isOk());
-        assertEquals("+5491100000004", recargar(cajero).getTelefono());
-    }
-
-    @Test
-    @DisplayName("verificarCodigo_conElCodigoDePendienteDeOtroUsuario_Devuelve400YNoTocaNada")
-    void verificarCodigo_conCodigoDeOtro_Devuelve400() throws Exception {
-        sembrarCodigo(duenoB, "+5491100000005");
-        // el jugador conoce el código de la víctima, pero no tiene uno propio pendiente
-        verificar(jugador, CODIGO).andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Código inválido o expirado"));
-
-        assertNull(recargar(jugador).getTelefono());
-        assertFalse(recargar(jugador).getTelefonoVerificado());
-        assertNull(recargar(duenoB).getTelefono());
-        assertTrue(codigoVerificacionRepository.findByEmail(duenoB.getEmail()).isPresent());
+    @DisplayName("telefono_verificacionApagada_sinToken_Devuelve401")
+    void telefono_verificacionApagada_sinToken_Devuelve401() throws Exception {
+        mockMvc.perform(post(SOLICITAR).contentType("application/json").content("{\"telefono\":\"+5491100000000\"}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post(VERIFICAR).contentType("application/json").content("{\"codigo\":\"" + CODIGO + "\"}"))
+                .andExpect(status().isUnauthorized());
     }
 }

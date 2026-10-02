@@ -54,3 +54,8 @@ AUDITORIA_INDICES.md
 AUDIT_REPORT.md
 
 .worktrees/
+
+# Archivos de trabajo locales (se conservan en disco, no se versionan)
+/AUDITORIA_*.md
+/docs/superpowers/
+/saque/

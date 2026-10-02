@@ -164,9 +164,18 @@ class DispositivosCajaAutorizacionTest extends AbstractSecurityWebTest {
         }
 
         @Test
-        @DisplayName("establecimientoInexistente_Devuelve404")
-        void establecimientoInexistente_Devuelve404() throws Exception {
+        @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
             activar(9_999_999L, duenoA)
+                    .andExpect(status().isForbidden())
+                    .andExpect(content().string(CUERPO_NO_AUTORIZADO_ESTABLECIMIENTO));
+            assertEquals(0, dispositivoCajaRepository.count());
+        }
+
+        @Test
+        @DisplayName("establecimientoInexistenteComoAdmin_Devuelve404")
+        void establecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+            activar(9_999_999L, admin)
                     .andExpect(status().isNotFound())
                     .andExpect(content().string("{\"error\":\"Establecimiento no encontrado\"}"));
             assertEquals(0, dispositivoCajaRepository.count());
@@ -184,6 +193,15 @@ class DispositivosCajaAutorizacionTest extends AbstractSecurityWebTest {
                     .header("Authorization", bearer(actor))
                     .contentType("application/json")
                     .content("{\"label\":\"Caja del fondo\"}"));
+        }
+
+        @Test
+        @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+            emparejar(9_999_999L, duenoA)
+                    .andExpect(status().isForbidden())
+                    .andExpect(content().string(CUERPO_NO_AUTORIZADO_ESTABLECIMIENTO));
+            assertEquals(0, codigoEmparejamientoCajaRepository.count());
         }
 
         @Test
@@ -255,6 +273,14 @@ class DispositivosCajaAutorizacionTest extends AbstractSecurityWebTest {
 
         private ResultActions listar(Long establecimientoId, Usuario actor) throws Exception {
             return mockMvc.perform(get(base(establecimientoId)).header("Authorization", bearer(actor)));
+        }
+
+        @Test
+        @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+            listar(9_999_999L, duenoA)
+                    .andExpect(status().isForbidden())
+                    .andExpect(content().string(CUERPO_NO_AUTORIZADO_ESTABLECIMIENTO));
         }
 
         @Test
@@ -375,6 +401,16 @@ class DispositivosCajaAutorizacionTest extends AbstractSecurityWebTest {
                     .andExpect(status().isNotFound())
                     .andExpect(content().string("{\"error\":\"Dispositivo no encontrado\"}"));
             assertSigueActivo(deA.getId());
+        }
+
+        @Test
+        @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+            DispositivoCaja d = dispositivoDe(cookieDispositivo(establecimientoA, duenoA));
+            revocar(9_999_999L, d.getId(), duenoA)
+                    .andExpect(status().isForbidden())
+                    .andExpect(content().string(CUERPO_NO_AUTORIZADO_ESTABLECIMIENTO));
+            assertSigueActivo(d.getId());
         }
 
         @Test

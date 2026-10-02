@@ -20,6 +20,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -79,6 +80,7 @@ public class DispositivoCajaService {
     public ActivarLocalResponse activarLocal(Long establecimientoId, String email, ActivarLocalRequest request, HttpServletResponse response) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         String tokenCrudo = generarSecretoAlto();
@@ -102,6 +104,7 @@ public class DispositivoCajaService {
     public EmparejarResponse emparejar(Long establecimientoId, String email, EmparejarRequest request) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         String codigoCrudo = generarSecretoAlto();
@@ -125,6 +128,7 @@ public class DispositivoCajaService {
     public List<DispositivoCajaResponse> listar(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         return dispositivoCajaRepository.findByEstablecimientoIdAndActivoTrue(establecimientoId).stream()
                 .map(d -> new DispositivoCajaResponse(d.getId(), d.getLabel(), d.getCreatedAt(), d.getLastUsedAt()))
@@ -134,6 +138,7 @@ public class DispositivoCajaService {
     public void revocar(Long establecimientoId, Long dispositivoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         DispositivoCaja dispositivo = dispositivoCajaRepository.findByIdAndEstablecimientoId(dispositivoId, establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Dispositivo no encontrado"));
@@ -220,9 +225,13 @@ public class DispositivoCajaService {
         }
     }
 
+    /**
+     * Devuelve el establecimiento del path o, si no existe, uno "fantasma" contra el cual la autorización
+     * falla igual que ante uno ajeno (ver EstablecimientoAutorizado). Siempre se llama exigirExistente
+     * después de autorizar.
+     */
     private Establecimiento buscarEstablecimientoPorId(Long establecimientoId) {
-        return establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        return EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
     }
 
 }

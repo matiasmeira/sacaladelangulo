@@ -68,8 +68,9 @@ class ReservaBloqueoMotivoTest extends AbstractSecurityWebTest {
     }
 
     @Test
-    @DisplayName("duenoDeOtroComplejoReservandoComoJugador_ErrorSinMotivo")
-    void duenoDeOtroComplejoReservandoComoJugador_ErrorSinMotivo() throws Exception {
-        reservarBloqueado(duenoB);
+    @DisplayName("adminReservandoComoJugador_ErrorSinMotivo")
+    void adminReservandoComoJugador_ErrorSinMotivo() throws Exception {
+        // un dueño ya no reserva como jugador (pendiente 112): el no-dueño de la cancha es el admin
+        reservarBloqueado(admin);
     }
 }

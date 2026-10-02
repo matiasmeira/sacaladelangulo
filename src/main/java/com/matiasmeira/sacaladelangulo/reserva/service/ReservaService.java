@@ -130,6 +130,12 @@ public class ReservaService {
                 email, request.canchaId(), request.fechaHoraInicio(), request.fechaHoraFin());
 
         Usuario jugador = buscarUsuarioPorEmail(email);
+        // Un dueño no reserva por el flujo del jugador (pendiente 112). Va acá y no sólo en el
+        // @PreAuthorize para que el 403 lleve un mensaje claro para el front. Las reservas del
+        // panel (crearReservaManual) no pasan por este método.
+        if (jugador.getRol() == Role.OWNER) {
+            throw new AccessDeniedException("Las reservas son para cuentas de jugador.");
+        }
         Cancha cancha = buscarCanchaPorId(request.canchaId());
         validarCanchaActivaParaJugador(cancha);
         establecimientoOperativoGuard.validarEstablecimientoOperativoParaJugador(cancha.getEstablecimiento());

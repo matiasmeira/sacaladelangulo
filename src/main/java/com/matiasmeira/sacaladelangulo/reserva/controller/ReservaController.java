@@ -35,8 +35,9 @@ public class ReservaController {
     private final ReservaService reservaService;
 
     /**
-     * Crea una nueva reserva.
-     * Protegido: solo jugadores, propietarios de establecimientos y administradores.
+     * Crea una nueva reserva como jugador.
+     * Protegido: jugadores y administradores. Un OWNER pasa la anotación a propósito y es
+     * rechazado en ReservaService.crearReserva con un 403 de mensaje propio (pendiente 112).
      *
      * @param userDetails Detalles del usuario autenticado
      * @param request DTO con datos de la reserva

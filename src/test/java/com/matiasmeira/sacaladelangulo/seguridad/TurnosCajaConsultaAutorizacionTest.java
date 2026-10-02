@@ -34,6 +34,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * afuera aunque tenga OPERAR_CAJA. También el cruce de turno por path en el cierre (POST /{turnoId}/cerrar):
  * como el service autoriza ANTES de buscar el turno (TurnoCajaService:232-236), un turno de otro complejo
  * da 404 al dueño legítimo del path y no se cierra. El resto de /cerrar está en CierreCajaAutorizacionTest.
+ *
+ * <p>Sin oráculo de existencia (pendiente 69): en todos los endpoints de caja (abrir, movimientos, cerrar,
+ * abierta, turnos y detalle) un establecimiento inexistente responde el mismo 403 que uno ajeno, con el
+ * mensaje del chequeo que corresponda (acción o propietario); el admin recibe 404.
  */
 @DisplayName("Consulta de caja y turnos")
 class TurnosCajaConsultaAutorizacionTest extends AbstractSecurityWebTest {
@@ -270,6 +274,52 @@ class TurnosCajaConsultaAutorizacionTest extends AbstractSecurityWebTest {
         void duenoDelTurno() throws Exception {
             cerrar(duenoB).andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_ACCION));
             assertBSigueAbierto();
+        }
+    }
+
+    @Nested
+    @DisplayName("sin oráculo de existencia")
+    class SinOraculo {
+        private static final long INEXISTENTE = 987654321L;
+
+        private String base() {
+            return "/api/v1/establecimientos/" + INEXISTENTE + "/caja";
+        }
+
+        private ResultActions post(String ruta, String cuerpo, Usuario quien) throws Exception {
+            return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(base() + ruta)
+                    .header("Authorization", bearer(quien)).contentType(MediaType.APPLICATION_JSON).content(cuerpo));
+        }
+
+        private ResultActions get(String ruta, Usuario quien) throws Exception {
+            return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(base() + ruta)
+                    .header("Authorization", bearer(quien)));
+        }
+
+        private void assert403(ResultActions r, String mensaje) throws Exception {
+            r.andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(mensaje));
+        }
+
+        @Test
+        @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void inexistente() throws Exception {
+            assert403(post("/abrir", "{\"fondoInicial\":1000}", duenoA), MENSAJE_403_ACCION);
+            assert403(post("/movimientos", "{\"tipo\":\"INGRESO\",\"monto\":500,\"descripcion\":\"x\"}", duenoA), MENSAJE_403_ACCION);
+            assert403(post("/" + turnoAbiertoA.getId() + "/cerrar", "{\"saldoRealContado\":1000}", duenoA), MENSAJE_403_ACCION);
+            assert403(get("/abierta", duenoA), MENSAJE_403_ACCION);
+            assert403(get("/turnos", duenoA), MENSAJE_403_PROPIETARIO);
+            assert403(get("/turnos/" + turnoAbiertoA.getId(), duenoA), MENSAJE_403_PROPIETARIO);
+            // Nada se tocó: el turno propio sigue abierto
+            assertEquals(EstadoTurnoCaja.ABIERTO, turnoCajaRepository.findById(turnoAbiertoA.getId()).orElseThrow().getEstado());
+        }
+
+        @Test
+        @DisplayName("establecimientoInexistenteComoAdmin_Devuelve404")
+        void inexistenteAdmin() throws Exception {
+            get("/abierta", admin).andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+            get("/turnos", admin).andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
         }
     }
 }

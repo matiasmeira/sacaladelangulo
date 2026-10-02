@@ -30,6 +30,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,10 +74,10 @@ public class TurnoCajaService {
      */
     @Transactional
     public TurnoCajaResponse abrirCaja(Long establecimientoId, AbrirCajaRequest request, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
                 establecimiento, email, PermisoEmpleado.OPERAR_CAJA);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         try {
@@ -198,10 +199,10 @@ public class TurnoCajaService {
      */
     @Transactional
     public MovimientoCajaResponse registrarMovimientoManual(Long establecimientoId, MovimientoManualRequest request, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
                 establecimiento, email, PermisoEmpleado.OPERAR_CAJA);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         try {
             TurnoCaja turno = turnoCajaRepository.findByEstablecimientoIdAndEstado(establecimientoId, EstadoTurnoCaja.ABIERTO)
@@ -226,10 +227,10 @@ public class TurnoCajaService {
      */
     @Transactional
     public CierreCajaResponse cerrarCaja(Long establecimientoId, Long turnoId, CerrarCajaRequest request, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
                 establecimiento, email, PermisoEmpleado.OPERAR_CAJA);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         try {
             TurnoCaja turno = turnoCajaRepository.findByIdAndEstablecimientoId(turnoId, establecimientoId)
@@ -291,9 +292,9 @@ public class TurnoCajaService {
      */
     @Transactional(readOnly = true)
     public CajaAbiertaResponse getCajaAbierta(Long establecimientoId, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         autorizacionEmpleadoService.validarAccion(establecimiento, email, PermisoEmpleado.OPERAR_CAJA);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         TurnoCaja turno = turnoCajaRepository.findByEstablecimientoIdAndEstado(establecimientoId, EstadoTurnoCaja.ABIERTO)
                 .orElseThrow(() -> new EntityNotFoundException("No hay un turno de caja abierto para este establecimiento"));
@@ -324,9 +325,9 @@ public class TurnoCajaService {
      */
     @Transactional(readOnly = true)
     public Page<TurnoCajaResumenResponse> listarTurnos(Long establecimientoId, Pageable pageable, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         return turnoCajaRepository.findByEstablecimientoIdOrderByFechaAperturaDesc(establecimientoId, pageable)
                 .map(turnoCajaMapper::mapToResumen);
@@ -338,9 +339,9 @@ public class TurnoCajaService {
      */
     @Transactional(readOnly = true)
     public TurnoCajaDetalleResponse getDetalleTurno(Long establecimientoId, Long turnoId, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         TurnoCaja turno = turnoCajaRepository.findByIdAndEstablecimientoId(turnoId, establecimientoId)
                 .orElseThrow(() -> new EntityNotFoundException("Turno de caja no encontrado"));

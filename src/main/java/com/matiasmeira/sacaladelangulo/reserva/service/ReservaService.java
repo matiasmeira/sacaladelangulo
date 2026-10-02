@@ -217,12 +217,13 @@ public class ReservaService {
 
     /**
      * Crea una reserva de mostrador para un cliente presencial/telefónico sin cuenta
-     * en la plataforma. Solo puede utilizarla el dueño real del establecimiento (o un
-     * administrador) al que pertenece la cancha solicitada. Nace directamente en estado
-     * CONFIRMADA, ya que la registra el propio dueño.
+     * en la plataforma. Pueden utilizarla el dueño real del establecimiento al que pertenece
+     * la cancha solicitada, un administrador, o un empleado de ese establecimiento con el
+     * permiso CREAR_RESERVA_MANUAL. Nace directamente en estado CONFIRMADA, ya que la
+     * registra el propio personal del establecimiento.
      *
      * @param request DTO con los datos de la reserva manual y del cliente
-     * @param email Email del usuario autenticado (OWNER/ADMIN)
+     * @param email Email del usuario autenticado (OWNER/ADMIN/EMPLOYEE con permiso)
      * @return ReservaResponse con los datos de la reserva creada
      */
     public ReservaResponse crearReservaManual(ReservaManualRequest request, String email) {
@@ -967,8 +968,10 @@ public class ReservaService {
 
     /**
      * Lista las reservas de un establecimiento en una fecha dada.
-     * Restringido al dueño del establecimiento o a un administrador (ver justificación arriba).
-     * Excluye canceladas por defecto; incluirCanceladas=true las trae también (ver B7).
+     * Pueden leerla el dueño del establecimiento, un administrador, o un empleado con algún
+     * permiso operativo de reserva (AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
+     * expone nombre e identidad de los jugadores, por eso no queda abierta a cualquier
+     * usuario autenticado. Excluye canceladas por defecto; incluirCanceladas=true las trae también (ver B7).
      */
     @Transactional(readOnly = true)
     public Page<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, LocalDate fecha, boolean incluirCanceladas, Pageable pageable, String email) {

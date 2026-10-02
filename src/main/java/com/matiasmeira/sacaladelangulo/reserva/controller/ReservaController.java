@@ -53,7 +53,8 @@ public class ReservaController {
 
     /**
      * Crea una reserva de mostrador (cliente presencial/telefónico sin cuenta registrada).
-     * Protegido: solo el dueño real del establecimiento de la cancha, o un administrador.
+     * Protegido: el dueño real del establecimiento de la cancha, un administrador, o un
+     * empleado de ese establecimiento con el permiso CREAR_RESERVA_MANUAL.
      *
      * @param userDetails Detalles del usuario autenticado
      * @param request DTO con datos de la reserva manual y del cliente

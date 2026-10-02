@@ -10,6 +10,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.BloqueoJugador;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugadorRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaResponse;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
@@ -163,10 +164,8 @@ public class ClienteService {
     }
 
     private Establecimiento validarAcceso(Long establecimientoId, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
-        return establecimiento;
+        return EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId),
+                establecimiento -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email));
     }
 
     private ClienteResponse construirClienteResponse(Long jugadorId, Usuario usuario, Object[] historico,

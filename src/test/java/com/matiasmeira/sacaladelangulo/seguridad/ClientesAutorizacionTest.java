@@ -126,6 +126,22 @@ class ClientesAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
+    @DisplayName("establecimientoInexistente_enListadoDetalleYReservas_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        String base = "/api/v1/establecimientos/987654321/clientes";
+        assertDuenoAjeno(pedir(base, duenoA));
+        assertDuenoAjeno(pedir(base + "/" + cliente.getId(), duenoA));
+        assertDuenoAjeno(pedir(base + "/" + cliente.getId() + "/reservas", duenoA));
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistenteComoAdmin_Devuelve404")
+    void establecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+        pedir("/api/v1/establecimientos/987654321/clientes", admin).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+    }
+
+    @Test
     @DisplayName("listado_duenoAjeno_Devuelve403")
     void listado_duenoAjeno_Devuelve403() throws Exception {
         assertDuenoAjeno(pedir(listado(), duenoB));

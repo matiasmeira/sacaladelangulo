@@ -1,13 +1,13 @@
 package com.matiasmeira.sacaladelangulo.empleado.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.dto.RegistroAuditoriaResponse;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.model.RegistroAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.repository.RegistroAuditoriaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -132,9 +132,8 @@ public class RegistroAuditoriaService {
 
     @Transactional(readOnly = true)
     public Page<RegistroAuditoriaResponse> listarPorEstablecimiento(Long establecimientoId, Pageable pageable, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId),
+                establecimiento -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email));
 
         return registroAuditoriaRepository.findByEstablecimientoIdOrderByFechaHoraDesc(establecimientoId, pageable)
                 .map(this::mapToResponse);

@@ -27,8 +27,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * AutorizacionEmpleadoService:135). Se siembran dos registros en A y uno en B para aseverar que cada
  * dueño sólo ve los de su complejo.
  *
- * <p>El establecimiento inexistente da 404 antes de autorizar (RegistroAuditoriaService:135-136, pendiente
- * 69, abierto): no se testea.
+ * <p>Sin oráculo de existencia (pendiente 69): el establecimiento inexistente responde el mismo 403 que uno
+ * ajeno; el admin recibe 404.
  */
 @DisplayName("GET /api/v1/establecimientos/{e}/registro-auditoria")
 class RegistroAuditoriaAutorizacionTest extends AbstractSecurityWebTest {
@@ -67,6 +67,23 @@ class RegistroAuditoriaAutorizacionTest extends AbstractSecurityWebTest {
     @DisplayName("admin_Devuelve200")
     void admin() throws Exception {
         listar(admin).andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(2));
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente() throws Exception {
+        mockMvc.perform(get("/api/v1/establecimientos/987654321/registro-auditoria")
+                        .header("Authorization", bearer(duenoA)))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistenteComoAdmin_Devuelve404")
+    void establecimientoInexistenteAdmin() throws Exception {
+        mockMvc.perform(get("/api/v1/establecimientos/987654321/registro-auditoria")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
     }
 
     @Test

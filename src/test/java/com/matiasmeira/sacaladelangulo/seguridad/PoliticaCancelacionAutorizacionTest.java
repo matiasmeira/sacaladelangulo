@@ -28,9 +28,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * los permisos. PoliticaCancelacionService autoriza con validarPropietarioOAdmin (líneas 38 y 53 ->
  * AutorizacionEmpleadoService:135). Defaults del complejo: 24 horas y 30 minutos.
  *
- * <p>Fuera de alcance (pendiente 69, abierto): el PATCH con body sin ningún campo responde 400 ANTES de
- * autorizar (PoliticaCancelacionService:48-50 vs :53), y el establecimiento inexistente 404 antes del 403
- * (:52). No se congelan acá.
+ * <p>Sin oráculo de existencia (pendiente 69): el service autoriza contra el establecimiento del path antes
+ * de validar el body, así que un establecimiento inexistente responde el mismo 403 que uno ajeno y el PATCH
+ * sin ningún campo responde 400 sólo a quien está autorizado.
  */
 @DisplayName("Política de cancelación /api/v1/establecimientos/{e}/politicas-cancelacion")
 class PoliticaCancelacionAutorizacionTest extends AbstractSecurityWebTest {
@@ -57,6 +57,59 @@ class PoliticaCancelacionAutorizacionTest extends AbstractSecurityWebTest {
         assertEquals(30, recargar(establecimientoA).getMinutosGraciaCancelacion());
         assertEquals(24, recargar(establecimientoB).getHorasCancelacionAntesPartido());
         assertEquals(0, registroAuditoriaRepository.count());
+    }
+
+    private static final long ID_INEXISTENTE = 987654321L;
+
+    private static String rutaDe(long establecimientoId) {
+        return "/api/v1/establecimientos/" + establecimientoId + "/politicas-cancelacion";
+    }
+
+    @Nested
+    @DisplayName("sin oráculo de existencia")
+    class SinOraculo {
+        @Test
+        @DisplayName("get_establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void getInexistente() throws Exception {
+            mockMvc.perform(get(rutaDe(ID_INEXISTENTE)).header("Authorization", bearer(duenoA)))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        }
+
+        @Test
+        @DisplayName("patch_establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void patchInexistente() throws Exception {
+            mockMvc.perform(patch(rutaDe(ID_INEXISTENTE)).header("Authorization", bearer(duenoA))
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"horasCancelacionAntesPartido\":12}"))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+            assertSinCambios();
+        }
+
+        @Test
+        @DisplayName("patch_establecimientoInexistenteComoAdmin_Devuelve404")
+        void patchInexistenteAdmin() throws Exception {
+            mockMvc.perform(patch(rutaDe(ID_INEXISTENTE)).header("Authorization", bearer(admin))
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"horasCancelacionAntesPartido\":12}"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+        }
+
+        @Test
+        @DisplayName("patch_bodyVacioDeDuenoAjeno_Devuelve403No400")
+        void patchBodyVacioDeAjeno() throws Exception {
+            mockMvc.perform(patch(ruta()).header("Authorization", bearer(duenoB))
+                            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+            assertSinCambios();
+        }
+
+        @Test
+        @DisplayName("patch_bodyVacioDeDuenoPropio_Devuelve400")
+        void patchBodyVacioDePropio() throws Exception {
+            mockMvc.perform(patch(ruta()).header("Authorization", bearer(duenoA))
+                            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isBadRequest());
+            assertSinCambios();
+        }
     }
 
     @Nested

@@ -1,7 +1,6 @@
 package com.matiasmeira.sacaladelangulo.establecimiento.service;
 
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
-import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
@@ -34,8 +33,9 @@ public class PoliticaCancelacionService {
 
     @Transactional(readOnly = true)
     public PoliticaCancelacionResponse obtenerPoliticaCancelacion(Long establecimientoId, String email) {
-        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        Establecimiento establecimiento = EstablecimientoAutorizado.autorizar(
+                establecimientoRepository.findById(establecimientoId),
+                e -> autorizacionEmpleadoService.validarPropietarioOAdmin(e, email));
 
         return new PoliticaCancelacionResponse(
                 establecimiento.getHorasCancelacionAntesPartido(),
@@ -45,12 +45,14 @@ public class PoliticaCancelacionService {
     }
 
     public PoliticaCancelacionResponse actualizarPoliticaCancelacion(Long establecimientoId, ActualizarPoliticaCancelacionRequest request, String email) {
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(
+                establecimientoRepository.findById(establecimientoId));
+        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
+
         if (request.horasCancelacionAntesPartido() == null && request.minutosGraciaCancelacion() == null) {
             throw new IllegalArgumentException("Tenés que indicar al menos un valor para actualizar la política de cancelación");
         }
-
-        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         Integer horasAnteriores = establecimiento.getHorasCancelacionAntesPartido();
         Integer minutosAnteriores = establecimiento.getMinutosGraciaCancelacion();
@@ -77,10 +79,5 @@ public class PoliticaCancelacionService {
                 establecimientoActualizado.getMinutosGraciaCancelacion(),
                 reservasFuturasAfectadas
         );
-    }
-
-    private Establecimiento buscarEstablecimientoPorId(Long id) {
-        return establecimientoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
     }
 }

@@ -140,6 +140,7 @@ class PoliticaCancelacionServiceTest {
     @Test
     @DisplayName("actualizarPoliticaCancelacion_AmbosNull_LanzaIllegalArgumentException")
     void actualizarPoliticaCancelacion_AmbosNull_LanzaIllegalArgumentException() {
+        when(establecimientoRepository.findById(10L)).thenReturn(Optional.of(establecimiento));
         ActualizarPoliticaCancelacionRequest request = new ActualizarPoliticaCancelacionRequest(null, null);
 
         assertThrows(IllegalArgumentException.class,

@@ -156,6 +156,7 @@ class ProductoBuffetServiceTest {
 
         ProductoBuffetRequest request = new ProductoBuffetRequest("Agua con gas", "500ml, con gas", BigDecimal.valueOf(1800), 99, null);
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -184,6 +185,7 @@ class ProductoBuffetServiceTest {
 
         AjustarStockRequest request = new AjustarStockRequest(10);
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -210,6 +212,7 @@ class ProductoBuffetServiceTest {
 
         AjustarStockRequest request = new AjustarStockRequest(-5);
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -242,6 +245,7 @@ class ProductoBuffetServiceTest {
 
         AjustarStockRequest request = new AjustarStockRequest(-10);
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         // El mapper es real (ver setUp), así que sólo hace falta que save devuelva
@@ -267,6 +271,7 @@ class ProductoBuffetServiceTest {
                 .establecimiento(deshabilitado).build();
         AjustarStockRequest request = new AjustarStockRequest(10);
 
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
         when(productoBuffetRepository.save(any(ProductoBuffet.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -315,6 +320,7 @@ class ProductoBuffetServiceTest {
                 .establecimiento(establecimiento)
                 .build();
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
@@ -346,11 +352,12 @@ class ProductoBuffetServiceTest {
                 .establecimiento(otroEstablecimiento)
                 .build();
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(productoBuffetRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
 
-        // Act & Assert: se pide eliminar pasando el establecimiento equivocado
+        // Act & Assert: el producto es de otro establecimiento: mismo 404 que un producto inexistente
         assertThrows(
-                IllegalArgumentException.class,
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
                 () -> productoBuffetService.eliminarProducto(establecimiento.getId(), producto.getId(), dueno.getEmail())
         );
         verify(productoBuffetRepository, never()).delete(any());

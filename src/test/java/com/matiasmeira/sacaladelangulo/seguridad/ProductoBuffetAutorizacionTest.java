@@ -31,9 +31,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * empleado queda afuera aunque tenga todos los permisos. El GET (controller:67) admite también EMPLOYEE y el
  * service exige REGISTRAR_VENTA_BUFFET con validarAccion (ProductoBuffetService:113 -> :59).
  *
- * <p>Sólo se testean ids coherentes (producto del complejo del path): el cruce producto/path y el
- * establecimiento inexistente se resuelven antes de autorizar (ProductoBuffetService:128-140, pendiente 69,
- * abierto) y no se congelan acá.
+ * <p>Sin oráculo de existencia (pendiente 69): el service autoriza contra el establecimiento del path antes de
+ * buscar el producto. Un establecimiento inexistente responde el mismo 403 que uno ajeno, y un producto
+ * inexistente o de otro complejo (por el path propio) el mismo 404, sin tocar el producto ajeno.
  */
 @DisplayName("Productos del buffet /api/v1/establecimientos/{e}/productos-buffet")
 class ProductoBuffetAutorizacionTest extends AbstractBuffetSecurityTest {
@@ -58,6 +58,69 @@ class ProductoBuffetAutorizacionTest extends AbstractBuffetSecurityTest {
 
     private int cantidadEnA() {
         return productoBuffetRepository.findByEstablecimientoId(establecimientoA.getId()).size();
+    }
+
+    private static final long ID_INEXISTENTE = 987654321L;
+    private static final String MENSAJE_PRODUCTO_NO_ENCONTRADO = "Producto no encontrado";
+
+    private static String baseDe(long establecimientoId) {
+        return "/api/v1/establecimientos/" + establecimientoId + "/productos-buffet";
+    }
+
+    @Nested
+    @DisplayName("sin oráculo de existencia")
+    class SinOraculo {
+        private static final String CUERPO = "{\"nombre\":\"Renombrado\",\"precio\":300,\"stock\":99}";
+
+        private ResultActions productoDeB(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder req)
+                throws Exception {
+            return mockMvc.perform(req.header("Authorization", bearer(duenoA))
+                    .contentType(MediaType.APPLICATION_JSON));
+        }
+
+        private void assertForbiddenService(ResultActions r) throws Exception {
+            r.andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        }
+
+        private void assertProductoNoEncontrado(ResultActions r) throws Exception {
+            r.andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value(MENSAJE_PRODUCTO_NO_ENCONTRADO));
+        }
+
+        @Test
+        @DisplayName("establecimientoInexistente_enTodosLosVerbos_Devuelve403IgualAlAjeno")
+        void establecimientoInexistente() throws Exception {
+            String base = baseDe(ID_INEXISTENTE);
+            assertForbiddenService(productoDeB(post(base).content(CUERPO)));
+            assertForbiddenService(productoDeB(put(base + "/" + productoA.getId()).content(CUERPO)));
+            assertForbiddenService(productoDeB(patch(base + "/" + productoA.getId() + "/stock").content("{\"cantidad\":5}")));
+            assertForbiddenService(productoDeB(delete(base + "/" + productoA.getId())));
+            mockMvc.perform(get(base).header("Authorization", bearer(duenoA))).andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.error").value(MENSAJE_403_ACCION));
+            assertAIntacto();
+            assertEquals(1, cantidadEnA());
+        }
+
+        @Test
+        @DisplayName("establecimientoInexistenteComoAdmin_Devuelve404")
+        void establecimientoInexistenteAdmin() throws Exception {
+            mockMvc.perform(post(baseDe(ID_INEXISTENTE)).header("Authorization", bearer(admin))
+                            .contentType(MediaType.APPLICATION_JSON).content(CUERPO))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+        }
+
+        @Test
+        @DisplayName("productoDeOtroComplejoPorElPathPropio_Devuelve404IgualAlInexistenteSinTocarlo")
+        void productoDeOtroComplejo() throws Exception {
+            String base = base();
+            for (long id : new long[] {productoB.getId(), ID_INEXISTENTE}) {
+                assertProductoNoEncontrado(productoDeB(put(base + "/" + id).content(CUERPO)));
+                assertProductoNoEncontrado(productoDeB(patch(base + "/" + id + "/stock").content("{\"cantidad\":5}")));
+                assertProductoNoEncontrado(productoDeB(delete(base + "/" + id)));
+            }
+            assertAIntacto();
+            assertEquals(10, recargar(productoB).getStock());
+        }
     }
 
     @Nested

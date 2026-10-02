@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.auth.model.PermisoEmpleado;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,8 +36,7 @@ public class ProductoBuffetService {
     private final ProductoBuffetMapper productoBuffetMapper;
 
     public ProductoBuffetResponse crearProducto(Long establecimientoId, ProductoBuffetRequest request, String email) {
-        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        Establecimiento establecimiento = autorizarPropietarioOAdmin(establecimientoId, email);
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         ProductoBuffet producto = ProductoBuffet.builder()
@@ -60,8 +60,8 @@ public class ProductoBuffetService {
      * exclusivamente a través de {@link #ajustarStock}.
      */
     public ProductoBuffetResponse actualizarProducto(Long establecimientoId, Long productoId, ProductoBuffetRequest request, String email) {
+        autorizarPropietarioOAdmin(establecimientoId, email);
         ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimientoId, productoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(producto.getEstablecimiento(), email);
 
         producto.setNombre(request.nombre());
         producto.setDescripcion(request.descripcion());
@@ -81,8 +81,8 @@ public class ProductoBuffetService {
      * por debajo de cero: el stock es informativo, no una condición para vender.
      */
     public ProductoBuffetResponse ajustarStock(Long establecimientoId, Long productoId, AjustarStockRequest request, String email) {
+        autorizarPropietarioOAdmin(establecimientoId, email);
         ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimientoId, productoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(producto.getEstablecimiento(), email);
 
         // Lock pesimista antes de leer/escribir el stock: serializa contra cualquier otro
         // ajuste/venta/cancelación concurrente sobre el mismo producto.
@@ -107,10 +107,11 @@ public class ProductoBuffetService {
 
     @Transactional(readOnly = true)
     public List<ProductoBuffetResponse> listarPorEstablecimiento(Long establecimientoId, String email) {
-        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         // El que puede vender puede ver qué vender. Las mutaciones de arriba siguen
         // con validarPropietarioOAdmin.
-        autorizacionEmpleadoService.validarAccion(establecimiento, email, PermisoEmpleado.REGISTRAR_VENTA_BUFFET);
+        EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId),
+                establecimiento -> autorizacionEmpleadoService.validarAccion(
+                        establecimiento, email, PermisoEmpleado.REGISTRAR_VENTA_BUFFET));
 
         return productoBuffetRepository.findByEstablecimientoId(establecimientoId).stream()
                 .map(productoBuffetMapper::mapToResponse)
@@ -118,25 +119,27 @@ public class ProductoBuffetService {
     }
 
     public void eliminarProducto(Long establecimientoId, Long productoId, String email) {
+        autorizarPropietarioOAdmin(establecimientoId, email);
         ProductoBuffet producto = buscarProductoDelEstablecimiento(establecimientoId, productoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(producto.getEstablecimiento(), email);
 
         productoBuffetRepository.delete(producto);
         log.info("Producto de buffet eliminado. ID: {}", productoId);
     }
 
-    private Establecimiento buscarEstablecimientoPorId(Long establecimientoId) {
-        return establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+    /**
+     * Autoriza contra el establecimiento del path antes de buscar o validar nada: uno inexistente responde
+     * igual que uno ajeno (ver EstablecimientoAutorizado).
+     */
+    private Establecimiento autorizarPropietarioOAdmin(Long establecimientoId, String email) {
+        return EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId),
+                establecimiento -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email));
     }
 
+    /** Acotado al establecimiento ya autorizado: inexistente o de otro complejo, el mismo 404. */
     private ProductoBuffet buscarProductoDelEstablecimiento(Long establecimientoId, Long productoId) {
-        ProductoBuffet producto = productoBuffetRepository.findById(productoId)
+        return productoBuffetRepository.findById(productoId)
+                .filter(producto -> producto.getEstablecimiento().getId().equals(establecimientoId))
                 .orElseThrow(() -> new EntityNotFoundException("Producto no encontrado"));
-        if (!producto.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("El producto no pertenece a este establecimiento");
-        }
-        return producto;
     }
 
 }

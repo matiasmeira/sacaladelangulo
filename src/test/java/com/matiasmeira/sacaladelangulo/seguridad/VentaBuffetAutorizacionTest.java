@@ -101,6 +101,18 @@ class VentaBuffetAutorizacionTest extends AbstractSecurityWebTest {
         }
 
         @Test
+        @DisplayName("productoDeOtroComplejo_Devuelve404IgualAlInexistenteSinVenta")
+        void productoDeOtroComplejo_Devuelve404() throws Exception {
+            registrar(duenoA, establecimientoA, productoB)
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Producto no encontrado"));
+            ProductoBuffet inexistente = ProductoBuffet.builder().id(987654321L).build();
+            registrar(duenoA, establecimientoA, inexistente)
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Producto no encontrado"));
+            assertEquals(0, ventaRepository.count());
+            assertEquals(10, stock(productoB));
+        }
+
+        @Test
         @DisplayName("establecimientoInexistenteEnElBody_Devuelve403IgualAlAjeno")
         void establecimientoInexistenteEnElBody_Devuelve403() throws Exception {
             Establecimiento inexistente = Establecimiento.builder().id(987654321L).build();

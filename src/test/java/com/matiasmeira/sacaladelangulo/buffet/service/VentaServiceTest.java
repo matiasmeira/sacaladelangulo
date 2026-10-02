@@ -392,7 +392,7 @@ class VentaServiceTest {
 
         // Act & Assert
         assertThrows(
-                IllegalArgumentException.class,
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
                 () -> ventaService.registrarVenta(request, dueno.getEmail())
         );
         verify(ventaRepository, never()).save(any());
@@ -439,7 +439,7 @@ class VentaServiceTest {
 
         // Act & Assert
         assertThrows(
-                IllegalArgumentException.class,
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
                 () -> ventaService.registrarVenta(request, dueno.getEmail())
         );
         verify(ventaRepository, never()).save(any());

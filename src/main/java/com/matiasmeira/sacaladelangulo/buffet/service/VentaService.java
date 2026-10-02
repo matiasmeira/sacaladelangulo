@@ -212,11 +212,10 @@ public class VentaService {
         if (reservaId == null) {
             return null;
         }
+        // Acotada al establecimiento ya autorizado: inexistente o de otro complejo, el mismo 404.
         Reserva reserva = reservaRepository.findById(reservaId)
+                .filter(r -> r.getCancha().getEstablecimiento().getId().equals(establecimientoId))
                 .orElseThrow(() -> new EntityNotFoundException("Reserva no encontrada"));
-        if (!reserva.getCancha().getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("La reserva no pertenece a este establecimiento");
-        }
         if (reserva.getEstado() != EstadoReserva.CONFIRMADA && reserva.getEstado() != EstadoReserva.FINALIZADA) {
             // Sin este chequeo se podía cargar consumo de buffet a
             // una reserva CANCELADA o todavía PENDIENTE_SENA, distorsionando reportes.
@@ -226,12 +225,10 @@ public class VentaService {
     }
 
     private ProductoBuffet buscarProductoDelEstablecimiento(Long establecimientoId, Long productoId) {
-        ProductoBuffet producto = productoBuffetRepository.findById(productoId)
+        // Acotado al establecimiento ya autorizado: inexistente o de otro complejo, el mismo 404.
+        return productoBuffetRepository.findById(productoId)
+                .filter(producto -> producto.getEstablecimiento().getId().equals(establecimientoId))
                 .orElseThrow(() -> new EntityNotFoundException("Producto no encontrado"));
-        if (!producto.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("El producto no pertenece a este establecimiento");
-        }
-        return producto;
     }
 
 }

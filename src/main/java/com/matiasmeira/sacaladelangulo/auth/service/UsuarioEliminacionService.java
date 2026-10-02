@@ -32,8 +32,7 @@ import java.util.UUID;
 
 /**
  * Baja de cuenta: soft-delete + anonimización de PII, preservando integridad referencial
- * (reservas y auditoría siguen apuntando a la fila, ya anonimizada). Ver spec en
- * docs/superpowers/specs/2026-08-15-eliminacion-cuenta-design.md.
+ * (reservas y auditoría siguen apuntando a la fila, ya anonimizada).
  */
 @Slf4j
 @Service

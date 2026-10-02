@@ -42,8 +42,7 @@ import static org.mockito.Mockito.when;
 /**
  * Ocupación derivada del pool (DisponibilidadCanchaResponse.ocupadaPorPool): una cancha
  * queda ahí en un rango si y solo si una reserva nueva sobre ella en ese rango sería
- * rechazada por PoolCanchaCalculator.hayDisponibilidad (ver
- * docs/superpowers/specs/2026-09-10-disponibilidad-ocupacion-pool.md).
+ * rechazada por PoolCanchaCalculator.hayDisponibilidad.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("DisponibilidadService - ocupación derivada del pool")

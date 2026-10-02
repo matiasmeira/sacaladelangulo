@@ -42,8 +42,6 @@ import static org.mockito.Mockito.when;
  * {@code FotoEstablecimientoServiceTest}) nunca tiene una transacción activa, así que
  * {@code isActualTransactionActive()} daría {@code false} tanto con el bug presente como
  * arreglado — no serviría como evidencia de nada.
- *
- * <p>Ver docs/superpowers/plans/2026-08-22-fotos-fronteras-transaccionales.md.
  */
 @SpringBootTest
 @TestPropertySource(properties = {

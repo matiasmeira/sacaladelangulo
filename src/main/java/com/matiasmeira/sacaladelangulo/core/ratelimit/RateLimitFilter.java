@@ -111,7 +111,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     /**
      * Escribe la respuesta de rechazo directamente sobre el response, en vez de lanzar
-     * (ver medición en .superpowers/sdd/ratelimit-429-medicion.md): este filtro corre
+     * (se midió que lanzar termina en un 500): este filtro corre
      * dentro de la cadena de Spring Security, ANTES del DispatcherServlet, así que una
      * excepción acá no pasa por GlobalExceptionHandler (que es un @RestControllerAdvice,
      * atado al despacho del controller) ni por ExceptionTranslationFilter (que sólo

@@ -174,7 +174,7 @@ class CanchaServiceTest {
         when(canchaRepository.findById(canchaDeOtroEstablecimiento.getId())).thenReturn(Optional.of(canchaDeOtroEstablecimiento));
 
         assertThrows(
-                IllegalArgumentException.class,
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
                 () -> canchaService.desactivarCancha(establecimiento.getId(), canchaDeOtroEstablecimiento.getId(), dueno.getEmail())
         );
         verify(canchaRepository, never()).save(any());

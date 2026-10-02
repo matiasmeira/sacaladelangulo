@@ -53,10 +53,12 @@ public class CanchaService {
     private final ReservaRepository reservaRepository;
 
     public CanchaResponse crearCancha(Long establecimientoId, CanchaRequest request, String email) {
-        validarSolapamientoTarifas(request.tarifas());
-
-        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(
+                establecimientoRepository.findById(establecimientoId));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
+
+        validarSolapamientoTarifas(request.tarifas());
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         BigDecimal montoSena = validarMontoSena(request.montoSena(), establecimiento.getDueno().getPlanSuscripcion());
@@ -110,16 +112,17 @@ public class CanchaService {
      */
     @Transactional(readOnly = true)
     public List<CanchaResponse> obtenerCanchasPorEstablecimiento(Long establecimientoId, String email, boolean incluirInactivas) {
-        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        if (incluirInactivas) {
-            autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
-        } else {
-            // Mismo conjunto que la agenda: se dibuja POR cancha, así que sin este listado
-            // no se renderiza aunque el empleado sólo vaya a cobrar. Alta, edición y baja
-            // de canchas siguen siendo del dueño.
-            autorizacionEmpleadoService.validarLectura(establecimiento, email,
-                    AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
-        }
+        EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId), establecimiento -> {
+            if (incluirInactivas) {
+                autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+            } else {
+                // Mismo conjunto que la agenda: se dibuja POR cancha, así que sin este listado
+                // no se renderiza aunque el empleado sólo vaya a cobrar. Alta, edición y baja
+                // de canchas siguen siendo del dueño.
+                autorizacionEmpleadoService.validarLectura(establecimiento, email,
+                        AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
+            }
+        });
 
         List<Cancha> canchas = incluirInactivas
                 ? canchaRepository.findByEstablecimientoId(establecimientoId)
@@ -131,16 +134,14 @@ public class CanchaService {
     }
 
     public CanchaResponse actualizarCancha(Long establecimientoId, Long canchaId, CanchaRequest request, String email) {
-        validarSolapamientoTarifas(request.tarifas());
-
-        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(
+                establecimientoRepository.findById(establecimientoId));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
-        Cancha cancha = buscarCanchaNoEliminada(canchaId);
+        Cancha cancha = buscarCanchaNoEliminada(establecimientoId, canchaId);
 
-        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
-        }
+        validarSolapamientoTarifas(request.tarifas());
 
         BigDecimal montoSena = validarMontoSena(request.montoSena(), establecimiento.getDueno().getPlanSuscripcion());
         List<Integer> duracionesPermitidas = resolverDuraciones(request.duracionesPermitidas());
@@ -199,14 +200,10 @@ public class CanchaService {
      * viejo, que sigue llamando a este método e ignorando el valor de retorno.
      */
     public Cancha desactivarCancha(Long establecimientoId, Long canchaId, String email) {
-        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId),
+                establecimiento -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email));
 
-        Cancha cancha = buscarCanchaNoEliminada(canchaId);
-
-        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
-        }
+        Cancha cancha = buscarCanchaNoEliminada(establecimientoId, canchaId);
 
         validarDesactivacion(cancha);
         cancha.setIsActive(false);
@@ -225,14 +222,10 @@ public class CanchaService {
      * mientras ésta estaba inactiva (ver el javadoc de validarConfiguracionDePool).
      */
     public Cancha reactivarCancha(Long establecimientoId, Long canchaId, String email) {
-        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId),
+                establecimiento -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email));
 
-        Cancha cancha = buscarCanchaNoEliminada(canchaId);
-
-        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
-        }
+        Cancha cancha = buscarCanchaNoEliminada(establecimientoId, canchaId);
 
         validarConfiguracionDePool(establecimientoId, canchaId, cancha.getCanchasFisicas());
         cancha.setIsActive(true);
@@ -536,25 +529,19 @@ public class CanchaService {
         return precios == null ? new HashMap<>() : new HashMap<>(precios);
     }
 
-    private Establecimiento buscarEstablecimientoPorId(Long establecimientoId) {
-        return establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-    }
-
     /**
      * Una cancha eliminada (deletedAt != null, ver CanchaEliminacionService) es, para
      * cualquier efecto práctico, inexistente: no aparece en el panel del dueño (ver
      * CanchaRepository.findByEstablecimientoId), así que nunca debería intentarse editar o
      * desactivar por su id salvo con un id viejo/inválido -- mismo mensaje que "no
-     * encontrada" a secas, sin distinguirlo.
+     * encontrada" a secas, sin distinguirlo. Se busca acotada al establecimiento ya autorizado: la cancha
+     * de otro complejo responde el mismo 404.
      */
-    private Cancha buscarCanchaNoEliminada(Long canchaId) {
-        Cancha cancha = canchaRepository.findById(canchaId)
+    private Cancha buscarCanchaNoEliminada(Long establecimientoId, Long canchaId) {
+        return canchaRepository.findById(canchaId)
+                .filter(cancha -> cancha.getDeletedAt() == null)
+                .filter(cancha -> cancha.getEstablecimiento().getId().equals(establecimientoId))
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
-        if (cancha.getDeletedAt() != null) {
-            throw new EntityNotFoundException("Cancha no encontrada");
-        }
-        return cancha;
     }
 
     /** Mismo motivo que mapToResponse: preciosPorDuracion es @ElementCollection. */

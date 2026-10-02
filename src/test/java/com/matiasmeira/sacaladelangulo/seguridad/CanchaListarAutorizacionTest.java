@@ -30,8 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * corta la anotación.
  *
  * <p>El establecimiento A tiene una cancha activa y una desactivada; el B, una activa: el listado nunca
- * mezcla complejos. El establecimiento inexistente da 404 antes de autorizar (CanchaService:113,
- * pendiente 69, abierto): no se testea.
+ * mezcla complejos. El establecimiento inexistente responde el mismo 403 que uno ajeno (pendiente
+ * 69), con el mensaje del chequeo que corresponda; el ADMIN recibe 404.
  */
 @DisplayName("GET /api/v1/establecimientos/{e}/canchas")
 class CanchaListarAutorizacionTest extends AbstractSecurityWebTest {
@@ -145,5 +145,28 @@ class CanchaListarAutorizacionTest extends AbstractSecurityWebTest {
     void inactivasEmpleadoTodos() throws Exception {
         Usuario todo = empleado(establecimientoA, EnumSet.allOf(PermisoEmpleado.class));
         listar(todo, true).andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_PROPIETARIO));
+    }
+
+    private ResultActions listarEn(long establecimientoId, Usuario quien, boolean incluirInactivas) throws Exception {
+        return mockMvc.perform(get("/api/v1/establecimientos/" + establecimientoId + "/canchas"
+                + (incluirInactivas ? "?incluirInactivas=true" : "")).header("Authorization", bearer(quien)));
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        listarEn(999_999L, duenoB, false).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_LECTURA));
+        listarEn(999_999L, duenoA, false).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_LECTURA));
+        listarEn(999_999L, duenoA, true).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_PROPIETARIO));
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistenteComoAdmin_Devuelve404")
+    void establecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+        listarEn(999_999L, admin, false).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
     }
 }

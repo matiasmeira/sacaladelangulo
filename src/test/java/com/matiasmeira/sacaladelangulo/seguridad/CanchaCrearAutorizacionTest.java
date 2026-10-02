@@ -73,10 +73,32 @@ class CanchaCrearAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
-    @DisplayName("idDeEstablecimientoInexistente_Devuelve404")
-    void idDeEstablecimientoInexistente_Devuelve404() throws Exception {
+    @DisplayName("idDeEstablecimientoInexistente_Devuelve403IgualAlAjeno")
+    void idDeEstablecimientoInexistente_Devuelve403() throws Exception {
         crear(999_999L, duenoA)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertCantidades(1, 0);
+    }
+
+    @Test
+    @DisplayName("idDeEstablecimientoInexistenteComoAdmin_Devuelve404")
+    void idDeEstablecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+        crear(999_999L, admin)
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+        assertCantidades(1, 0);
+    }
+
+    @Test
+    @DisplayName("tarifasSolapadasDeDuenoAjeno_Devuelve403No400")
+    void tarifasSolapadasDeDuenoAjeno_Devuelve403No400() throws Exception {
+        String solapadas = "{\"nombre\":\"X\",\"deportes\":[\"PADEL\"],\"precioBase\":1500,\"tarifas\":["
+                + "{\"diaSemana\":\"MONDAY\",\"horaInicio\":\"10:00\",\"horaFin\":\"14:00\",\"precio\":100},"
+                + "{\"diaSemana\":\"MONDAY\",\"horaInicio\":\"12:00\",\"horaFin\":\"16:00\",\"precio\":100}]}";
+        String url = "/api/v1/establecimientos/" + establecimientoA.getId() + "/canchas";
+        mockMvc.perform(post(url).header("Authorization", bearer(duenoB)).contentType("application/json").content(solapadas))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        mockMvc.perform(post(url).header("Authorization", bearer(duenoA)).contentType("application/json").content(solapadas))
+                .andExpect(status().isBadRequest());
         assertCantidades(1, 0);
     }
 

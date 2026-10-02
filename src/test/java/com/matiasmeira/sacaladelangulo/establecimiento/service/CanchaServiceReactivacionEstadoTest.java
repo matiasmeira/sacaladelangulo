@@ -127,7 +127,8 @@ class CanchaServiceReactivacionEstadoTest {
         when(canchaRepository.findById(inactivaDeOtroEstablecimiento.getId())).thenReturn(Optional.of(inactivaDeOtroEstablecimiento));
 
         assertThatThrownBy(() -> canchaService.reactivarCancha(establecimiento.getId(), inactivaDeOtroEstablecimiento.getId(), dueno.getEmail()))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class)
+                .hasMessage("Cancha no encontrada");
         verify(canchaRepository, never()).save(any());
     }
 

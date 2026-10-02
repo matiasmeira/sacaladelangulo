@@ -20,16 +20,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * PUT /api/v1/establecimientos/{establecimientoId}/canchas/{canchaId}. @PreAuthorize OWNER/ADMIN
- * (CanchaController:65). CanchaService.actualizarCancha: busca el complejo (:136), valida con
- * validarPropietarioOAdmin (:137) -> 403 al dueño ajeno; después busca la cancha (:139, 404) y exige
- * que sea del complejo del path (:141-142, IllegalArgumentException -> 400 "La cancha no pertenece a
- * este establecimiento"). El orden importa: el cruce se evalúa DESPUÉS de autorizar sobre el path.
+ * (CanchaController:65). CanchaService.actualizarCancha autoriza primero con validarPropietarioOAdmin contra
+ * el establecimiento del path (pendiente 69): el dueño ajeno y el establecimiento inexistente reciben el mismo
+ * 403. Después busca la cancha acotada a ese establecimiento: inexistente, eliminada o de otro complejo
+ * responden el mismo 404 "Cancha no encontrada". El body (tarifas) se valida al final, sólo para quien
+ * está autorizado.
  */
 @DisplayName("PUT /api/v1/establecimientos/{id}/canchas/{canchaId}")
 class CanchaActualizarAutorizacionTest extends AbstractSecurityWebTest {
 
     private static final String MENSAJE_403_SERVICE = "No autorizado en este establecimiento";
-    private static final String MENSAJE_CRUCE = "La cancha no pertenece a este establecimiento";
+    private static final String MENSAJE_CANCHA_NO_ENCONTRADA = "Cancha no encontrada";
     private static final String BODY = "{\"nombre\":\"Cancha Editada\",\"deportes\":[\"PADEL\"],\"precioBase\":2500}";
 
     private Cancha canchaB;
@@ -104,36 +105,65 @@ class CanchaActualizarAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
-    @DisplayName("duenoDeOtroEstablecimientoConPathPropioYCanchaAjena_Devuelve400SinCambios")
-    void duenoDeOtroEstablecimientoConPathPropioYCanchaAjena_Devuelve400SinCambios() throws Exception {
-        // Cruce: path de B (autoriza) con la cancha de A -> CanchaService:141-142
+    @DisplayName("duenoDeOtroEstablecimientoConPathPropioYCanchaAjena_Devuelve404SinCambios")
+    void duenoDeOtroEstablecimientoConPathPropioYCanchaAjena_Devuelve404SinCambios() throws Exception {
+        // Cruce: path de B (autoriza) con la cancha de A: el mismo 404 que una cancha inexistente
         actualizar(establecimientoB.getId(), canchaA.getId(), duenoB)
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value(MENSAJE_CRUCE));
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value(MENSAJE_CANCHA_NO_ENCONTRADA));
         assertSinCambios();
     }
 
     @Test
-    @DisplayName("duenoDelEstablecimientoConCanchaDeOtroComplejo_Devuelve400SinCambios")
-    void duenoDelEstablecimientoConCanchaDeOtroComplejo_Devuelve400SinCambios() throws Exception {
+    @DisplayName("duenoDelEstablecimientoConCanchaDeOtroComplejo_Devuelve404SinCambios")
+    void duenoDelEstablecimientoConCanchaDeOtroComplejo_Devuelve404SinCambios() throws Exception {
         // Mismo cruce a la inversa: path de A con la cancha de B
         actualizar(establecimientoA.getId(), canchaB.getId(), duenoA)
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value(MENSAJE_CRUCE));
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value(MENSAJE_CANCHA_NO_ENCONTRADA));
         assertSinCambios();
     }
 
     @Test
-    @DisplayName("adminConCanchaDeOtroComplejo_Devuelve400SinCambios")
-    void adminConCanchaDeOtroComplejo_Devuelve400SinCambios() throws Exception {
-        // El ADMIN pasa la autorización pero el cruce también lo frena.
+    @DisplayName("adminConCanchaDeOtroComplejo_Devuelve404SinCambios")
+    void adminConCanchaDeOtroComplejo_Devuelve404SinCambios() throws Exception {
+        // El ADMIN pasa la autorización pero la cancha no es del establecimiento del path.
         actualizar(establecimientoA.getId(), canchaB.getId(), admin)
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value(MENSAJE_CRUCE));
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value(MENSAJE_CANCHA_NO_ENCONTRADA));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        actualizar(999_999L, canchaA.getId(), duenoA)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistenteComoAdmin_Devuelve404")
+    void establecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+        actualizar(999_999L, canchaA.getId(), admin)
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+    }
+
+    @Test
+    @DisplayName("bodyInvalidoDeDuenoAjeno_Devuelve403No400")
+    void bodyInvalidoDeDuenoAjeno_Devuelve403No400() throws Exception {
+        // Tarifas solapadas: el service lo rechaza con 400, pero sólo a quien está autorizado.
+        String tarifasSolapadas = "{\"nombre\":\"X\",\"deportes\":[\"PADEL\"],\"precioBase\":2500,\"tarifas\":["
+                + "{\"diaSemana\":\"MONDAY\",\"horaInicio\":\"10:00\",\"horaFin\":\"14:00\",\"precio\":100},"
+                + "{\"diaSemana\":\"MONDAY\",\"horaInicio\":\"12:00\",\"horaFin\":\"16:00\",\"precio\":100}]}";
+        String url = "/api/v1/establecimientos/" + establecimientoA.getId() + "/canchas/" + canchaA.getId();
+        mockMvc.perform(put(url).header("Authorization", bearer(duenoB)).contentType("application/json").content(tarifasSolapadas))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        mockMvc.perform(put(url).header("Authorization", bearer(duenoA)).contentType("application/json").content(tarifasSolapadas))
+                .andExpect(status().isBadRequest());
         assertSinCambios();
     }
 
     @Test
     @DisplayName("canchaInexistente_Devuelve404")
     void canchaInexistente_Devuelve404() throws Exception {
-        // CanchaService:554
         actualizar(establecimientoA.getId(), 999_999L, duenoA)
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Cancha no encontrada"));
         assertSinCambios();

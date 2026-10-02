@@ -55,7 +55,7 @@ import static org.mockito.Mockito.when;
  *
  * <p>Un caso de esta matriz queda documentado como bug real (ver
  * {@link #finalizar_matriz(EstadoReserva)} para CANCELADA_PRERESERVA): el test se deja en
- * rojo a propósito en vez de ajustar la expectativa para que pase (ver REVISION_FUNCIONAL.md).
+ * rojo a propósito en vez de ajustar la expectativa para que pase.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -223,7 +223,7 @@ class ReservaServiceMatrizTransicionesTest {
         when(reservaRepository.findByIdConEstablecimientoYDueno(RESERVA_ID)).thenReturn(Optional.of(reservaEn(estadoInicial)));
 
         if (FINALIZAR_INVALIDOS.contains(estadoInicial)) {
-            // FIX aplicado (ver REVISION_FUNCIONAL.md): CANCELADA_PRERESERVA (una prereserva
+            // FIX aplicado: CANCELADA_PRERESERVA (una prereserva
             // que expiró SIN que nadie pagara la seña) ahora se rechaza explícitamente, igual
             // que CANCELADA. Antes caía en la rama por defecto y se podía "finalizar" igual,
             // generando cobro y movimiento de caja sobre una reserva que nunca fue confirmada

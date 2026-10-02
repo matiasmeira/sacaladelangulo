@@ -273,8 +273,8 @@ class ReservaRepositoryTest {
     }
 
     /**
-     * Confirma con datos reales de TurnoFijo (no sólo Reserva sueltas) el hallazgo del
-     * diagnóstico de CanchaEliminacionService: un turno fijo ACTIVO con una ocurrencia futura
+     * Confirma con datos reales de TurnoFijo (no sólo Reserva sueltas) un hallazgo del
+     * análisis previo de CanchaEliminacionService: un turno fijo ACTIVO con una ocurrencia futura
      * CONFIRMADA queda atrapado por resumenReservasFuturasVivasPorCancha, sin que
      * CanchaEliminacionService necesite consultar TurnoFijoRepository. Esto es así porque
      * TurnoFijoService.crearInterno persiste TODAS las ocurrencias del período como Reserva
@@ -399,7 +399,7 @@ class ReservaRepositoryTest {
     }
 
     /**
-     * El hallazgo más importante del diagnóstico de CanchaEliminacionService: una reserva
+     * El caso más importante de CanchaEliminacionService: una reserva
      * HISTÓRICA (FINALIZADA, ya cobrada) sobre una cancha que HOY está eliminada tiene que
      * seguir resolviendo el nombre y el precio de esa cancha sin romperse -- es exactamente lo
      * que necesitan los reportes y los cierres de caja de hace meses. Cancha no se borra

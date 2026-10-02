@@ -127,8 +127,7 @@ class ReservaServiceTest {
     /**
      * A diferencia del resto de la suite (anclada a 2030 a propósito, para no depender de
      * cuándo se ejecuten los tests), los tests de crearReserva/crearReservaManual necesitan
-     * una fecha real dentro de la ventana de anticipación de 31 días (ver M14 en la
-     * auditoría), así que se calculan relativos a "hoy". El establecimiento de prueba solo
+     * una fecha real dentro de la ventana de anticipación de 31 días, así que se calculan relativos a "hoy". El establecimiento de prueba solo
      * tiene horario de atención los martes.
      */
     private static final LocalDate FECHA_BASE = proximoMartes();

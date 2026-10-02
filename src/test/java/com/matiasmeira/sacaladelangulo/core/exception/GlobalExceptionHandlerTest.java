@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@DisplayName("GlobalExceptionHandler - Mapeo de errores de cliente comunes (ver M22)")
+@DisplayName("GlobalExceptionHandler - Mapeo de errores de cliente comunes")
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();

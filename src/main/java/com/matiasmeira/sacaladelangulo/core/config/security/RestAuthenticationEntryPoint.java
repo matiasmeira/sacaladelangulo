@@ -16,7 +16,7 @@ import java.util.Map;
  * Las peticiones sin autenticar nunca llegan al DispatcherServlet (Spring Security las
  * corta en el filter chain), así que GlobalExceptionHandler no las ve: sin este handler
  * caen al formato por defecto de Spring Security (texto plano), inconsistente con el
- * esquema JSON {"error": "..."} del resto de la API (ver B1 en la auditoría).
+ * esquema JSON {"error": "..."} del resto de la API.
  */
 @Component
 public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {

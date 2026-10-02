@@ -89,7 +89,7 @@ class RecuperacionPasswordServiceTest {
         assertEquals("existente@test.com", eventoCaptor.getValue().email());
 
         // El valor crudo del código/token solo viaja en el evento (dispara el email); en
-        // la base solo se persiste su hash (ver M-05 en la auditoría).
+        // la base solo se persiste su hash.
         String codigoCrudo = eventoCaptor.getValue().codigo();
         assertEquals(6, codigoCrudo.length());
         assertTrue(codigoCrudo.chars().allMatch(Character::isDigit));

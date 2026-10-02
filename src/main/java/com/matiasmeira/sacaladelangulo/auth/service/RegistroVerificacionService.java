@@ -108,7 +108,7 @@ public class RegistroVerificacionService {
 
         String token = UUID.randomUUID().toString();
         String codigo = String.format("%06d", random.nextInt(1000000));
-        // Solo se persiste el hash (ver M-05 en la auditoría): el valor crudo únicamente
+        // Solo se persiste el hash: el valor crudo únicamente
         // viaja en el link/email enviado al usuario, nunca a la base.
         TokenVerificacionEmail tokenVerificacion = TokenVerificacionEmail.builder()
                 .email(email)
@@ -175,7 +175,7 @@ public class RegistroVerificacionService {
         }
 
         // El código validado no tiene un token crudo recuperable (solo se persiste su
-        // hash, ver M-05 en la auditoría): se emite uno nuevo, equivalente al del link,
+        // hash): se emite uno nuevo, equivalente al del link,
         // para que el frontend continúe con /registro/completar sin cambios. Solo se
         // guarda su hash, igual que el resto de los secretos de este flujo.
         String nuevoToken = UUID.randomUUID().toString();
@@ -221,7 +221,7 @@ public class RegistroVerificacionService {
         } catch (DataIntegrityViolationException ex) {
             // existsByEmail + save no es atómico: un doble submit con el mismo token (el
             // token no se consume hasta el final) puede pasar ambas veces el chequeo antes
-            // de que cualquiera inserte (ver M8 en la auditoría).
+            // de que cualquiera inserte.
             tokenVerificacionEmailRepository.delete(tokenVerificacion);
             throw new IllegalArgumentException("El email ya está registrado");
         }
@@ -232,7 +232,7 @@ public class RegistroVerificacionService {
         eventPublisher.publishEvent(new RegistroCompletadoEvent(email, usuario.getNombre(), usuario.getRol()));
 
         // Se construye el UserDetails a partir del Usuario recién guardado en vez de
-        // volver a consultar la base con loadUserByUsername (ver M4 en la auditoría).
+        // volver a consultar la base con loadUserByUsername.
         var userDetails = UsuarioUserDetailsMapper.map(usuario);
         return new AuthResponse(jwtService.generateToken(userDetails));
     }

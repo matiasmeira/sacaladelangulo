@@ -99,7 +99,7 @@ class GastoServiceAdversarialTest {
     }
 
     /**
-     * FIX aplicado (ver REVISION_FUNCIONAL.md): GastoService.registrarGasto ahora re-valida
+     * FIX aplicado: GastoService.registrarGasto ahora re-valida
      * server-side que la descripción no esté vacía (validarCamposObligatorios), no solo el DTO
      * vía @NotBlank/@Valid en el controller. Antes de este fix, una descripción vacía se
      * persistía sin problema si algún caller se saltaba la validación del controller.
@@ -114,7 +114,7 @@ class GastoServiceAdversarialTest {
     }
 
     /**
-     * FIX aplicado (ver REVISION_FUNCIONAL.md): antes, un metodoPago nulo llegaba hasta
+     * FIX aplicado: antes, un metodoPago nulo llegaba hasta
      * GastoMapper y reventaba con NullPointerException en vez de un error de negocio claro.
      * Ahora GastoService.registrarGasto rechaza explícitamente con IllegalArgumentException
      * antes de siquiera construir la entidad.
@@ -134,8 +134,8 @@ class GastoServiceAdversarialTest {
      * lo pasa tal cual a GastoRepository.buscar, cuyo WHERE con "fecha >= :desde AND fecha
      * <= :hasta" simplemente no matchea nada si el rango está invertido. Resultado: página
      * vacía, sin error. Documentado como inconsistencia de API (un endpoint de listados
-     * "traga" el rango invertido silenciosamente, el de reportes lo rechaza con 400) en
-     * REVISION_FUNCIONAL.md, no como bug bloqueante.
+     * "traga" el rango invertido silenciosamente, el de reportes lo rechaza con 400); se lo
+     * considera una inconsistencia de API, no un bug bloqueante.
      */
     @Test
     @DisplayName("listarGastos: rango invertido (desde > hasta) NO se rechaza, delega al repositorio tal cual")

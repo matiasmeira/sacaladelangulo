@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
  * "facturado" en este reporte SOLO contempla reservas (ver ReservaRepository.sumFacturacionPorMetodoPago
  * usado por ReporteFacturacionService) — la venta de buffet, que sí genera ingresos reales de
  * caja, no está representada en absoluto en este número. No es un bug de cálculo (la resta
- * está bien hecha), es un hueco de alcance documentado en REVISION_FUNCIONAL.md.
+ * está bien hecha), es un hueco de alcance conocido.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReporteGastosService - Casos adversariales adicionales")

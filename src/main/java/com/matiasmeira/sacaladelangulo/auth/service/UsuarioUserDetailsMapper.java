@@ -12,7 +12,7 @@ import java.util.List;
  * cuando ya tenemos el Usuario a mano (justo después de authenticationManager.authenticate(),
  * que ya lo cargó internamente vía UserDetailsService, o recién creado/guardado en un
  * registro). Es la misma lógica de mapeo que usa el bean UserDetailsService en
- * SecurityConfig, extraída acá para no duplicarla (ver M4 en la auditoría).
+ * SecurityConfig, extraída acá para no duplicarla.
  */
 public final class UsuarioUserDetailsMapper {
 

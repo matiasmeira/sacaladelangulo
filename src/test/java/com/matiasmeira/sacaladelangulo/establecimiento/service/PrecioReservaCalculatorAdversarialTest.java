@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * FIX aplicado (ver REVISION_FUNCIONAL.md): PrecioReservaCalculator ahora normaliza la escala
+ * FIX aplicado: PrecioReservaCalculator ahora normaliza la escala
  * del resultado a 2 decimales (los que corresponden a dinero, ver NUMERIC(38,2) en la
  * migración) tanto en el camino de precio exacto como en el proporcional. Antes del fix,
  * duracionHoras salía de un ".divide(..., 2, HALF_UP)" (siempre escala 2) y se multiplicaba

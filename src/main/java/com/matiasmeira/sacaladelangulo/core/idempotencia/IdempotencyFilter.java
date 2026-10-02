@@ -52,7 +52,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
      * Público (no private): RutasProtegidasCoincidenConControllersTest, en otro paquete,
      * verifica que cada ruta acá siga existiendo como endpoint POST real, para detectar en
      * el test suite (no en producción) si un refactor de rutas desincroniza este set de
-     * los controllers reales (ver M26 en la auditoría).
+     * los controllers reales.
      */
     public static final Set<String> RUTAS_PROTEGIDAS = Set.of(
             "/api/v1/reservas",
@@ -110,7 +110,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     }
     /**
      * Ventana corta para distinguir "en curso" de "abandonada" (el proceso murió entre
-     * guardar la solicitud y completarla — ver M21 en la auditoría), independiente de la
+     * guardar la solicitud y completarla), independiente de la
      * retención de 24h de IdempotencyCleanupService: sin esto, una solicitud interrumpida
      * bloquea cualquier reintento legítimo del cliente hasta que se limpie por completo.
      */
@@ -119,7 +119,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
      * Debe coincidir con SolicitudIdempotente.clave (length = 255): sin esta validación
      * temprana, una clave más larga que la columna llega hasta el INSERT y revienta con
      * DataIntegrityViolationException, indistinguible ahí de una carrera de idempotencia
-     * genuina (el catch de más abajo respondería 409 con un mensaje engañoso, ver B15).
+     * genuina (el catch de más abajo respondería 409 con un mensaje engañoso).
      */
     private static final int LONGITUD_MAXIMA_CLAVE = 255;
 

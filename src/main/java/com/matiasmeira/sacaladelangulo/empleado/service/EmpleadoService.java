@@ -39,9 +39,9 @@ public class EmpleadoService {
     private static final String DOMINIO_EMAIL_SINTETICO = "empleados.sacaladelangulo.interno";
 
     /**
-     * Defensa en profundidad adicional al rate limiting de A2: bloquea los PIN más
+     * Defensa en profundidad adicional al rate limiting del login de mostrador: bloquea los PIN más
      * triviales (secuencias/repeticiones obvias) para que un atacante no necesite ni
-     * agotar el rate limit para adivinar el PIN de un empleado (ver B22 en la auditoría).
+     * agotar el rate limit para adivinar el PIN de un empleado.
      */
     private static final Set<String> PINES_PROHIBIDOS = construirPinesProhibidos();
 
@@ -66,7 +66,7 @@ public class EmpleadoService {
         Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         // Trim + IgnoreCase para que "Juan" y "juan "/" JUAN" cuenten como el mismo
-        // nombre tanto acá como al loguear (ver B4 en la auditoría).
+        // nombre tanto acá como al loguear.
         String nombre = request.nombre() == null ? null : request.nombre().trim();
         if (usuarioRepository.existsByEstablecimientoIdAndNombreIgnoreCaseAndRolAndIsActiveTrue(establecimientoId, nombre, Role.EMPLOYEE)) {
             throw new IllegalArgumentException("Ya existe un empleado con ese nombre en este establecimiento");
@@ -150,7 +150,7 @@ public class EmpleadoService {
         validarPinNoTrivial(request.pin());
 
         empleado.setPassword(passwordEncoder.encode(request.pin()));
-        // Invalida cualquier JWT de mostrador ya emitido con el PIN viejo (ver B3 en la auditoría).
+        // Invalida cualquier JWT de mostrador ya emitido con el PIN viejo.
         empleado.setTokenVersion(empleado.getTokenVersion() + 1);
         Usuario empleadoActualizado = usuarioRepository.save(empleado);
         log.info("PIN actualizado. Empleado: {}", empleadoId);

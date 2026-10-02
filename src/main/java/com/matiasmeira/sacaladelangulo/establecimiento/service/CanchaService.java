@@ -147,7 +147,7 @@ public class CanchaService {
 
         validarPreciosPorDuracion(request.preciosPorDuracion(), request.tarifas(), duracionesPermitidas);
 
-        // isActive es reversible (ver B19/M-XX en la auditoría): null en el request deja el
+        // isActive es reversible: null en el request deja el
         // estado actual sin tocar, así un edit que no incluye este campo nunca reactiva ni
         // desactiva por accidente. Se resuelve ANTES de tocar la entidad para poder comparar
         // el estado previo contra el nuevo.
@@ -190,7 +190,7 @@ public class CanchaService {
 
     /**
      * Desactiva una cancha (baja lógica, isActive=false): sin este método no había forma
-     * de dar de baja una cancha, solo de crearla o editarla (ver B19 en la auditoría).
+     * de dar de baja una cancha, solo de crearla o editarla.
      * Misma validación de ownership que actualizarCancha. isActive es reversible: se puede
      * volver a activar desde actualizarCancha o desde reactivarCancha.
      *
@@ -243,8 +243,8 @@ public class CanchaService {
 
     /**
      * Bloquea la desactivación si alguna reserva futura del GRUPO de pool de {@code cancha}
-     * (cierre transitivo de PoolCanchaCalculator, no solo el pool propio: ver ejemplo de
-     * F1/F2/F3-C9 en el diagnóstico) deja de tener capacidad al sacarla. No es una regla
+     * (cierre transitivo de PoolCanchaCalculator, no solo el pool propio: p. ej. una
+     * lógica C9 armada con las físicas F1/F2/F3) deja de tener capacidad al sacarla. No es una regla
      * nueva: se recalcula con el mismo PoolCanchaCalculator que usa producción, sobre una
      * copia en memoria que simula el estado post-desactivación — footprint() ya excluye las
      * físicas inactivas de la capacidad del grupo.
@@ -421,8 +421,7 @@ public class CanchaService {
         if (incluyeEliminada) {
             throw new IllegalArgumentException("Algunas canchas físicas no existen");
         }
-        // Sin este chequeo, un pool podía armarse con canchas de OTRO establecimiento (ver
-        // M-03 en la auditoría): el cálculo de disponibilidad y el lock pesimista de
+        // Sin este chequeo, un pool podía armarse con canchas de OTRO establecimiento: el cálculo de disponibilidad y el lock pesimista de
         // ReservaService operarían sobre filas de un tenant ajeno.
         boolean todasDelEstablecimiento = canchasFisicas.stream()
                 .allMatch(c -> c.getEstablecimiento().getId().equals(establecimientoId));

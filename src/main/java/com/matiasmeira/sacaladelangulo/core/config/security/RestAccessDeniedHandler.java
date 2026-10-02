@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * Complementa a RestAuthenticationEntryPoint: cubre el caso de un usuario ya
  * autenticado pero sin el rol requerido por authorizeHttpRequests, rechazado en el
- * filter chain antes de llegar a GlobalExceptionHandler (ver B1 en la auditoría).
+ * filter chain antes de llegar a GlobalExceptionHandler.
  */
 @Component
 public class RestAccessDeniedHandler implements AccessDeniedHandler {

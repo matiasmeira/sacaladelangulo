@@ -521,7 +521,7 @@ class TurnoFijoServiceTest {
 
         // Assert: un turno fijo es UN aviso, no uno por ocurrencia. Con un evento por
         // ocurrencia, un turno fijo anual encola 52 tareas @Async contra un pool con cola
-        // de 50 y manda 104 emails (ver B-07 en la auditoría).
+        // de 50 y manda 104 emails.
         verify(eventPublisher).publishEvent(new TurnoFijoCreadoEvent(List.of(500L, 501L, 502L)));
         verify(eventPublisher, never()).publishEvent(any(ReservaConfirmadaEvent.class));
     }

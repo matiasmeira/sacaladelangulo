@@ -12,7 +12,7 @@ import java.math.BigDecimal;
  * aplican nombre, descripción, precio y umbral de alerta; el stock se maneja
  * exclusivamente a través
  * del endpoint de ajuste (PATCH .../stock) — ver el @Schema de stock, que documenta
- * esto también en el OpenAPI expuesto a integradores (ver B9 en la auditoría).
+ * esto también en el OpenAPI expuesto a integradores.
  */
 public record ProductoBuffetRequest(
         @NotBlank(message = "El nombre es obligatorio")

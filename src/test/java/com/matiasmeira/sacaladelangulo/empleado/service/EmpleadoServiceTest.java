@@ -161,7 +161,7 @@ class EmpleadoServiceTest {
     @DisplayName("crearEmpleado_Exito_ReutilizaNombreDeEmpleadoDesactivado")
     void crearEmpleado_Exito_ReutilizaNombreDeEmpleadoDesactivado() {
         // Arrange: ya existe un "Juan" desactivado, pero la validación de unicidad solo
-        // mira empleados activos (ver B18 en la auditoría).
+        // mira empleados activos.
         EmpleadoRequest request = new EmpleadoRequest("Juan", "7392", null);
 
         when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));

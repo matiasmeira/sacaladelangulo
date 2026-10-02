@@ -16,8 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * IdempotencyFilter y RateLimitFilter hardcodean rutas por match exacto de string, sin
  * ninguna dependencia de compilación hacia los controllers reales: un refactor de rutas
- * los desincroniza en silencio, sin error de compilación ni de test (ver M26 en la
- * auditoría). Este test detecta esa desincronización acá, verificando que cada ruta
+ * los desincroniza en silencio, sin error de compilación ni de test. Este test detecta esa desincronización acá, verificando que cada ruta
  * hardcodeada siga resolviendo a un @PostMapping real.
  */
 @SpringBootTest
@@ -34,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         // FlywayAutoConfiguration corra las migraciones de Postgres contra este H2.
         "spring.flyway.enabled=false"
 })
-@DisplayName("Rutas hardcodeadas en IdempotencyFilter/RateLimitFilter siguen mapeadas a un controller real (ver M26)")
+@DisplayName("Rutas hardcodeadas en IdempotencyFilter/RateLimitFilter siguen mapeadas a un controller real")
 class RutasProtegidasCoincidenConControllersTest {
 
     @Autowired

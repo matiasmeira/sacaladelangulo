@@ -37,7 +37,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     /**
      * Público (no private): RutasProtegidasCoincidenConControllersTest, en otro paquete,
      * verifica que cada ruta hardcodeada acá siga existiendo como endpoint POST real, en
-     * vez de asumirlo (ver M26 en la auditoría).
+     * vez de asumirlo.
      */
     public static final Map<String, Limite> LIMITES_POR_RUTA = Map.of(
             "/api/v1/auth/login", new Limite(15, Duration.ofMinutes(5).toMillis()),

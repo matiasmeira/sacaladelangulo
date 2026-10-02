@@ -101,7 +101,7 @@ class RegistroVerificacionServiceTest {
         assertEquals("nuevo@test.com", eventoCaptor.getValue().email());
 
         // El valor crudo del código/token solo viaja en el evento (dispara el email); en
-        // la base solo se persiste su hash (ver M-05 en la auditoría).
+        // la base solo se persiste su hash.
         String codigoCrudo = eventoCaptor.getValue().codigo();
         assertEquals(6, codigoCrudo.length());
         assertTrue(codigoCrudo.chars().allMatch(Character::isDigit));
@@ -373,7 +373,7 @@ class RegistroVerificacionServiceTest {
     @DisplayName("verificarCodigo_Exito_EmiteUnNuevoTokenYPersisteSoloSuHash")
     void verificarCodigo_Exito_EmiteUnNuevoTokenYPersisteSoloSuHash() {
         // El código validado no tiene un token crudo recuperable (solo se persiste su
-        // hash, ver M-05 en la auditoría): verificarCodigo emite un token NUEVO
+        // hash): verificarCodigo emite un token NUEVO
         // (equivalente al del link) y actualiza el hash persistido a partir de él.
         TokenVerificacionEmail token = TokenVerificacionEmail.builder()
                 .id(1L)

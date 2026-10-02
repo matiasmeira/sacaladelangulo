@@ -84,7 +84,7 @@ public class BloqueoCanchaService {
      * mismo establecimiento. Precarga una sola vez las canchas activas y, para el rango
      * completo que abarcan todas las reservas afectadas, los bloqueos y reservas del
      * establecimiento — en vez de repetir esas 3 consultas por cada combinación
-     * reserva×cancha candidata (antes O(N×M) queries; ver A14 en la auditoría).
+     * reserva×cancha candidata (antes O(N×M) queries).
      */
     private List<ReservaAfectadaResponse> calcularAlternativasParaReservasAfectadas(Cancha canchaBloqueada, List<Reserva> reservasAfectadas) {
         Long establecimientoId = canchaBloqueada.getEstablecimiento().getId();
@@ -173,8 +173,7 @@ public class BloqueoCanchaService {
      * del jugador refleje los horarios bloqueados por el dueño. El motivo (texto libre,
      * puede contener notas operativas internas) sólo se incluye si quien consulta tiene
      * acceso de panel al establecimiento (ADMIN, su dueño o un empleado suyo con cualquier
-     * permiso, el mismo criterio que la disponibilidad); para el resto es null (ver M30 en
-     * la auditoría). El establecimiento se toma de los bloqueos devueltos; si no hay
+     * permiso, el mismo criterio que la disponibilidad); para el resto es null. El establecimiento se toma de los bloqueos devueltos; si no hay
      * ninguno se responde [] sin consultar la regla.
      */
     @Transactional(readOnly = true)

@@ -30,7 +30,7 @@ import java.util.Map;
 /**
  * Reporting/métricas de ventas del buffet, separado de VentaService (que se ocupa
  * exclusivamente del ciclo de vida de la venta: registrar/cancelar) para no mezclar
- * ambas responsabilidades en una sola clase (ver B12 en la auditoría).
+ * ambas responsabilidades en una sola clase.
  */
 @Service
 @RequiredArgsConstructor

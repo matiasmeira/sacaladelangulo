@@ -74,7 +74,7 @@ public class Gasto {
     private LocalDateTime fechaCreacion;
 
     /**
-     * Anulación lógica (ver M-04 en la auditoría): antes eliminarGasto hacía un DELETE
+     * Anulación lógica: antes eliminarGasto hacía un DELETE
      * físico, perdiendo el historial financiero y descuadrando el arqueo de caja sin
      * dejar rastro. Un gasto con isActive=false queda excluido del listado y de los
      * reportes (ver GastoRepository), pero la fila persiste para auditoría.

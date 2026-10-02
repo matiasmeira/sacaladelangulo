@@ -85,7 +85,7 @@ public class ProductoBuffetService {
         autorizacionEmpleadoService.validarPropietarioOAdmin(producto.getEstablecimiento(), email);
 
         // Lock pesimista antes de leer/escribir el stock: serializa contra cualquier otro
-        // ajuste/venta/cancelación concurrente sobre el mismo producto (ver A5 en la auditoría).
+        // ajuste/venta/cancelación concurrente sobre el mismo producto.
         productoBuffetRepository.lockPorIds(List.of(productoId));
 
         int nuevoStock = producto.getStock() + request.cantidad();

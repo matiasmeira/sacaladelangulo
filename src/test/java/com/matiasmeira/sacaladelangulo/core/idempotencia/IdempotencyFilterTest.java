@@ -251,7 +251,7 @@ class IdempotencyFilterTest {
     @DisplayName("doFilter_ClaveExistenteAbandonada_LaBorraYEjecutaElControladorComoSolicitudNueva")
     void doFilter_ClaveExistenteAbandonada_LaBorraYEjecutaElControladorComoSolicitudNueva() throws Exception {
         // El proceso murió entre guardar la solicitud y completarla: statusRespuesta sigue
-        // null, pero ya pasó la ventana corta de "en curso" (ver M21).
+        // null, pero ya pasó la ventana corta de "en curso".
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/reservas");
         request.addHeader("Idempotency-Key", "clave-abc");
         MockHttpServletResponse response = new MockHttpServletResponse();

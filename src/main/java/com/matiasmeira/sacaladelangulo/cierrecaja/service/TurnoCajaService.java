@@ -178,8 +178,7 @@ public class TurnoCajaService {
      * original ya cerró (o nunca se llegó a registrar nada, porque no había turno abierto en
      * su momento), la respuesta es false y el caller NO debe tocar la caja — ni revertir ni
      * registrar un movimiento nuevo — porque cualquiera de las dos cosas ensuciaría el arqueo
-     * de un turno que no tuvo ese billete físico (bug real corregido, ver
-     * REVISION_FUNCIONAL.md).
+     * de un turno que no tuvo ese billete físico (bug real corregido).
      */
     @Transactional(readOnly = true)
     public boolean movimientoOriginalSigueEnTurnoAbierto(Establecimiento establecimiento, OrigenMovimientoCaja origen, Long referenciaId) {

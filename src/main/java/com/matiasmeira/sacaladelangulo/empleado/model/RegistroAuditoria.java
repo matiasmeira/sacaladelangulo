@@ -50,7 +50,7 @@ public class RegistroAuditoria {
     /**
      * ID del OWNER/ADMIN que ejecutó una acción administrativa sobre `empleado` (alta,
      * cambio de permisos/PIN, baja). Null para las acciones operativas, donde el propio
-     * `empleado` es quien actuó (ver M31 en la auditoría).
+     * `empleado` es quien actuó.
      */
     @Column(name = "actor_id")
     private Long actorId;

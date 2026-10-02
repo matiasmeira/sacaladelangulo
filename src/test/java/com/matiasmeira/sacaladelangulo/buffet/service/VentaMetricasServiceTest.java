@@ -44,7 +44,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Extraído de VentaServiceTest (ver B12 en la auditoría): estos tests cubrían
+ * Extraído de VentaServiceTest: estos tests cubrían
  * obtenerMetricas cuando ese método todavía vivía en VentaService.
  */
 @ExtendWith(MockitoExtension.class)

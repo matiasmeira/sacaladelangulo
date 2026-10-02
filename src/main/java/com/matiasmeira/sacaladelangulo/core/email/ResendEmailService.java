@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
  * construir el cliente; ver LogEmailService para el fallback de desarrollo y por qué la
  * activación se decide con un flag booleano propio en vez de mirar la api-key directamente).
  * Se invoca siempre de forma asíncrona y después del commit de la transacción que la
- * origina (ver RegistroVerificacionEmailListener y AsyncConfig, A12 en la auditoría), así
+ * origina, así
  * que una excepción acá nunca hace rollback de nada: la captura AsyncConfig.
  *
  * <p>En prod, resend.enabled es true por default (ver application-prod.properties) y

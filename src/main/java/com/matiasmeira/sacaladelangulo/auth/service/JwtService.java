@@ -18,11 +18,11 @@ import java.util.Map;
 /**
  * Servicio responsable de crear y validar tokens JWT.
  *
- * <p>Usa jjwt 0.11.5 (ver {@code pom.xml}), desactualizado respecto a la línea 0.12.x
- * (ver B14 en la auditoría). Pendiente: planificar el upgrade coordinado con el dominio
+ * <p>Usa jjwt 0.11.5 (ver {@code pom.xml}), desactualizado respecto a la línea 0.12.x.
+ * Pendiente: planificar el upgrade coordinado con el dominio
  * auth — 0.12.x reemplaza esta API por una fluida distinta ({@code Jwts.parserBuilder()}
  * → {@code Jwts.parser()}, {@code setSigningKey} → {@code verifyWith}, etc.), así que no
- * es un simple bump de versión en el pom. Se decidió no encararlo junto con B3 (que
+ * es un simple bump de versión en el pom. Se decidió no encararlo junto con la revocación de tokens por versión (que
  * agregó el claim tokenVersion a este mismo archivo) para no acumular dos cambios de
  * riesgo distinto sobre el código de autenticación en el mismo momento.
  */
@@ -38,7 +38,7 @@ public class JwtService {
     /**
      * Claim con la versión de token del Usuario al momento de emitirlo. Permite revocar
      * tokens ya emitidos (logout, cambio de contraseña/PIN) sin esperar a que expiren:
-     * ver isTokenValid y B3 en la auditoría. Los tokens emitidos antes de este cambio no
+     * ver isTokenValid. Los tokens emitidos antes de este cambio no
      * llevan el claim y quedan invalidados en la primera petición tras el deploy.
      */
     private static final String TOKEN_VERSION_CLAIM = "tokenVersion";

@@ -29,7 +29,7 @@ public class FeedbackController {
      * Crea la calificación de una reserva finalizada.
      * Protegido: solo el jugador que jugó la reserva (el service exige esa
      * pertenencia explícitamente; ADMIN no está habilitado porque nunca es el
-     * jugador de una reserva ajena, ver M20 en la auditoría).
+     * jugador de una reserva ajena).
      */
     @PostMapping("/api/v1/reservas/{reservaId}/feedback")
     @PreAuthorize("hasRole('PLAYER')")
@@ -44,7 +44,7 @@ public class FeedbackController {
     /**
      * Edita la puntuación/comentario de un feedback propio.
      * Protegido: solo el jugador dueño del feedback (mismo criterio de ownership que
-     * crearFeedback, ver B10 en la auditoría).
+     * crearFeedback).
      */
     @PutMapping("/api/v1/feedback/{feedbackId}")
     @PreAuthorize("hasRole('PLAYER')")
@@ -58,7 +58,7 @@ public class FeedbackController {
     /**
      * Elimina un feedback propio.
      * Protegido: solo el jugador dueño del feedback (mismo criterio de ownership que
-     * crearFeedback, ver B10 en la auditoría).
+     * crearFeedback).
      */
     @DeleteMapping("/api/v1/feedback/{feedbackId}")
     @PreAuthorize("hasRole('PLAYER')")

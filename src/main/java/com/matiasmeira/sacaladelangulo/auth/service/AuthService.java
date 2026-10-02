@@ -66,13 +66,13 @@ public class AuthService {
             // Un único mensaje/status para cualquier fallo de autenticación (contraseña
             // incorrecta, usuario inexistente, o cualquier otra AuthenticationException que
             // Spring Security pueda lanzar en el futuro): distinguir entre subtipos convertiría
-            // este endpoint en un oráculo del estado de la cuenta (ver M3 en la auditoría).
+            // este endpoint en un oráculo del estado de la cuenta.
             throw new BadCredentialsException("Credenciales inválidas");
         }
 
         // authenticationManager.authenticate() ya cargó el UserDetails internamente (vía
         // DaoAuthenticationProvider -> UserDetailsService) y lo devuelve como principal: se
-        // reutiliza en vez de volver a consultar la base con loadUserByUsername (ver M4).
+        // reutiliza en vez de volver a consultar la base con loadUserByUsername.
         var userDetails = (UserDetails) resultado.getPrincipal();
         return new AuthResponse(jwtService.generateToken(userDetails));
     }
@@ -98,7 +98,7 @@ public class AuthService {
 
         // Normalizado antes de armar la clave de rate limit y de consultar la base, para
         // que variar mayúsculas/espacios no sirva ni para eludir el límite de intentos
-        // ni para esquivar la búsqueda por nombre (ver B4 en la auditoría).
+        // ni para esquivar la búsqueda por nombre.
         String nombre = normalizarNombre(request.nombre());
         String claveLimite = "login-empleado:" + establecimientoIdDispositivo + ":" + nombre;
         if (!rateLimiterService.tryConsume(claveLimite, LOGIN_EMPLEADO_INTENTOS_MAXIMOS, LOGIN_EMPLEADO_VENTANA_MILLIS)) {
@@ -120,7 +120,7 @@ public class AuthService {
             );
         } catch (AuthenticationException ex) {
             // Mismo criterio que authenticate(): un único mensaje/status para cualquier
-            // fallo de autenticación (ver M3 en la auditoría).
+            // fallo de autenticación.
             throw new BadCredentialsException("Credenciales inválidas");
         }
 
@@ -131,8 +131,7 @@ public class AuthService {
 
     /**
      * Invalida cualquier JWT ya emitido para este usuario: incrementa tokenVersion, que
-     * JwtService compara contra el claim del token en cada petición (ver B3 en la
-     * auditoría). No requiere borrar nada del lado del cliente.
+     * JwtService compara contra el claim del token en cada petición. No requiere borrar nada del lado del cliente.
      */
     public void logout(String email) {
         Usuario usuario = usuarioRepository.findByEmail(email)

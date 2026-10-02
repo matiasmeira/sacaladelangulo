@@ -59,7 +59,7 @@ public class BloqueoCanchaController {
      * disponibilidad del jugador para no mostrar como libres horarios bloqueados. El
      * motivo (texto libre cargado por el dueño/empleado) sólo se expone a quien tiene
      * acceso de panel al establecimiento (ADMIN, su dueño o un empleado suyo); para el
-     * resto es null (ver M30 en la auditoría).
+     * resto es null.
      */
     @GetMapping("/api/v1/establecimientos/{establecimientoId}/bloqueos")
     @PreAuthorize("hasAnyRole('PLAYER', 'OWNER', 'ADMIN', 'EMPLOYEE')")

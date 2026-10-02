@@ -16,7 +16,7 @@ public interface GastoRepository extends JpaRepository<Gasto, Long> {
 
     Optional<Gasto> findByIdAndEstablecimientoId(Long id, Long establecimientoId);
 
-    // Las tres queries de abajo excluyen is_active=false (ver M-04 en la auditoría): un
+    // Las tres queries de abajo excluyen is_active=false: un
     // gasto eliminado no debe aparecer en el listado ni contarse en los reportes, aunque
     // la fila siga existiendo para auditoría.
 

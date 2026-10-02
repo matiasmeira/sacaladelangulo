@@ -95,7 +95,7 @@ public class RecuperacionPasswordService {
 
         String token = UUID.randomUUID().toString();
         String codigo = String.format("%06d", random.nextInt(1000000));
-        // Solo se persiste el hash (ver M-05 en la auditoría): el valor crudo únicamente
+        // Solo se persiste el hash: el valor crudo únicamente
         // viaja en el link/email enviado al usuario, nunca a la base.
         TokenRecuperacionPassword tokenRecuperacion = TokenRecuperacionPassword.builder()
                 .email(email)

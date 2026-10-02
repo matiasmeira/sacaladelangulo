@@ -11,8 +11,7 @@ import java.time.LocalDateTime;
 /**
  * Entidad para almacenar códigos OTP de verificación de teléfono.
  *
- * <p>codigoHash guarda el hash SHA-256 (ver TokenHasher), nunca el código crudo (ver M-05
- * en la auditoría).
+ * <p>codigoHash guarda el hash SHA-256 (ver TokenHasher), nunca el código crudo.
  */
 @Getter
 @Setter

@@ -24,7 +24,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
     /**
      * Trae el feedback junto con reserva -> jugador en una sola consulta, para validar
      * ownership (editar/eliminar el propio feedback) sin un round-trip extra por lazy
-     * loading (ver B10 en la auditoría).
+     * loading.
      */
     @Query("SELECT f FROM Feedback f JOIN FETCH f.reserva r LEFT JOIN FETCH r.jugador WHERE f.id = :id")
     Optional<Feedback> findByIdConReservaYJugador(@Param("id") Long id);

@@ -46,7 +46,7 @@ public class SolicitudIdempotente {
      * IdempotencyFilter.LONGITUD_MAXIMA_CLAVE valide contra el mismo límite real de la
      * columna, en vez de dejar que una clave demasiado larga reviente en un
      * DataIntegrityViolationException indistinguible de una carrera de idempotencia
-     * genuina (ver B15 en la auditoría).
+     * genuina.
      */
     @Column(nullable = false, length = 255)
     private String clave;

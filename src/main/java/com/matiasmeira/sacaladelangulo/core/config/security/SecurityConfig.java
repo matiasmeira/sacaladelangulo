@@ -38,8 +38,7 @@ public class SecurityConfig {
 
     /**
      * Externalizado (a diferencia de antes, que estaba hardcodeado en el código) para
-     * poder cambiar los orígenes permitidos por entorno sin recompilar (ver M9 en la
-     * auditoría).
+     * poder cambiar los orígenes permitidos por entorno sin recompilar.
      */
     @Value("${app.cors.allowed-origins}")
     private java.util.List<String> allowedOrigins;
@@ -60,7 +59,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(restAccessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         // Excepción puntual antes de la regla general de abajo: logout
-                        // necesita saber quién es el usuario autenticado (ver B3 en la auditoría).
+                        // necesita saber quién es el usuario autenticado.
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/auth/logout").authenticated()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
@@ -88,7 +87,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/mails/baja").permitAll()
                         // Health check de la plataforma (Railway/Render/Fly): sondea por HTTP sin
                         // credenciales, así que bajo anyRequest().authenticated() recibía 401 y la
-                        // instancia figuraba caída aunque estuviera sana (ver READINESS.md y el
+                        // instancia figuraba caída aunque estuviera sana (ver el
                         // comentario de application-prod.properties).
                         //
                         // Abrirlo no filtra nada: la exposición ya está limitada a "health"

@@ -20,8 +20,7 @@ import java.time.LocalDateTime;
  * El campo @Version protege actualizaciones concurrentes sobre una reserva ya
  * persistida (confirmar/cancelar/finalizar/mover). NO protege la creación de reservas
  * solapadas: ese caso (dos inserts concurrentes para el mismo horario) se resuelve con
- * locking pesimista sobre la cancha en ReservaService (ver bloquearCanchasRelacionadas,
- * y C1 en la auditoría).
+ * locking pesimista sobre la cancha en ReservaService.
  */
 @Slf4j
 @Getter

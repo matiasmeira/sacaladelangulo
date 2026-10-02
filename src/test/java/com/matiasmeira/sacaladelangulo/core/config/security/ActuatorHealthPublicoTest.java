@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * El health check de Railway/Render/Fly sondea por HTTP sin credenciales: mientras
  * /actuator/health cayó bajo anyRequest().authenticated() devolvía 401, y la plataforma
- * daba la instancia por caída aunque estuviera sana (ver READINESS.md). Es una regla de
+ * daba la instancia por caída aunque estuviera sana. Es una regla de
  * seguridad que sólo se puede verificar de punta a punta, así que va con un contenedor
  * servlet real y TestRestTemplate (que ante 4xx devuelve el status en vez de arrojar),
  * mismo criterio que RateLimitFilterIntegrationTest.

@@ -82,7 +82,7 @@ class JwtServiceTest {
      * mismo token, así que un token expirado nunca llega a pasar por isTokenValid. Pero como
      * método standalone, "isTokenValid" no es realmente boolean-safe: cualquier código nuevo
      * que lo invoque directo sin ese try/catch previo (como hace este test) se lleva una
-     * excepción en vez de un false. Ver REVISION_FUNCIONAL.md.
+     * excepción en vez de un false.
      */
     @Test
     @DisplayName("BUG DE CONTRATO: isTokenValid tira ExpiredJwtException en vez de devolver false para un token expirado")

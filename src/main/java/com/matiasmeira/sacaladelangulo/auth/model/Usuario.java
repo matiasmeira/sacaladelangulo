@@ -95,7 +95,7 @@ public class Usuario {
     /**
      * Incrementado en logout o al cambiar la contraseña/PIN: el JWT emitido antes de ese
      * incremento lleva la versión vieja como claim y JwtService lo invalida en la
-     * siguiente petición, aunque no haya expirado (ver B3 en la auditoría).
+     * siguiente petición, aunque no haya expirado.
      */
     @Column(name = "token_version", nullable = false)
     @Builder.Default

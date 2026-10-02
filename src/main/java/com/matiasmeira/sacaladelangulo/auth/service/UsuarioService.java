@@ -50,8 +50,8 @@ public class UsuarioService {
         // Generar código aleatorio de 6 dígitos
         String codigo = String.format("%06d", random.nextInt(1000000));
 
-        // Crear y guardar el código con expiración a 5 minutos. Solo se persiste el hash
-        // (ver M-05 en la auditoría): el valor crudo únicamente viaja por SMS/log de dev.
+        // Crear y guardar el código con expiración a 5 minutos. Solo se persiste el hash;
+        // el valor crudo únicamente viaja por SMS/log de dev.
         CodigoVerificacion codigoVerificacion = CodigoVerificacion.builder()
                 .email(email)
                 .codigoHash(TokenHasher.sha256Hex(codigo))

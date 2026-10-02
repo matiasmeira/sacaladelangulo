@@ -691,7 +691,7 @@ public class ReservaService {
             // CANCELADA_PRERESERVA (venció la ventana de 10 min sin que nadie pagara la seña)
             // se rechaza igual que CANCELADA: sin este chequeo, una prereserva que nadie
             // confirmó podía "finalizarse" igual, generando cobro y movimiento de caja sobre
-            // un turno que nunca fue confirmado (ver REVISION_FUNCIONAL.md).
+            // un turno que nunca fue confirmado.
             if (reserva.getEstado() == EstadoReserva.CANCELADA || reserva.getEstado() == EstadoReserva.CANCELADA_PRERESERVA) {
                 throw new IllegalArgumentException("No se puede finalizar una reserva cancelada");
             }
@@ -702,8 +702,8 @@ public class ReservaService {
             }
 
             if (reserva.getEstado() == EstadoReserva.PENDIENTE_SENA) {
-                // Mismo criterio de matriz de estados que confirmarReserva/cancelarReserva
-                // (ver C2 y A3 en la auditoría): una reserva tiene que pasar por CONFIRMADA
+                // Mismo criterio de matriz de estados que confirmarReserva/cancelarReserva:
+                // una reserva tiene que pasar por CONFIRMADA
                 // antes de poder finalizarse.
                 throw new IllegalArgumentException("No se puede finalizar una reserva que todavía no fue confirmada");
             }
@@ -854,7 +854,7 @@ public class ReservaService {
 
         // Solo tiene sentido reasignar cancha en reservas todavía "en curso": una cancelada
         // no debería reflotarse, y una finalizada ya representa un partido que ya se jugó
-        // en la cancha original (ver B6 en la auditoría).
+        // en la cancha original.
         if (reserva.getEstado() != EstadoReserva.PENDIENTE_SENA && reserva.getEstado() != EstadoReserva.CONFIRMADA) {
             throw new IllegalArgumentException("Solo se puede mover una reserva pendiente de seña o confirmada");
         }
@@ -951,7 +951,7 @@ public class ReservaService {
      * Restringido al dueño del establecimiento o a un administrador: expone nombre e
      * identidad de los jugadores, por lo que no debe quedar accesible a cualquier usuario autenticado.
      * Excluye canceladas por defecto; incluirCanceladas=true las trae también, para
-     * auditar cancelaciones históricas (ver B7 en la auditoría).
+     * auditar cancelaciones históricas.
      */
     @Transactional(readOnly = true)
     public Page<ReservaResponse> obtenerReservasPorCanchaYFecha(Long canchaId, LocalDate fecha, boolean incluirCanceladas, Pageable pageable, String email) {
@@ -971,7 +971,7 @@ public class ReservaService {
      * Pueden leerla el dueño del establecimiento, un administrador, o un empleado con algún
      * permiso operativo de reserva (AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
      * expone nombre e identidad de los jugadores, por eso no queda abierta a cualquier
-     * usuario autenticado. Excluye canceladas por defecto; incluirCanceladas=true las trae también (ver B7).
+     * usuario autenticado. Excluye canceladas por defecto; incluirCanceladas=true las trae también.
      */
     @Transactional(readOnly = true)
     public Page<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, LocalDate fecha, boolean incluirCanceladas, Pageable pageable, String email) {

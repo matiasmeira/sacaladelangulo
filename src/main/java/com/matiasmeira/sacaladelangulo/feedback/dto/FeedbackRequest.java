@@ -15,8 +15,8 @@ public record FeedbackRequest(
         Integer puntuacion,
 
         /**
-         * Se persiste tal cual, sin sanitizar en el servidor (decisión consciente, ver B11
-         * en la auditoría): el frontend actual es React, que escapa el texto por defecto al
+         * Se persiste tal cual, sin sanitizar en el servidor (decisión consciente):
+         * el frontend actual es React, que escapa el texto por defecto al
          * renderizarlo (no usa dangerouslySetInnerHTML), así que hoy no hay XSS explotable.
          * Si en el futuro se agrega otro consumidor de esta API (otro frontend, una app
          * nativa, etc.), ese consumidor es responsable de hacer su propio output-encoding

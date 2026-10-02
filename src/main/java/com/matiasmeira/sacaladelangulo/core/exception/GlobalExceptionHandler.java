@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
      * específico (Spring resuelve al @ExceptionHandler más cercano en la jerarquía),
      * un parseo manual sin capturar (Integer.parseInt, etc.) filtraría el mensaje crudo
      * de la JDK a través del handler genérico de abajo. Hoy no hay ningún parseo manual
-     * en el proyecto, pero esto lo cubre igual como defensa en profundidad (ver M23).
+     * en el proyecto, pero esto lo cubre igual como defensa en profundidad.
      */
     @ExceptionHandler(NumberFormatException.class)
     public ResponseEntity<Map<String, String>> handleNumberFormatException(NumberFormatException ex) {
@@ -76,7 +76,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Decisión consciente (ver B16 en la auditoría): este handler atiende tanto el
+     * Decisión consciente: este handler atiende tanto el
      * AccessDeniedException interno de Spring Security (falla de @PreAuthorize, mensaje
      * genérico tipo "Access Denied", sin datos sensibles) como el que lanza el código de
      * negocio en decenas de lugares (validarPropietarioOAdmin y similares) con mensajes

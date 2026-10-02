@@ -16,8 +16,7 @@ import java.util.Map;
 
 /**
  * Habilita @Async, usado hoy por RegistroVerificacionEmailListener para desacoplar el
- * envío del email de verificación de la transacción que crea el token (ver A12 en la
- * auditoría): sin esto, el envío se ejecutaría igual pero de forma sincrónica.
+ * envío del email de verificación de la transacción que crea el token: sin esto, el envío se ejecutaría igual pero de forma sincrónica.
  *
  * Con LogEmailService (solo loguea) el executor por defecto de Spring y no manejar
  * excepciones nunca importó, porque loguear no puede fallar. Con un envío real (ver

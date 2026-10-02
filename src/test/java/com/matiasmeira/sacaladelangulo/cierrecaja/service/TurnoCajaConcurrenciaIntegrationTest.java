@@ -201,7 +201,7 @@ class TurnoCajaConcurrenciaIntegrationTest extends AbstractPostgresIntegrationTe
     }
 
     /**
-     * FIX aplicado (ver REVISION_FUNCIONAL.md, hallazgo de coherencia de caminos de plata):
+     * FIX aplicado (coherencia de los caminos de plata):
      * VentaService.cancelarVenta / GastoService.editarGasto/eliminarGasto revertían el
      * movimiento de caja original llamando a TurnoCajaService.registrarMovimientoSiCorresponde,
      * que siempre escribía contra el turno ACTUALMENTE abierto — no contra el turno donde se

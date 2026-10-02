@@ -81,7 +81,7 @@ public class FeedbackService {
         } catch (DataIntegrityViolationException ex) {
             // existsByReservaId + save no es atómico: dos requests casi simultáneas del
             // mismo jugador (doble click/retry) pueden pasar ambas la validación antes de
-            // que cualquiera persista (ver M18 en la auditoría).
+            // que cualquiera persista.
             throw new IllegalArgumentException("Ya calificaste esta reserva");
         }
         log.info("Feedback creado con éxito. ID: {}, Reserva: {}", feedbackGuardado.getId(), reservaId);
@@ -95,8 +95,7 @@ public class FeedbackService {
 
     /**
      * Edita la calificación/comentario de un feedback propio. Misma validación de
-     * ownership que crearFeedback: solo el jugador que dejó el feedback puede editarlo
-     * (ver B10 en la auditoría).
+     * ownership que crearFeedback: solo el jugador que dejó el feedback puede editarlo.
      *
      * @param feedbackId ID del feedback a editar
      * @param request DTO con la nueva puntuación y comentario
@@ -122,8 +121,7 @@ public class FeedbackService {
     }
 
     /**
-     * Elimina un feedback propio. Misma validación de ownership que crearFeedback (ver
-     * B10 en la auditoría).
+     * Elimina un feedback propio. Misma validación de ownership que crearFeedback.
      *
      * @param feedbackId ID del feedback a eliminar
      * @param email Email del usuario autenticado (jugador)

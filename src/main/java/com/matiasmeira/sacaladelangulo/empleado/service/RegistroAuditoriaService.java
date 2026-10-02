@@ -53,7 +53,7 @@ public class RegistroAuditoriaService {
     /**
      * Audita una acción administrativa del dueño/admin sobre un empleado (alta, cambio de
      * permisos/PIN, baja) — a diferencia de {@link #registrar}, acá el actor no es el
-     * propio `empleado` sino quien lo administra (ver M31 en la auditoría).
+     * propio `empleado` sino quien lo administra.
      *
      * REQUIRED y no REQUIRES_NEW, a diferencia de {@link #registrar}: en el alta, el
      * empleado se acaba de crear en la transacción de afuera y todavía no commiteó. Una
@@ -111,7 +111,7 @@ public class RegistroAuditoriaService {
      * directamente sobre un recurso del establecimiento (gastos, precios/tarifas de
      * cancha) — no hay ningún empleado ni dispositivo involucrado, a diferencia de
      * {@link #registrarAdministrativa} y {@link #registrarDispositivo}. Antes estas
-     * acciones no dejaban rastro (ver §3 "Consistencia entre features" en la auditoría).
+     * acciones no dejaban rastro.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void registrarSobreEstablecimiento(Usuario actor, Establecimiento establecimiento, AccionAuditoria accion, Long entidadAfectadaId, String detalle) {

@@ -126,7 +126,7 @@ class GastoServiceTest {
                 eq(establecimiento), eq(TipoMovimientoCaja.EGRESO), eq(OrigenMovimientoCaja.GASTO),
                 eq(MetodoPago.EFECTIVO), eq(BigDecimal.valueOf(1000)), eq("Gasto: Luz"),
                 eq(100L), eq(dueno));
-        // Ver §3 "Consistencia entre features" en la auditoría: alta de gasto por el
+        // Alta de gasto por el
         // propio dueño ahora deja rastro en RegistroAuditoria, no solo la de empleados.
         verify(registroAuditoriaService).registrarSobreEstablecimiento(
                 eq(dueno), eq(establecimiento), eq(AccionAuditoria.REGISTRAR_GASTO), eq(100L), any());
@@ -224,7 +224,7 @@ class GastoServiceTest {
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(gastoRepository.save(any(Gasto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         // El movimiento original todavía vive en el turno abierto (caso feliz): ver
-        // REVISION_FUNCIONAL.md / TurnoCajaService.movimientoOriginalSigueEnTurnoAbierto.
+        // TurnoCajaService.movimientoOriginalSigueEnTurnoAbierto.
         when(turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(establecimiento, OrigenMovimientoCaja.GASTO, 50L)).thenReturn(true);
 
         GastoResponse response = gastoService.editarGasto(establecimiento.getId(), 50L, request, dueno.getEmail());
@@ -233,7 +233,7 @@ class GastoServiceTest {
         assertEquals("MARKETING", response.categoria());
         assertEquals("Nueva", response.descripcion());
         assertEquals("http://x", response.comprobanteUrl());
-        // Ver M-04 en la auditoría: cambió monto (200->999) y método de pago
+        // Cambió monto (200->999) y método de pago
         // (EFECTIVO->TRANSFERENCIA), así que debe revertir el egreso original en efectivo
         // y no registrar un nuevo egreso (el nuevo método ya no es EFECTIVO).
         verify(turnoCajaService).registrarMovimientoSiCorresponde(
@@ -283,7 +283,7 @@ class GastoServiceTest {
     @Test
     @DisplayName("eliminarGasto_Exito_EsAnulacionLogicaNoDeleteFisico")
     void eliminarGasto_Exito_EsAnulacionLogicaNoDeleteFisico() {
-        // Ver M-04 en la auditoría: eliminarGasto ya no borra la fila (se perdía el
+        // eliminarGasto ya no borra la fila (se perdía el
         // historial financiero), marca isActive=false para que quede excluida del listado
         // y de los reportes pero persista para auditoría.
         Gasto gasto = Gasto.builder()

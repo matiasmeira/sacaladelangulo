@@ -83,8 +83,7 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     /**
      * Misma consulta que findReservasEnRangoDiario pero sin excluir ningún estado, para
-     * cuando el dueño/admin pide explícitamente auditar cancelaciones históricas (ver B7
-     * en la auditoría). Mismo @EntityGraph, por el mismo motivo.
+     * cuando el dueño/admin pide explícitamente auditar cancelaciones históricas. Mismo @EntityGraph, por el mismo motivo.
      */
     @EntityGraph(attributePaths = {"jugador", "cancha", "turnoFijo"})
     @org.springframework.data.jpa.repository.Query("SELECT r FROM Reserva r WHERE r.cancha.id = :canchaId AND r.fechaHoraInicio < :finDia AND r.fechaHoraFin > :inicioDia")
@@ -122,7 +121,7 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     /**
      * Misma consulta que findByCancha_Establecimiento_IdAndFechaHoraInicioBetweenAndEstadoNotIn
-     * pero sin excluir ningún estado (ver B7 en la auditoría). Mismo @EntityGraph.
+     * pero sin excluir ningún estado. Mismo @EntityGraph.
      */
     @EntityGraph(attributePaths = {"jugador", "cancha", "turnoFijo"})
     org.springframework.data.domain.Page<Reserva> findByCancha_Establecimiento_IdAndFechaHoraInicioBetween(

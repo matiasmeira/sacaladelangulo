@@ -14,8 +14,7 @@ import java.time.LocalDateTime;
  * RecuperacionPasswordService). Mismo criterio que TokenVerificacionEmail: no es un JWT
  * ni autentica nada por sí mismo, solo habilita el reset puntual de la contraseña.
  *
- * <p>tokenHash/codigoHash guardan el hash SHA-256 (ver TokenHasher), nunca el valor crudo
- * (ver M-05 en la auditoría).
+ * <p>tokenHash/codigoHash guardan el hash SHA-256 (ver TokenHasher), nunca el valor crudo.
  */
 @Getter
 @Setter

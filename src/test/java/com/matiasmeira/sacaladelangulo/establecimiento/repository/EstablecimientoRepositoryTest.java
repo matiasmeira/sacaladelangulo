@@ -24,12 +24,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Valida contra una base real (H2) que findCercanosYPorDeporte siga siendo JPQL válido
- * después de agregarle el pre-filtro de bounding box (ver M29 en la auditoría): un test
+ * después de agregarle el pre-filtro de bounding box: un test
  * puramente mockeado no detecta un error de sintaxis en funciones nativas (RADIANS/COS/
  * ACOS) que solo se resuelven contra un motor de base real.
  */
 @DataJpaTest
-// ddl-auto=validate es el default de la config base (ver A10): la base embebida que usa
+// ddl-auto=validate es el default de la config base: la base embebida que usa
 // @DataJpaTest arranca vacía, así que acá hace falta create-drop para generar el esquema.
 // spring.flyway.enabled=false evita que FlywayAutoConfiguration corra las migraciones de
 // Postgres (ver db/migration/V1__baseline.sql) contra este H2 en memoria.
@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.flyway.enabled=false"
 })
-@DisplayName("EstablecimientoRepository - Búsqueda geográfica (ver M29)")
+@DisplayName("EstablecimientoRepository - Búsqueda geográfica")
 class EstablecimientoRepositoryTest {
 
     @Autowired

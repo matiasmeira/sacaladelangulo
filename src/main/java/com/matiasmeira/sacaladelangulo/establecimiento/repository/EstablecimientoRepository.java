@@ -64,7 +64,7 @@ public interface EstablecimientoRepository extends JpaRepository<Establecimiento
      * sin autenticación), incluso las que están a miles de km de distancia. El box se
      * calcula generosamente ancho (111.045 km/grado real, se usa 110 para asegurar que
      * nunca excluya un punto válido por redondeo) — el Haversine exacto de abajo sigue
-     * siendo el filtro final real (ver M29 en la auditoría).
+     * siendo el filtro final real.
      */
     // El cast en "deporte" evita SQLState 42P18 ("no se pudo determinar el tipo del
     // parámetro"): pgjdbc no puede inferir el tipo de un parámetro cuya única aparición

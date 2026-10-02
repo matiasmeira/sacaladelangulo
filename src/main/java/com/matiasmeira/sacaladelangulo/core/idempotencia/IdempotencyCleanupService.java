@@ -23,8 +23,7 @@ public class IdempotencyCleanupService {
     /**
      * 2h alcanza holgadamente cualquier reintento real de un cliente (un timeout de red
      * se reintenta en segundos/minutos, no horas); reduce la ventana en la que el cuerpo
-     * completo de la respuesta (potencial PII) queda persistido en texto plano (ver M27
-     * en la auditoría).
+     * completo de la respuesta (potencial PII) queda persistido en texto plano.
      */
     private static final Duration RETENCION = Duration.ofHours(2);
 

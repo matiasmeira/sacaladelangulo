@@ -41,8 +41,7 @@ import static org.mockito.Mockito.when;
  * PATCH /estado (ver CanchaEstadoService). Antes de este método la única forma de reactivar
  * era actualizarCancha con el CanchaRequest completo -- este método hace lo mismo, pero sin
  * exigir el resto de los campos de la cancha, y con el mismo guard de pool que ya corre ahí
- * (validarConfiguracionDePool), no el de desactivarDesactivacion (ver B19/estado-toggle en la
- * auditoría).
+ * (validarConfiguracionDePool), no el de desactivarDesactivacion.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CanchaService - reactivarCancha (PATCH /estado, activo=true)")

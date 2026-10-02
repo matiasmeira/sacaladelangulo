@@ -87,7 +87,7 @@ public class VentaService {
 
             // Lock pesimista sobre todos los productos del carrito antes de leer/escribir
             // stock, en orden ascendente de ID para evitar deadlocks entre ventas
-            // concurrentes que comparten productos en distinto orden (ver A5).
+            // concurrentes que comparten productos en distinto orden.
             List<Long> productoIdsOrdenados = request.detalles().stream()
                     .map(DetalleVentaRequest::productoId)
                     .distinct()
@@ -140,7 +140,7 @@ public class VentaService {
             // inexistente o inválido, ver resolverReserva/buscarProductoDelEstablecimiento):
             // un catch(RuntimeException) más amplio también auditaría errores de
             // programación genuinos (NPE, ClassCastException) como si fueran un resultado
-            // de negocio normal (ver B13 en la auditoría).
+            // de negocio normal.
             registrarAuditoriaSiEsEmpleado(usuarioAutenticado, AccionAuditoria.REGISTRAR_VENTA_BUFFET, null, false, ex.getMessage());
             throw ex;
         }
@@ -169,7 +169,7 @@ public class VentaService {
             return ventaMapper.mapToResponse(venta);
         }
 
-        // Mismo lock pesimista que en registrarVenta/ajustarStock (ver A5): serializa la
+        // Mismo lock pesimista que en registrarVenta/ajustarStock: serializa la
         // devolución de stock contra cualquier otra venta/ajuste concurrente sobre los
         // mismos productos.
         List<Long> productoIdsOrdenados = venta.getDetalles().stream()
@@ -190,11 +190,10 @@ public class VentaService {
         log.info("Venta cancelada con éxito. ID: {}", ventaId);
 
         // Revierte el ingreso de caja que generó la venta original (si correspondía), para
-        // que el arqueo no reporte un faltante falso tras anular una venta en efectivo (ver
-        // M-04 en la auditoría). Solo se compensa si el movimiento original TODAVÍA vive en
+        // que el arqueo no reporte un faltante falso tras anular una venta en efectivo. Solo se compensa si el movimiento original TODAVÍA vive en
         // el turno actualmente abierto: si ese turno ya cerró, escribir la reversión contra
         // el turno abierto ahora ensuciaría su arqueo con un movimiento que no corresponde a
-        // ningún billete físico de ESE turno (bug real corregido, ver REVISION_FUNCIONAL.md).
+        // ningún billete físico de ESE turno (bug real corregido).
         if (turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(venta.getEstablecimiento(), OrigenMovimientoCaja.VENTA_BUFFET, ventaId)) {
             turnoCajaService.registrarMovimientoSiCorresponde(
                     venta.getEstablecimiento(), TipoMovimientoCaja.EGRESO, OrigenMovimientoCaja.VENTA_BUFFET,
@@ -217,7 +216,7 @@ public class VentaService {
             throw new IllegalArgumentException("La reserva no pertenece a este establecimiento");
         }
         if (reserva.getEstado() != EstadoReserva.CONFIRMADA && reserva.getEstado() != EstadoReserva.FINALIZADA) {
-            // Ver M19 en la auditoría: sin este chequeo se podía cargar consumo de buffet a
+            // Sin este chequeo se podía cargar consumo de buffet a
             // una reserva CANCELADA o todavía PENDIENTE_SENA, distorsionando reportes.
             throw new IllegalArgumentException("No se puede cargar consumo a una reserva en estado " + reserva.getEstado());
         }

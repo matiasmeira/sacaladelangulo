@@ -9,7 +9,7 @@ import java.util.Collection;
  * UserDetails propio (en vez del User genérico de Spring Security) para poder llevar
  * tokenVersion hasta JwtService sin volver a consultar la base: tanto el filtro JWT
  * como AuthService ya obtienen este principal a partir de un Usuario recién leído de
- * la base (ver B3 en la auditoría).
+ * la base.
  */
 public class UsuarioPrincipal implements UserDetails {
 

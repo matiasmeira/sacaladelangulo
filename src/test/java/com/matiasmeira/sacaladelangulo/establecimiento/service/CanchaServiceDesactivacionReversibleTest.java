@@ -142,7 +142,7 @@ class CanchaServiceDesactivacionReversibleTest {
     }
 
     /**
-     * El caso del diagnóstico: F1,F2,F3 forman el pool de C9 (necesita 3). C9 tiene una
+     * El caso típico: F1,F2,F3 forman el pool de C9 (necesita 3). C9 tiene una
      * reserva futura. F2 no tiene ninguna reserva propia, así que un guard que sólo mirara
      * "reservas sobre la cancha exacta" no vería nada. Desactivar F2 baja la capacidad real
      * del grupo a 2 (ver PoolCanchaCalculator.footprint), y la reserva de C9 (que necesita 3)

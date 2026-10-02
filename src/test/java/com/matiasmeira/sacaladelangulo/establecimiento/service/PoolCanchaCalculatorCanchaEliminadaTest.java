@@ -13,7 +13,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Regresión que fija el hallazgo del diagnóstico de CanchaEliminacionService: eliminar
+ * Regresión que fija un hallazgo del análisis previo de CanchaEliminacionService: eliminar
  * (deletedAt) una física que ya está desactivada NO cambia en nada el cálculo de pool de
  * ninguna lógica que la use, porque {@link PoolCanchaCalculator#footprint} ya la excluye de
  * la capacidad del grupo por {@code isActive=false} -- un chequeo que no mira deletedAt en

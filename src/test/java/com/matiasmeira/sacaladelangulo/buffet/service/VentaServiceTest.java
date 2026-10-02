@@ -448,7 +448,7 @@ class VentaServiceTest {
     @Test
     @DisplayName("registrarVenta_Fallo_ReservaCanceladaOPendienteDeSena")
     void registrarVenta_Fallo_ReservaCanceladaOPendienteDeSena() {
-        // Arrange: cargar consumo a una reserva CANCELADA no debe permitirse (ver M19)
+        // Arrange: cargar consumo a una reserva CANCELADA no debe permitirse
         Cancha cancha = Cancha.builder()
                 .id(60L)
                 .nombre("Cancha A")
@@ -565,7 +565,7 @@ class VentaServiceTest {
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(ventaRepository.save(any(Venta.class))).thenAnswer(invocation -> invocation.getArgument(0));
         // El movimiento original todavía vive en el turno abierto (caso feliz): ver
-        // REVISION_FUNCIONAL.md / TurnoCajaService.movimientoOriginalSigueEnTurnoAbierto.
+        // TurnoCajaService.movimientoOriginalSigueEnTurnoAbierto.
         when(turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(establecimiento, OrigenMovimientoCaja.VENTA_BUFFET, venta.getId())).thenReturn(true);
 
         // Act
@@ -577,7 +577,7 @@ class VentaServiceTest {
         assertEquals(10, alfajor.getStock());
         verify(productoBuffetRepository).save(agua);
         verify(productoBuffetRepository).save(alfajor);
-        // Ver M-04 en la auditoría: anular una venta en efectivo debe revertir el ingreso
+        // Anular una venta en efectivo debe revertir el ingreso
         // de caja que generó, para que el arqueo no reporte un faltante falso.
         verify(turnoCajaService).registrarMovimientoSiCorresponde(
                 eq(establecimiento), eq(TipoMovimientoCaja.EGRESO), eq(OrigenMovimientoCaja.VENTA_BUFFET),

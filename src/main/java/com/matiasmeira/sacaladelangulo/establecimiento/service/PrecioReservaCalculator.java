@@ -44,7 +44,7 @@ public final class PrecioReservaCalculator {
         // El resultado de multiplicar dos BigDecimal normaliza la escala a la SUMA de ambas
         // escalas (2+2=4 si precioPorHora ya viene con 2 decimales, como vuelve de
         // NUMERIC(38,2)): sin este setScale final, precioTotal quedaba con una cantidad de
-        // decimales inconsistente según la duración pedida (ver REVISION_FUNCIONAL.md).
+        // decimales inconsistente según la duración pedida.
         return precioPorHora.multiply(duracionHoras).setScale(2, RoundingMode.HALF_UP);
     }
 

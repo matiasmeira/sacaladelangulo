@@ -40,9 +40,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Cobertura acotada a desactivarCancha (ver B19 en la auditoría): antes no existía
+ * Cobertura acotada a desactivarCancha: antes no existía
  * ningún test de CanchaService, y agregar cobertura del resto de sus métodos
- * (crearCancha/actualizarCancha) queda fuera del alcance de este hallazgo puntual.
+ * (crearCancha/actualizarCancha) queda fuera del alcance de este alcance puntual.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CanchaService - Tests de desactivación de cancha")
@@ -283,7 +283,7 @@ class CanchaServiceTest {
 
         assertEquals(0, BigDecimal.valueOf(18000).compareTo(response.preciosPorDuracion().get(120)));
         verify(canchaRepository).save(any(Cancha.class));
-        // Ver §3 "Consistencia entre features" en la auditoría: alta de cancha (con su
+        // Alta de cancha (con su
         // precio) por el dueño ahora deja rastro en RegistroAuditoria.
         verify(registroAuditoriaService).registrarSobreEstablecimiento(
                 eq(dueno), eq(establecimiento), eq(AccionAuditoria.CREAR_CANCHA), any(), any());

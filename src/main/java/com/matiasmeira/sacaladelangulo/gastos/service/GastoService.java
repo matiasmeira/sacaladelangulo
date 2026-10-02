@@ -109,13 +109,13 @@ public class GastoService {
 
         // Si cambió el monto o el método de pago, revierte el egreso original y registra el
         // nuevo, para que el arqueo de caja no quede desfasado tras editar un gasto ya
-        // contabilizado (ver M-04 en la auditoría) — pero SOLO si el movimiento original
+        // contabilizado — pero SOLO si el movimiento original
         // todavía vive en el turno actualmente abierto. Si ese turno ya cerró, ni se revierte
         // ni se registra un movimiento nuevo: el egreso original ya quedó reflejado
         // (correctamente, con el monto viejo) en el arqueo ya cerrado de aquel turno, y
         // registrar el monto nuevo completo en OTRO turno lo duplicaría/ensuciaría sin que
-        // haya entrado o salido ningún billete físico real de ESE turno (bug real corregido,
-        // ver REVISION_FUNCIONAL.md). El Gasto en sí (fuente de verdad para los reportes) ya
+        // haya entrado o salido ningún billete físico real de ESE turno (bug real corregido).
+        // El Gasto en sí (fuente de verdad para los reportes) ya
         // quedó actualizado arriba independientemente de esto.
         boolean montoOMetodoCambiaron = montoAnterior.compareTo(request.monto()) != 0 || metodoPagoAnterior != request.metodoPago();
         if (montoOMetodoCambiaron) {
@@ -141,7 +141,7 @@ public class GastoService {
     }
 
     /**
-     * Anulación lógica (ver M-04 en la auditoría): antes hacía un DELETE físico, perdiendo
+     * Anulación lógica: antes hacía un DELETE físico, perdiendo
      * el historial financiero. Ahora marca isActive=false — la fila persiste para
      * auditoría, pero queda excluida del listado y de los reportes (ver GastoRepository).
      * Idempotente: si ya estaba eliminado, no vuelve a revertir el movimiento de caja.
@@ -158,9 +158,8 @@ public class GastoService {
         }
 
         // Revierte el egreso original antes de anular el gasto, para que el arqueo de caja no
-        // quede desfasado (ver M-04 en la auditoría) — solo si ese movimiento todavía vive en
-        // el turno actualmente abierto (mismo criterio que editarGasto/VentaService.cancelarVenta,
-        // ver REVISION_FUNCIONAL.md).
+        // quede desfasado — solo si ese movimiento todavía vive en
+        // el turno actualmente abierto (mismo criterio que editarGasto/VentaService.cancelarVenta).
         if (turnoCajaService.movimientoOriginalSigueEnTurnoAbierto(gasto.getEstablecimiento(), OrigenMovimientoCaja.GASTO, gastoId)) {
             turnoCajaService.registrarMovimientoSiCorresponde(
                     gasto.getEstablecimiento(), TipoMovimientoCaja.INGRESO, OrigenMovimientoCaja.GASTO,
@@ -210,8 +209,7 @@ public class GastoService {
     /**
      * Re-valida server-side lo que GastoRequest ya exige vía Bean Validation (@NotBlank,
      * @NotNull) en el controller. Mismo criterio defensivo que validarMonto: este service no
-     * debería confiar ciegamente en que todo caller pasó por el @Valid del controller (ver
-     * REVISION_FUNCIONAL.md — antes, un metodoPago nulo llegaba hasta GastoMapper y reventaba
+     * debería confiar ciegamente en que todo caller pasó por el @Valid del controller (antes, un metodoPago nulo llegaba hasta GastoMapper y reventaba
      * con NullPointerException en vez de un error de negocio claro).
      */
     private void validarCamposObligatorios(GastoRequest request) {

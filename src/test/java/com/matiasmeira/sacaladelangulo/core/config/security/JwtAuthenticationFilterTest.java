@@ -78,7 +78,7 @@ class JwtAuthenticationFilterTest {
     @DisplayName("doFilter_BearerVacio_DejaPasarPeroNoAutentica")
     void doFilter_BearerVacio_DejaPasarPeroNoAutentica() throws Exception {
         // "Bearer " sin nada después: jjwt rechaza el string vacío con IllegalArgumentException,
-        // no con JwtException (ver M1 en la auditoría).
+        // no con JwtException.
         when(request.getHeader("Authorization")).thenReturn("Bearer ");
         when(jwtService.extractUsername("")).thenThrow(new IllegalArgumentException("JWT String argument cannot be null or empty"));
 

@@ -27,7 +27,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
      *
      * <p>IgnoreCase para que "Juan" y "juan" (o con espacios extra, ya trimeados por el
      * llamador) se traten como el mismo empleado tanto al loguear como al validar
-     * unicidad de nombre (ver B4 en la auditoría).
+     * unicidad de nombre.
      *
      * <p>AndIsActiveTrue NO es sólo una comodidad: es lo que hace que este finder pueda
      * declarar Optional. Tiene que mirar EXACTAMENTE el mismo conjunto que el guard de
@@ -43,7 +43,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     /**
      * AndIsActiveTrue para que el nombre de un empleado desactivado quede libre y se
-     * pueda reutilizar al dar de alta a otro empleado (ver B18 en la auditoría): sin
+     * pueda reutilizar al dar de alta a otro empleado: sin
      * este filtro, un nombre queda bloqueado para siempre apenas se desactiva a quien
      * lo tenía.
      */

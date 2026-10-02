@@ -15,8 +15,7 @@ import java.time.LocalDateTime;
  * JwtService: un JWT válido sería aceptado como sesión por JwtAuthenticationFilter antes
  * de que el usuario exista, mientras que este token no autentica nada por sí mismo.
  *
- * <p>tokenHash/codigoHash guardan el hash SHA-256 (ver TokenHasher), nunca el valor crudo
- * (ver M-05 en la auditoría): el valor crudo solo existe en el link/email enviado al
+ * <p>tokenHash/codigoHash guardan el hash SHA-256 (ver TokenHasher), nunca el valor crudo. El valor crudo solo existe en el link/email enviado al
  * usuario y en memoria durante el request que lo valida.
  */
 @Getter

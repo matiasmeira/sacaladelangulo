@@ -25,18 +25,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * /api/v1/establecimientos/{establecimientoId}. @PreAuthorize OWNER/ADMIN (EmpleadoController:71,
  * :82, :93): jugador y empleado (aun con todos los permisos) quedan afuera ahí.
  *
- * <p>Cruce de establecimiento (IDOR): EmpleadoService busca al empleado con
- * buscarEmpleadoDelEstablecimiento (línea 177), que exige que pertenezca al establecimiento del
- * PATH (IllegalArgumentException -> 400), y valida al actor contra empleado.getEstablecimiento()
- * (líneas 136, 149, 166), no contra el path: un dueño B que usa su propio establecimientoId con
- * el empleadoId de A no llega a tocar al empleado. Un dueño B con el path correcto de A lo
- * rechaza validarPropietarioOAdmin (AutorizacionEmpleadoService:135) con 403.
+ * <p>Sin oráculo de existencia (pendiente 69): EmpleadoService autoriza primero contra el establecimiento del
+ * PATH con validarPropietarioOAdmin (el dueño ajeno y el establecimiento inexistente reciben el mismo 403) y
+ * recién después busca al empleado acotado a ese establecimiento (buscarEmpleadoDelEstablecimiento): un
+ * empleado inexistente, de otro complejo o que no es EMPLOYEE responde el mismo 404 "Empleado no encontrado".
+ * Un dueño B que usa su propio establecimientoId con el empleadoId de A no llega a tocar al empleado.
  */
 @DisplayName("Administración de empleados (PIN, permisos y baja)")
 class EmpleadoAdminAutorizacionTest extends AbstractSecurityWebTest {
 
     private static final String MENSAJE_403_SERVICE = "No autorizado en este establecimiento";
-    private static final String MENSAJE_EMPLEADO_AJENO = "El empleado no pertenece a este establecimiento";
+    private static final String MENSAJE_EMPLEADO_NO_ENCONTRADO = "Empleado no encontrado";
     private static final String PIN_NUEVO = "4827";
 
     private String rutaBase(Long establecimientoId, Usuario empleado) {
@@ -67,6 +66,23 @@ class EmpleadoAdminAutorizacionTest extends AbstractSecurityWebTest {
         }
 
         @Test
+        @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+            cambiar(duenoA, 987654321L, empleadoSinPermiso)
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+            assertPinSinCambios(empleadoSinPermiso);
+        }
+
+        @Test
+        @DisplayName("empleadoInexistenteEnElPathPropio_Devuelve404IgualAlDeOtroComplejo")
+        void empleadoInexistenteEnElPathPropio_Devuelve404() throws Exception {
+            mockMvc.perform(put("/api/v1/establecimientos/" + establecimientoA.getId() + "/empleados/987654321/pin")
+                            .header("Authorization", bearer(duenoA)).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"pin\":\"" + PIN_NUEVO + "\"}"))
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value(MENSAJE_EMPLEADO_NO_ENCONTRADO));
+        }
+
+        @Test
         @DisplayName("jugador_Devuelve403PorAnotacion")
         void jugador_Devuelve403PorAnotacion() throws Exception {
             cambiar(jugador, establecimientoA.getId(), empleadoSinPermiso)
@@ -86,9 +102,9 @@ class EmpleadoAdminAutorizacionTest extends AbstractSecurityWebTest {
         @Test
         @DisplayName("duenoBConSuEstablecimientoEnElPathYElEmpleadoDeA_RechazaYNoCambiaElPin")
         void duenoBConSuEstablecimientoEnElPathYElEmpleadoDeA_RechazaYNoCambiaElPin() throws Exception {
-            // EmpleadoService:177 (buscarEmpleadoDelEstablecimiento) -> 400
+            // buscarEmpleadoDelEstablecimiento acotado al path -> 404, igual que un empleado inexistente
             cambiar(duenoB, establecimientoB.getId(), empleadoSinPermiso)
-                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value(MENSAJE_EMPLEADO_AJENO));
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value(MENSAJE_EMPLEADO_NO_ENCONTRADO));
             assertPinSinCambios(empleadoSinPermiso);
         }
 
@@ -131,6 +147,14 @@ class EmpleadoAdminAutorizacionTest extends AbstractSecurityWebTest {
         }
 
         @Test
+        @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+            actualizar(duenoA, 987654321L, empleadoConPermiso)
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+            assertPermisosOriginales();
+        }
+
+        @Test
         @DisplayName("jugador_Devuelve403PorAnotacion")
         void jugador_Devuelve403PorAnotacion() throws Exception {
             actualizar(jugador, establecimientoA.getId(), empleadoConPermiso)
@@ -150,9 +174,9 @@ class EmpleadoAdminAutorizacionTest extends AbstractSecurityWebTest {
         @Test
         @DisplayName("duenoBConSuEstablecimientoEnElPathYElEmpleadoDeA_RechazaYNoCambiaLosPermisos")
         void duenoBConSuEstablecimientoEnElPathYElEmpleadoDeA_RechazaYNoCambiaLosPermisos() throws Exception {
-            // EmpleadoService:177 (buscarEmpleadoDelEstablecimiento) -> 400
+            // buscarEmpleadoDelEstablecimiento acotado al path -> 404, igual que un empleado inexistente
             actualizar(duenoB, establecimientoB.getId(), empleadoConPermiso)
-                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value(MENSAJE_EMPLEADO_AJENO));
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value(MENSAJE_EMPLEADO_NO_ENCONTRADO));
             assertPermisosOriginales();
         }
 
@@ -190,6 +214,14 @@ class EmpleadoAdminAutorizacionTest extends AbstractSecurityWebTest {
         }
 
         @Test
+        @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+        void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+            desactivar(duenoA, 987654321L, empleadoSinPermiso)
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+            assertActivo(true);
+        }
+
+        @Test
         @DisplayName("jugador_Devuelve403PorAnotacion")
         void jugador_Devuelve403PorAnotacion() throws Exception {
             desactivar(jugador, establecimientoA.getId(), empleadoSinPermiso)
@@ -209,9 +241,9 @@ class EmpleadoAdminAutorizacionTest extends AbstractSecurityWebTest {
         @Test
         @DisplayName("duenoBConSuEstablecimientoEnElPathYElEmpleadoDeA_RechazaYNoLoDesactiva")
         void duenoBConSuEstablecimientoEnElPathYElEmpleadoDeA_RechazaYNoLoDesactiva() throws Exception {
-            // EmpleadoService:177 (buscarEmpleadoDelEstablecimiento) -> 400
+            // buscarEmpleadoDelEstablecimiento acotado al path -> 404, igual que un empleado inexistente
             desactivar(duenoB, establecimientoB.getId(), empleadoSinPermiso)
-                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value(MENSAJE_EMPLEADO_AJENO));
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value(MENSAJE_EMPLEADO_NO_ENCONTRADO));
             assertActivo(true);
         }
 

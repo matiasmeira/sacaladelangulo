@@ -284,6 +284,7 @@ class EmpleadoServiceTest {
         ActualizarPermisosRequest request = new ActualizarPermisosRequest(
                 Set.of(PermisoEmpleado.CANCELAR_RESERVA, PermisoEmpleado.REGISTRAR_VENTA_BUFFET));
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(usuarioRepository.findById(empleado.getId())).thenReturn(Optional.of(empleado));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -321,11 +322,12 @@ class EmpleadoServiceTest {
 
         ActualizarPermisosRequest request = new ActualizarPermisosRequest(Set.of(PermisoEmpleado.CANCELAR_RESERVA));
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(usuarioRepository.findById(empleadoDeOtroEstablecimiento.getId())).thenReturn(Optional.of(empleadoDeOtroEstablecimiento));
 
-        // Act & Assert
+        // Act & Assert: el empleado es de otro establecimiento: mismo 404 que un empleado inexistente
         assertThrows(
-                IllegalArgumentException.class,
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
                 () -> empleadoService.actualizarPermisos(establecimiento.getId(), empleadoDeOtroEstablecimiento.getId(), request, dueno.getEmail())
         );
         verify(usuarioRepository, never()).save(any());
@@ -346,6 +348,7 @@ class EmpleadoServiceTest {
 
         CambiarPinRequest request = new CambiarPinRequest("5678");
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(usuarioRepository.findById(empleado.getId())).thenReturn(Optional.of(empleado));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(passwordEncoder.encode("5678")).thenReturn("hash-5678");
@@ -376,6 +379,7 @@ class EmpleadoServiceTest {
 
         CambiarPinRequest request = new CambiarPinRequest("0000");
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(usuarioRepository.findById(empleado.getId())).thenReturn(Optional.of(empleado));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
 
@@ -400,6 +404,7 @@ class EmpleadoServiceTest {
                 .isActive(true)
                 .build();
 
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         when(usuarioRepository.findById(empleado.getId())).thenReturn(Optional.of(empleado));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> invocation.getArgument(0));

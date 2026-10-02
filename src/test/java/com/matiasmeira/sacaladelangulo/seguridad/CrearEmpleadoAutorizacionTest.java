@@ -38,6 +38,17 @@ class CrearEmpleadoAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        mockMvc.perform(post("/api/v1/establecimientos/987654321/empleados")
+                        .header("Authorization", bearer(duenoA)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nombre\":\"Nuevo Empleado\",\"pin\":\"4827\",\"permisos\":[\"OPERAR_CAJA\"]}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("No autorizado en este establecimiento"));
+        assertEquals(2, empleadosDeA());
+    }
+
+    @Test
     @DisplayName("sinToken_Devuelve401")
     void sinToken_Devuelve401() throws Exception {
         crear(null)

@@ -32,6 +32,13 @@ class EmpleadoListarAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        mockMvc.perform(get("/api/v1/establecimientos/987654321/empleados").header("Authorization", bearer(duenoA)))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+    }
+
+    @Test
     @DisplayName("duenoPropio_Devuelve200SoloConSusEmpleados")
     void duenoPropio() throws Exception {
         empleado(establecimientoB, EnumSet.of(PermisoEmpleado.OPERAR_CAJA));

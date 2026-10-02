@@ -14,6 +14,7 @@ import com.matiasmeira.sacaladelangulo.empleado.dto.EmpleadoResponse;
 import com.matiasmeira.sacaladelangulo.empleado.model.AccionAuditoria;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -64,6 +65,7 @@ public class EmpleadoService {
     public EmpleadoResponse crearEmpleado(Long establecimientoId, EmpleadoRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         // Trim + IgnoreCase para que "Juan" y "juan "/" JUAN" cuenten como el mismo
         // nombre tanto acá como al loguear.
@@ -114,6 +116,7 @@ public class EmpleadoService {
     public List<EmpleadoResponse> listarPorEstablecimiento(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         return usuarioRepository.findByEstablecimientoIdAndRol(establecimientoId, Role.EMPLOYEE).stream()
                 .map(empleadoMapper::mapToResponse)
@@ -132,8 +135,10 @@ public class EmpleadoService {
     }
 
     public EmpleadoResponse actualizarPermisos(Long establecimientoId, Long empleadoId, ActualizarPermisosRequest request, String email) {
+        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
-        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
 
         empleado.setPermisos(new HashSet<>(request.permisos()));
         Usuario empleadoActualizado = usuarioRepository.save(empleado);
@@ -145,8 +150,10 @@ public class EmpleadoService {
     }
 
     public EmpleadoResponse cambiarPin(Long establecimientoId, Long empleadoId, CambiarPinRequest request, String email) {
+        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
-        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
         validarPinNoTrivial(request.pin());
 
         empleado.setPassword(passwordEncoder.encode(request.pin()));
@@ -162,8 +169,10 @@ public class EmpleadoService {
     }
 
     public void desactivarEmpleado(Long establecimientoId, Long empleadoId, String email) {
+        Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
+        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         Usuario empleado = buscarEmpleadoDelEstablecimiento(establecimientoId, empleadoId);
-        Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(empleado.getEstablecimiento(), email);
 
         empleado.setIsActive(false);
         Usuario empleadoDesactivado = usuarioRepository.save(empleado);
@@ -183,20 +192,22 @@ public class EmpleadoService {
         return "empleado-" + UUID.randomUUID() + "@" + DOMINIO_EMAIL_SINTETICO;
     }
 
+    /**
+     * Devuelve el establecimiento del path o, si no existe, uno "fantasma" contra el cual la autorización
+     * falla igual que ante uno ajeno (ver EstablecimientoAutorizado). Siempre se llama exigirExistente
+     * después de autorizar.
+     */
     private Establecimiento buscarEstablecimientoPorId(Long establecimientoId) {
-        return establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        return EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
     }
 
+    /** Acotado al establecimiento ya autorizado: inexistente, no empleado o de otro complejo, el mismo 404. */
     private Usuario buscarEmpleadoDelEstablecimiento(Long establecimientoId, Long empleadoId) {
-        Usuario empleado = usuarioRepository.findById(empleadoId)
+        return usuarioRepository.findById(empleadoId)
+                .filter(empleado -> empleado.getRol() == Role.EMPLOYEE)
+                .filter(empleado -> empleado.getEstablecimiento() != null
+                        && empleado.getEstablecimiento().getId().equals(establecimientoId))
                 .orElseThrow(() -> new EntityNotFoundException("Empleado no encontrado"));
-        if (empleado.getRol() != Role.EMPLOYEE
-                || empleado.getEstablecimiento() == null
-                || !empleado.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("El empleado no pertenece a este establecimiento");
-        }
-        return empleado;
     }
 
 }

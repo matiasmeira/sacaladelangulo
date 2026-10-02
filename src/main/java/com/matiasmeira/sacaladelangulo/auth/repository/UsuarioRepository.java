@@ -6,6 +6,9 @@ import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -21,6 +24,22 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     Optional<Usuario> findByEmail(String email);
 
     boolean existsByEmail(String email);
+
+    /**
+     * Convierte un PLAYER en OWNER con plan TRIAL (pendiente 86). El {@code AND rol = PLAYER} es
+     * el guard de concurrencia: de dos requests simultáneas (doble click, dos pestañas) sólo una
+     * ve la fila como PLAYER y devuelve 1; la otra devuelve 0 y no debe disparar el mail de
+     * bienvenida. No toca tokenVersion: el JWT no lleva el rol. Limpia el contexto de
+     * persistencia para que la relectura traiga el estado nuevo.
+     *
+     * @return 1 si convirtió, 0 si el usuario ya no era PLAYER
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Usuario u SET u.rol = com.matiasmeira.sacaladelangulo.auth.model.Role.OWNER, "
+            + "u.planSuscripcion = com.matiasmeira.sacaladelangulo.auth.model.PlanSuscripcion.TRIAL, "
+            + "u.fechaFinPrueba = NULL "
+            + "WHERE u.id = :id AND u.rol = com.matiasmeira.sacaladelangulo.auth.model.Role.PLAYER")
+    int convertirEnDuenoSiEsJugador(@Param("id") Long id);
 
     /**
      * Resuelve al empleado del login de mostrador (ver AuthService.authenticateEmpleado).

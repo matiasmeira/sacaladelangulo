@@ -3,12 +3,15 @@ package com.matiasmeira.sacaladelangulo.auth.service;
 import com.matiasmeira.sacaladelangulo.auth.dto.PerfilMapper;
 import com.matiasmeira.sacaladelangulo.auth.dto.PerfilResponse;
 import com.matiasmeira.sacaladelangulo.auth.model.CodigoVerificacion;
+import com.matiasmeira.sacaladelangulo.auth.model.Role;
 import com.matiasmeira.sacaladelangulo.auth.model.Usuario;
 import com.matiasmeira.sacaladelangulo.auth.repository.CodigoVerificacionRepository;
 import com.matiasmeira.sacaladelangulo.auth.repository.UsuarioRepository;
 import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.core.security.TokenHasher;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +38,7 @@ public class UsuarioService {
     private final UsuarioRepository usuarioRepository;
     private final CodigoVerificacionRepository codigoVerificacionRepository;
     private final PerfilMapper perfilMapper;
+    private final ApplicationEventPublisher eventPublisher;
     private final SecureRandom random = new SecureRandom();
 
     /**
@@ -126,5 +130,37 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
         return perfilMapper.mapToResponse(usuario);
+    }
+
+    /**
+     * Convierte la cuenta de un PLAYER en cuenta de OWNER (plan TRIAL, mismo email y contraseña).
+     * Idempotente: un OWNER recibe su perfil sin cambios ni mail. ADMIN y EMPLOYEE no pueden.
+     *
+     * <p>El cambio es un UPDATE condicional ({@code AND rol = PLAYER}) y el mail de bienvenida de
+     * dueño sale sólo si ese UPDATE tocó la fila: dos requests simultáneas no mandan dos mails.
+     * No toca tokenVersion ni emite token: el JWT no lleva el rol y se lee de la base en cada request.
+     *
+     * @param email Email del usuario autenticado (siempre del principal)
+     */
+    public PerfilResponse convertirEnDueno(String email) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+
+        if (usuario.getRol() == Role.OWNER) {
+            return perfilMapper.mapToResponse(usuario);
+        }
+        if (usuario.getRol() != Role.PLAYER) {
+            throw new AccessDeniedException("Solo un jugador puede convertir su cuenta en cuenta de dueño.");
+        }
+
+        int convertidos = usuarioRepository.convertirEnDuenoSiEsJugador(usuario.getId());
+        if (convertidos == 1) {
+            log.info("Usuario {} convirtió su cuenta de jugador en cuenta de dueño", usuario.getId());
+            eventPublisher.publishEvent(new RegistroCompletadoEvent(usuario.getEmail(), usuario.getNombre(), Role.OWNER));
+        }
+
+        Usuario recargado = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        return perfilMapper.mapToResponse(recargado);
     }
 }

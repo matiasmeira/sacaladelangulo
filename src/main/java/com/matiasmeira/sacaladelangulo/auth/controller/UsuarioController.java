@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -68,6 +69,17 @@ public class UsuarioController {
     public ResponseEntity<PerfilResponse> me(@AuthenticationPrincipal UserDetails userDetails) {
         String email = userDetails.getUsername();
         return ResponseEntity.ok(usuarioService.obtenerPerfil(email));
+    }
+
+    /**
+     * Un jugador convierte su cuenta en cuenta de dueño (mismo email y contraseña). Un OWNER que
+     * repite la llamada recibe su perfil sin cambios; ADMIN y EMPLOYEE reciben 403. Sin body: la
+     * identidad sale siempre del token.
+     */
+    @PostMapping("/me/convertir-en-dueno")
+    @PreAuthorize("hasAnyRole('PLAYER','OWNER')")
+    public ResponseEntity<PerfilResponse> convertirEnDueno(@AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(usuarioService.convertirEnDueno(userDetails.getUsername()));
     }
 
     @DeleteMapping("/me")

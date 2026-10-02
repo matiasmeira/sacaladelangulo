@@ -101,6 +101,16 @@ class VentaBuffetAutorizacionTest extends AbstractSecurityWebTest {
         }
 
         @Test
+        @DisplayName("establecimientoInexistenteEnElBody_Devuelve403IgualAlAjeno")
+        void establecimientoInexistenteEnElBody_Devuelve403() throws Exception {
+            Establecimiento inexistente = Establecimiento.builder().id(987654321L).build();
+            registrar(duenoA, inexistente, productoA)
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_ACCION));
+            assertEquals(0, ventaRepository.count());
+            assertEquals(10, stock(productoA));
+        }
+
+        @Test
         @DisplayName("duenoDeOtroEstablecimientoSobreElA_Devuelve403")
         void duenoDeOtroEstablecimientoSobreElA_Devuelve403() throws Exception {
             // AutorizacionEmpleadoService:59

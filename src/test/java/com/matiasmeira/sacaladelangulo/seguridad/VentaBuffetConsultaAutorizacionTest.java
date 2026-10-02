@@ -30,7 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * GET /api/v1/buffet/ventas y /api/v1/buffet/ventas/metricas (consultas del dueño). @PreAuthorize OWNER/ADMIN
  * (VentaBuffetController:68 y :83): el empleado queda afuera aunque tenga todos los permisos.
  * VentaMetricasService autoriza con validarPropietarioOAdmin sobre el establecimientoId del query param
- * (líneas 53 y 87 -> AutorizacionEmpleadoService:135). Las ventas de A y B se siembran con total distinto
+ * (líneas 53 y 87 -> AutorizacionEmpleadoService:135) ANTES de buscar nada (pendiente 69): un establecimiento
+ * inexistente responde el mismo 403 que uno ajeno. Las ventas de A y B se siembran con total distinto
  * para aseverar que cada dueño ve sólo las de su complejo.
  */
 @DisplayName("Consultas de ventas del buffet (listado y métricas)")
@@ -87,6 +88,24 @@ class VentaBuffetConsultaAutorizacionTest extends AbstractBuffetSecurityTest {
     @DisplayName("listar_admin_Devuelve200ParaCualquierComplejo")
     void listar_admin() throws Exception {
         listar(admin, establecimientoB).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].total").value(900));
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403() throws Exception {
+        Establecimiento inexistente = Establecimiento.builder().id(987654321L).build();
+        listar(duenoA, inexistente).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        metricas(duenoA, inexistente).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistenteComoAdmin_Devuelve404")
+    void establecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+        Establecimiento inexistente = Establecimiento.builder().id(987654321L).build();
+        listar(admin, inexistente).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
     }
 
     @Test

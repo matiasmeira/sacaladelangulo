@@ -22,6 +22,7 @@ import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoServ
 import com.matiasmeira.sacaladelangulo.empleado.service.RegistroAuditoriaService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.reserva.model.EstadoReserva;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
@@ -67,10 +68,11 @@ public class VentaService {
         log.info("Iniciando registro de venta. Email: {}, Establecimiento: {}, Items: {}",
                 email, request.establecimientoId(), request.detalles().size());
 
-        Establecimiento establecimiento = establecimientoRepository.findById(request.establecimientoId())
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(
+                establecimientoRepository.findById(request.establecimientoId()));
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarAccion(
                 establecimiento, email, PermisoEmpleado.REGISTRAR_VENTA_BUFFET);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         try {

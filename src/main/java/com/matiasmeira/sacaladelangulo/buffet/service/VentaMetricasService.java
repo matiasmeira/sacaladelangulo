@@ -8,10 +8,10 @@ import com.matiasmeira.sacaladelangulo.buffet.model.DetalleVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.EstadoVenta;
 import com.matiasmeira.sacaladelangulo.buffet.model.Venta;
 import com.matiasmeira.sacaladelangulo.buffet.repository.VentaRepository;
-import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,9 +48,9 @@ public class VentaMetricasService {
      */
     @Transactional(readOnly = true)
     public MetricasVentasResponse obtenerMetricas(Long establecimientoId, LocalDate desde, LocalDate hasta, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         if (desde.isAfter(hasta)) {
             throw new IllegalArgumentException("La fecha 'desde' no puede ser posterior a 'hasta'");
@@ -82,9 +82,9 @@ public class VentaMetricasService {
     @Transactional(readOnly = true)
     public Page<VentaResumenResponse> listarVentas(Long establecimientoId, LocalDate desde, LocalDate hasta,
                                                      EstadoVenta estado, String email, Pageable pageable) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         if (desde.isAfter(hasta)) {
             throw new IllegalArgumentException("La fecha 'desde' no puede ser posterior a 'hasta'");

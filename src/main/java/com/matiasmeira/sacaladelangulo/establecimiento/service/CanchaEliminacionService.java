@@ -68,12 +68,12 @@ public class CanchaEliminacionService {
     public void eliminarCancha(Long establecimientoId, Long canchaId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario dueno = autorizacionEmpleadoService.validarPropietario(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
+        // Acotada al establecimiento ya autorizado: inexistente o de otro complejo, el mismo 404.
         Cancha cancha = canchaRepository.findById(canchaId)
+                .filter(c -> c.getEstablecimiento().getId().equals(establecimientoId))
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
-        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
-        }
 
         if (Boolean.TRUE.equals(cancha.getIsActive())) {
             throw new IllegalArgumentException(
@@ -103,8 +103,12 @@ public class CanchaEliminacionService {
         complejoDetalleCache.invalidarPorEstablecimientoId(establecimientoId);
     }
 
+    /**
+     * Devuelve el establecimiento del path o, si no existe, uno "fantasma" contra el cual la autorización
+     * falla igual que ante uno ajeno (ver EstablecimientoAutorizado). Siempre se llama exigirExistente
+     * después de autorizar.
+     */
     private Establecimiento buscarEstablecimientoPorId(Long id) {
-        return establecimientoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        return EstablecimientoAutorizado.resolver(establecimientoRepository.findById(id));
     }
 }

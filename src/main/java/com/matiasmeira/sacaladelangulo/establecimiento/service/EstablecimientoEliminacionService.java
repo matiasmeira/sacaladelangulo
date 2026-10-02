@@ -49,6 +49,7 @@ public class EstablecimientoEliminacionService {
     public void eliminarEstablecimiento(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         Usuario dueno = autorizacionEmpleadoService.validarPropietario(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         if (Boolean.TRUE.equals(establecimiento.getIsActive())) {
             throw new IllegalArgumentException(
@@ -86,8 +87,12 @@ public class EstablecimientoEliminacionService {
         eventPublisher.publishEvent(new EstablecimientoEliminadoEvent(dueno.getEmail(), dueno.getNombre(), nombreOriginal));
     }
 
+    /**
+     * Devuelve el establecimiento del path o, si no existe, uno "fantasma" contra el cual la autorización
+     * falla igual que ante uno ajeno (ver EstablecimientoAutorizado). Siempre se llama exigirExistente
+     * después de autorizar.
+     */
     private Establecimiento buscarEstablecimientoPorId(Long id) {
-        return establecimientoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        return EstablecimientoAutorizado.resolver(establecimientoRepository.findById(id));
     }
 }

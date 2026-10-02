@@ -108,6 +108,7 @@ public class EstablecimientoService {
     public EstablecimientoResponse actualizarEstablecimiento(Long id, EstablecimientoRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(id);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         establecimiento.setNombre(request.nombre());
         establecimiento.setDireccion(request.direccion());
@@ -183,9 +184,13 @@ public class EstablecimientoService {
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
     }
 
+    /**
+     * Devuelve el establecimiento del path o, si no existe, uno "fantasma" contra el cual la autorización
+     * falla igual que ante uno ajeno (ver EstablecimientoAutorizado). Siempre se llama exigirExistente
+     * después de autorizar.
+     */
     private Establecimiento buscarEstablecimientoPorId(Long id) {
-        return establecimientoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        return EstablecimientoAutorizado.resolver(establecimientoRepository.findById(id));
     }
 
     /**

@@ -35,13 +35,18 @@ public class EstablecimientoPrevisualizacionService {
     public PrevisualizacionEstablecimientoResponse previsualizar(Long establecimientoId, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(establecimientoId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         ComplejoDetalleResponse detalle = complejoPublicoService.construirDetalle(establecimiento);
         return new PrevisualizacionEstablecimientoResponse(detalle, establecimiento.getEstadoVerificacion(), true);
     }
 
+    /**
+     * Devuelve el establecimiento del path o, si no existe, uno "fantasma" contra el cual la autorización
+     * falla igual que ante uno ajeno (ver EstablecimientoAutorizado). Siempre se llama exigirExistente
+     * después de autorizar.
+     */
     private Establecimiento buscarEstablecimientoPorId(Long id) {
-        return establecimientoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        return EstablecimientoAutorizado.resolver(establecimientoRepository.findById(id));
     }
 }

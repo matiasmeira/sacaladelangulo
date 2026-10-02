@@ -106,11 +106,11 @@ class EstablecimientoEliminarAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
-    @DisplayName("idInexistente_Devuelve404")
-    void idInexistente_Devuelve404() throws Exception {
-        // EstablecimientoEliminacionService:91
+    @DisplayName("idInexistente_Devuelve403IgualAlAjeno")
+    void idInexistente_Devuelve403() throws Exception {
+        // Sin oráculo de existencia (pendiente 69): mismo 403 y mismo mensaje que ante un complejo ajeno
         eliminar(999_999L, duenoA)
-                .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
         assertNadaEliminado();
     }
 

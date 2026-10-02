@@ -78,10 +78,18 @@ class EstablecimientoActualizarAutorizacionTest extends AbstractSecurityWebTest 
     }
 
     @Test
-    @DisplayName("idInexistente_Devuelve404")
-    void idInexistente_Devuelve404() throws Exception {
-        // EstablecimientoService:175
+    @DisplayName("idInexistente_Devuelve403IgualAlAjeno")
+    void idInexistente_Devuelve403() throws Exception {
+        // Sin oráculo de existencia (pendiente 69): mismo 403 y mismo mensaje que ante un complejo ajeno
         actualizar(999_999L, duenoA)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("idInexistenteComoAdmin_Devuelve404")
+    void idInexistenteComoAdmin_Devuelve404() throws Exception {
+        actualizar(999_999L, admin)
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
         assertSinCambios();
     }

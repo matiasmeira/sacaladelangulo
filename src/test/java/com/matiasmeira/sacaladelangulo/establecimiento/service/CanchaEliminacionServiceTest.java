@@ -235,7 +235,8 @@ class CanchaEliminacionServiceTest {
         Cancha canchaDeOtroEstablecimiento = Canchas.canchaDesactivada(otroEstablecimiento, b -> b.id(100L));
         when(canchaRepository.findById(100L)).thenReturn(Optional.of(canchaDeOtroEstablecimiento));
 
-        assertThrows(IllegalArgumentException.class,
+        // La cancha de otro complejo responde el mismo 404 que una inexistente
+        assertThrows(EntityNotFoundException.class,
                 () -> canchaEliminacionService.eliminarCancha(10L, 100L, dueno.getEmail()));
         verify(canchaRepository, never()).save(any());
     }

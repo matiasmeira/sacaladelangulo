@@ -59,7 +59,7 @@ public class CanchaService {
         Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
-        BigDecimal montoSena = validarMontoSena(request.montoSena(), usuarioAutenticado.getPlanSuscripcion());
+        BigDecimal montoSena = validarMontoSena(request.montoSena(), establecimiento.getDueno().getPlanSuscripcion());
         Integer canchasNecesarias = calcularCanchasNecesarias(request.canchasFisicasIds(), request.cantidadCanchasNecesarias());
         List<Integer> duracionesPermitidas = resolverDuraciones(request.duracionesPermitidas());
 
@@ -142,7 +142,7 @@ public class CanchaService {
             throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
         }
 
-        BigDecimal montoSena = validarMontoSena(request.montoSena(), usuarioAutenticado.getPlanSuscripcion());
+        BigDecimal montoSena = validarMontoSena(request.montoSena(), establecimiento.getDueno().getPlanSuscripcion());
         List<Integer> duracionesPermitidas = resolverDuraciones(request.duracionesPermitidas());
 
         validarPreciosPorDuracion(request.preciosPorDuracion(), request.tarifas(), duracionesPermitidas);
@@ -382,7 +382,7 @@ public class CanchaService {
         boolean planLimitado = plan == PlanSuscripcion.FREE;
         if (planLimitado) {
             if (montoSena == null || montoSena.compareTo(PlanSuscripcionLimites.SENA_MINIMA_PLAN_LIMITADO) < 0) {
-                throw new IllegalArgumentException("El plan actual requiere configurar una seña obligatoria de mínimo $" + PlanSuscripcionLimites.SENA_MINIMA_PLAN_LIMITADO);
+                throw new IllegalArgumentException("El plan del complejo requiere configurar una seña obligatoria de mínimo $" + PlanSuscripcionLimites.SENA_MINIMA_PLAN_LIMITADO);
             }
             return montoSena;
         }

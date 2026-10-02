@@ -103,13 +103,13 @@ public class EstablecimientoService {
 
     public EstablecimientoResponse actualizarEstablecimiento(Long id, EstablecimientoRequest request, String email) {
         Establecimiento establecimiento = buscarEstablecimientoPorId(id);
-        Usuario usuarioAutenticado = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
         establecimiento.setNombre(request.nombre());
         establecimiento.setDireccion(request.direccion());
         establecimiento.setLatitud(request.latitud());
         establecimiento.setLongitud(request.longitud());
-        establecimiento.setRequiereSena(esPlanLimitado(usuarioAutenticado.getPlanSuscripcion()) || request.requiereSena());
+        establecimiento.setRequiereSena(esPlanLimitado(establecimiento.getDueno().getPlanSuscripcion()) || request.requiereSena());
         establecimiento.setRequiereTelefonoVerificado(request.requiereTelefonoVerificado());
 
         if (request.servicios() != null) {

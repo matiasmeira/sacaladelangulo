@@ -412,4 +412,60 @@ class EstablecimientoServiceTest {
         assertEquals(1, response.horariosAtencion().size());
         assertEquals(DayOfWeek.FRIDAY, response.horariosAtencion().get(0).diaSemana());
     }
+
+    private Usuario usuarioConPlan(Long id, Role rol, PlanSuscripcion plan) {
+        return Usuario.builder().id(id).email("u" + id + "@test.com").rol(rol).planSuscripcion(plan).build();
+    }
+
+    /** Edita un complejo del dueño dado, autenticado como {@code autenticado}, y devuelve lo que se guardó. */
+    private Establecimiento actualizarRequiereSena(Usuario dueno, Usuario autenticado, boolean requiereSenaRequest) {
+        Establecimiento existente = Establecimientos.establecimientoOperativo(b -> b
+                .id(11L).nombre("Nombre").direccion("Direccion").latitud(-34.6).longitud(-58.4)
+                .requiereSena(false).requiereTelefonoVerificado(false)
+                .dueno(dueno).horariosAtencion(new ArrayList<>()));
+        EstablecimientoRequest request = new EstablecimientoRequest(
+                "Nombre", "Direccion", -34.6, -58.4, requiereSenaRequest, false, List.of(), null);
+
+        when(establecimientoRepository.findById(11L)).thenReturn(Optional.of(existente));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(existente, "quien@test.com")).thenReturn(autenticado);
+        when(establecimientoRepository.save(any(Establecimiento.class))).thenAnswer(i -> i.getArgument(0));
+
+        establecimientoService.actualizarEstablecimiento(11L, request, "quien@test.com");
+
+        ArgumentCaptor<Establecimiento> captor = ArgumentCaptor.forClass(Establecimiento.class);
+        verify(establecimientoRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("actualizarEstablecimiento_AdminPremiumEnComplejoDeDuenoFree_RequiereSenaQuedaTrue")
+    void actualizarEstablecimiento_AdminPremiumEnComplejoDeDuenoFree_RequiereSenaQuedaTrue() {
+        Establecimiento guardado = actualizarRequiereSena(
+                usuarioConPlan(2L, Role.OWNER, PlanSuscripcion.FREE),
+                usuarioConPlan(1L, Role.ADMIN, PlanSuscripcion.PREMIUM), false);
+        assertTrue(guardado.getRequiereSena());
+    }
+
+    @Test
+    @DisplayName("actualizarEstablecimiento_AdminFreeEnComplejoDeDuenoPremium_RespetaElRequest")
+    void actualizarEstablecimiento_AdminFreeEnComplejoDeDuenoPremium_RespetaElRequest() {
+        Establecimiento guardado = actualizarRequiereSena(
+                usuarioConPlan(2L, Role.OWNER, PlanSuscripcion.PREMIUM),
+                usuarioConPlan(1L, Role.ADMIN, PlanSuscripcion.FREE), false);
+        assertEquals(false, guardado.getRequiereSena());
+    }
+
+    @Test
+    @DisplayName("actualizarEstablecimiento_DuenoFreeEnLoSuyo_RequiereSenaQuedaTrue")
+    void actualizarEstablecimiento_DuenoFreeEnLoSuyo_RequiereSenaQuedaTrue() {
+        Usuario dueno = usuarioConPlan(2L, Role.OWNER, PlanSuscripcion.FREE);
+        assertTrue(actualizarRequiereSena(dueno, dueno, false).getRequiereSena());
+    }
+
+    @Test
+    @DisplayName("actualizarEstablecimiento_DuenoTrial_RespetaElRequest")
+    void actualizarEstablecimiento_DuenoTrial_RespetaElRequest() {
+        Usuario dueno = usuarioConPlan(2L, Role.OWNER, PlanSuscripcion.TRIAL);
+        assertEquals(false, actualizarRequiereSena(dueno, dueno, false).getRequiereSena());
+    }
 }

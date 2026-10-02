@@ -74,6 +74,14 @@ class BloqueoJugadorAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
+    @DisplayName("admin_jugadorConReservaEnElComplejo_Devuelve201")
+    void admin_jugadorConReserva_Devuelve201() throws Exception {
+        Usuario cliente = jugadorConReservaEnA();
+        bloquear(cliente.getId(), admin).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.jugadorId").value(cliente.getId()));
+    }
+
+    @Test
     @DisplayName("duenoPropio_jugadorSinReservasEnElComplejo_Devuelve404Unico")
     void duenoPropio_jugadorSinReservas_Devuelve404() throws Exception {
         assertNoEncontrado(bloquear(jugador.getId(), duenoA));

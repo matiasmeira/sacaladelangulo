@@ -45,7 +45,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             // Paso 1 del registro de jugadores. A diferencia del resto de este mapa, acá lo
             // que se protege no es una credencial sino el ENVÍO DE EMAIL: cada llamada dispara
             // un mail real a la dirección del body. El límite por identidad de negocio que ya
-            // existe (3 cada 15 min por email, ver RegistroVerificacionService.iniciarRegistro)
+            // existe (1 por minuto por email, ver RegistroVerificacionService.iniciarRegistro)
             // no cubre este caso, porque se esquiva rotando direcciones: sin un tope por IP,
             // el endpoint sirve para mandar correo no solicitado desde el dominio propio a una
             // lista arbitraria, y eso golpea la reputación de envío en Resend.

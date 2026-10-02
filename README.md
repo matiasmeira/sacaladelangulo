@@ -94,3 +94,40 @@ Swagger UI: `/swagger-ui.html`, sólo con el perfil `dev`.
 ```
 
 El CI (`.github/workflows/test.yml`, GitHub Actions) corre ambas suites en jobs separados.
+
+## Tests e2e
+
+Los tests e2e viven en el repo del front (`npm run e2e` en `saque-front`): levantan este back
+en `:8081` con el perfil `e2e` y un front en `:3001`, contra una base propia. Nada de esto entra
+al jar: el código e2e está en `src/test/java/.../e2e/`, la configuración en
+`src/test/resources/application-e2e.properties` y el seed en `e2e/seed/` (fuera de `src/` y
+excluido de la imagen en `.dockerignore`).
+
+**Una sola vez**, crear la base (con `psql` o cualquier cliente):
+
+```sql
+CREATE DATABASE sacaladelangulo_e2e;
+```
+
+Variables necesarias (las mismas que el back normal): `DB_PASSWORD` y `JWT_SECRET`; opcionales
+`DB_HOST`, `DB_PORT` y `DB_USERNAME` (default `postgres`). La base `sacaladelangulo_e2e` está
+fija en el perfil.
+
+**Cada arranque borra la base `_e2e`** (Flyway `clean` + `migrate` + seed). Si la URL de la base
+no termina en `_e2e`, el arranque falla sin tocar nada (`GuardaBaseE2e`).
+
+Para levantarlo a mano:
+
+```bash
+./mvnw -Dbuild.dir=target-e2e spring-boot:test-run \
+  -Dspring-boot.run.main-class=com.matiasmeira.sacaladelangulo.e2e.E2eApplication
+```
+
+`-Dbuild.dir=target-e2e` evita pisar `target/`, desde donde corre el back de desarrollo.
+
+Los mails no se envían: cada uno agrega una línea JSON (`destinatario`, `asunto`, `links`,
+`codigo`, `fecha`) a `target-e2e/mails.jsonl`, que se vacía al arrancar.
+
+Datos del seed (contraseña de todos: `E2e-Canche-2026!`): `dueno.e2e@canche.test` (dueño, complejos
+`e2e-sin-sena` y `e2e-con-sena`, 2 canchas cada uno), `dueno.vacio.e2e@canche.test` (complejo
+`e2e-sin-canchas`, sin canchas), `admin.e2e@canche.test` y `jugador.e2e@canche.test`. Sin reservas.

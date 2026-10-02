@@ -30,3 +30,7 @@ saque/
 # El propio Dockerfile
 Dockerfile
 .dockerignore
+
+# Tests e2e: seed y config del back e2e (sólo para desarrollo local)
+e2e/
+target-e2e/

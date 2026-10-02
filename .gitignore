@@ -59,3 +59,6 @@ AUDIT_REPORT.md
 /AUDITORIA_*.md
 /docs/superpowers/
 /saque/
+
+### e2e ###
+target-e2e/

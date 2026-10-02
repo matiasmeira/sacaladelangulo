@@ -100,6 +100,18 @@ class BloqueoJugadorAutorizacionTest extends AbstractSecurityWebTest {
     }
 
     @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403() throws Exception {
+        Usuario cliente = jugadorConReservaEnA();
+        mockMvc.perform(post("/api/v1/establecimientos/987654321/jugadores-bloqueados")
+                        .header("Authorization", bearer(duenoA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"jugadorId\":" + cliente.getId() + ",\"motivo\":\"No-show\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("No autorizado en este establecimiento"));
+    }
+
+    @Test
     @DisplayName("duenoAjeno_Devuelve403")
     void duenoAjeno_Devuelve403() throws Exception {
         Usuario cliente = jugadorConReservaEnA();

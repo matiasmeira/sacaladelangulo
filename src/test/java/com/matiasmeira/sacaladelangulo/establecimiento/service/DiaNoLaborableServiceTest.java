@@ -158,6 +158,7 @@ class DiaNoLaborableServiceTest {
     @Test
     @DisplayName("eliminar_Exito")
     void eliminar_Exito() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         // Arrange
         DiaNoLaborable diaNoLaborable = DiaNoLaborable.builder()
                 .id(1L)
@@ -179,6 +180,7 @@ class DiaNoLaborableServiceTest {
     @Test
     @DisplayName("eliminar_Fallo_NoPerteneceAlEstablecimiento")
     void eliminar_Fallo_NoPerteneceAlEstablecimiento() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         // Arrange
         Establecimiento otroEstablecimiento = Establecimientos.establecimientoOperativo(b -> b
                 .id(99L)
@@ -198,9 +200,9 @@ class DiaNoLaborableServiceTest {
 
         when(diaNoLaborableRepository.findById(diaNoLaborable.getId())).thenReturn(Optional.of(diaNoLaborable));
 
-        // Act & Assert: se pide eliminar pasando el establecimiento equivocado
+        // Act & Assert: el día es de otro establecimiento: mismo 404 que un día inexistente
         assertThrows(
-                IllegalArgumentException.class,
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
                 () -> diaNoLaborableService.eliminar(establecimiento.getId(), diaNoLaborable.getId(), dueno.getEmail())
         );
         verify(diaNoLaborableRepository, never()).delete(any());

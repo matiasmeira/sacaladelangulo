@@ -11,6 +11,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Cancha;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.reserva.model.Reserva;
 import com.matiasmeira.sacaladelangulo.reserva.repository.ReservaRepository;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
@@ -33,6 +34,7 @@ public class BloqueoCanchaService {
 
     private final BloqueoCanchaRepository bloqueoCanchaRepository;
     private final CanchaRepository canchaRepository;
+    private final EstablecimientoRepository establecimientoRepository;
     private final ReservaRepository reservaRepository;
     private final ReservaMapper reservaMapper;
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
@@ -40,13 +42,14 @@ public class BloqueoCanchaService {
 
     @Transactional
     public BloqueoCanchaResponse crearBloqueo(Long establecimientoId, Long canchaId, BloqueoCanchaRequest request, String email) {
+        Establecimiento establecimiento = autorizarSobreEstablecimiento(establecimientoId, email);
+        Cancha cancha = buscarCanchaDelEstablecimiento(establecimientoId, canchaId);
+
         if (!request.fechaInicio().isBefore(request.fechaFin())) {
             throw new IllegalArgumentException("La fecha de inicio debe ser anterior a la de fin");
         }
 
-        Cancha cancha = buscarCanchaDelEstablecimiento(establecimientoId, canchaId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
-        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(cancha.getEstablecimiento());
+        establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         BloqueoCancha bloqueo = BloqueoCancha.builder()
                 .cancha(cancha)
@@ -141,17 +144,13 @@ public class BloqueoCanchaService {
 
     @Transactional
     public void eliminarBloqueo(Long establecimientoId, Long canchaId, Long bloqueoId, String email) {
+        autorizarSobreEstablecimiento(establecimientoId, email);
+
+        // Acotado a la cancha y al establecimiento del path: inexistente o de otro lado, el mismo 404.
         BloqueoCancha bloqueo = bloqueoCanchaRepository.findById(bloqueoId)
+                .filter(b -> b.getCancha().getId().equals(canchaId))
+                .filter(b -> b.getCancha().getEstablecimiento().getId().equals(establecimientoId))
                 .orElseThrow(() -> new EntityNotFoundException("Bloqueo no encontrado"));
-
-        if (!bloqueo.getCancha().getId().equals(canchaId)) {
-            throw new IllegalArgumentException("El bloqueo no pertenece a esta cancha");
-        }
-        if (!bloqueo.getCancha().getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
-        }
-
-        autorizacionEmpleadoService.validarPropietarioOAdmin(bloqueo.getCancha().getEstablecimiento(), email);
 
         bloqueoCanchaRepository.delete(bloqueo);
         log.info("Bloqueo {} eliminado de la cancha {}", bloqueoId, canchaId);
@@ -159,8 +158,8 @@ public class BloqueoCanchaService {
 
     @Transactional(readOnly = true)
     public List<BloqueoCanchaResponse> listarPorCancha(Long establecimientoId, Long canchaId, String email) {
-        Cancha cancha = buscarCanchaDelEstablecimiento(establecimientoId, canchaId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(cancha.getEstablecimiento(), email);
+        autorizarSobreEstablecimiento(establecimientoId, email);
+        buscarCanchaDelEstablecimiento(establecimientoId, canchaId);
 
         return bloqueoCanchaRepository.findByCanchaIdOrderByFechaInicioAsc(canchaId).stream()
                 .map(this::mapSinReservasAfectadas)
@@ -211,6 +210,15 @@ public class BloqueoCanchaService {
         );
     }
 
+    /**
+     * Autoriza contra el establecimiento del path ANTES de buscar cualquier sub-recurso: un establecimiento
+     * inexistente responde igual que uno ajeno (ver EstablecimientoAutorizado).
+     */
+    private Establecimiento autorizarSobreEstablecimiento(Long establecimientoId, String email) {
+        return EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId),
+                establecimiento -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email));
+    }
+
     // A diferencia de ReservaService.buscarCanchaPorId, acá no hace falta validar isActive:
     // sólo dueño/admin llegan a este método (crearBloqueo/listarPorCancha), y un bloqueo
     // sobre una cancha ya inactiva es redundante, no peligroso -no le da una reserva a nadie-.
@@ -218,15 +226,11 @@ public class BloqueoCanchaService {
     // todas las vistas del dueño, y no hay ningún caso de uso legítimo para crearle un
     // bloqueo nuevo o listar los suyos.
     private Cancha buscarCanchaDelEstablecimiento(Long establecimientoId, Long canchaId) {
-        Cancha cancha = canchaRepository.findById(canchaId)
+        // Inexistente, eliminada o de otro establecimiento: el mismo 404, sin distinguir.
+        return canchaRepository.findById(canchaId)
+                .filter(cancha -> cancha.getDeletedAt() == null)
+                .filter(cancha -> cancha.getEstablecimiento().getId().equals(establecimientoId))
                 .orElseThrow(() -> new EntityNotFoundException("Cancha no encontrada"));
-        if (cancha.getDeletedAt() != null) {
-            throw new EntityNotFoundException("Cancha no encontrada");
-        }
-        if (!cancha.getEstablecimiento().getId().equals(establecimientoId)) {
-            throw new IllegalArgumentException("La cancha no pertenece a este establecimiento");
-        }
-        return cancha;
     }
 
 }

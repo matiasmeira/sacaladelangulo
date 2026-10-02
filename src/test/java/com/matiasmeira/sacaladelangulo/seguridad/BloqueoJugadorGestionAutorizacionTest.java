@@ -19,9 +19,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Bloqueos de jugador, GET y DELETE /api/v1/establecimientos/{e}/jugadores-bloqueados[/{jugadorId}].
  * (El POST está en BloqueoJugadorAutorizacionTest.) @PreAuthorize OWNER/ADMIN (BloqueoJugadorController:
- * :40, :50); BloqueoJugadorService autoriza con validarPropietarioOAdmin (:77, :89) ANTES de buscar el
- * bloqueo, así que el cruce (jugadorId bloqueado en otro complejo vía path propio) responde el 404 de
- * "no está bloqueado en este establecimiento" sin tocar nada.
+ * :40, :50); BloqueoJugadorService autoriza con validarPropietarioOAdmin contra el establecimiento del path
+ * (pendiente 69) ANTES de buscar nada: un establecimiento inexistente responde igual que uno ajeno (403) y el
+ * cruce (jugadorId bloqueado en otro complejo vía path propio) responde el 404 de "no está bloqueado en
+ * este establecimiento" sin tocar nada.
  */
 @DisplayName("Bloqueo de jugadores GET/DELETE /api/v1/establecimientos/{e}/jugadores-bloqueados")
 class BloqueoJugadorGestionAutorizacionTest extends AbstractConfigOperativaSecurityTest {
@@ -50,6 +51,31 @@ class BloqueoJugadorGestionAutorizacionTest extends AbstractConfigOperativaSecur
 
     private Usuario empleadoTodosLosPermisos() {
         return empleado(establecimientoA, EnumSet.allOf(PermisoEmpleado.class));
+    }
+
+    private static final long ID_INEXISTENTE = 987654321L;
+
+    @Test
+    @DisplayName("eliminar_establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void eliminar_establecimientoInexistente_Devuelve403() throws Exception {
+        eliminar(ID_INEXISTENTE, jugadorBloqueadoA.getId(), duenoA).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertTrue(bloqueadoEnA());
+        assertTrue(bloqueadoEnB());
+    }
+
+    @Test
+    @DisplayName("eliminar_establecimientoInexistenteComoAdmin_Devuelve404")
+    void eliminar_establecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+        eliminar(ID_INEXISTENTE, jugadorBloqueadoA.getId(), admin).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+    }
+
+    @Test
+    @DisplayName("listar_establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void listar_establecimientoInexistente_Devuelve403() throws Exception {
+        listar(ID_INEXISTENTE, duenoA).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
     }
 
     // ---- DELETE ----

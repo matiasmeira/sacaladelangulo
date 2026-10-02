@@ -22,10 +22,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Bloqueos de cancha: POST / GET / DELETE /api/v1/establecimientos/{e}/canchas/{c}/bloqueos[/{id}].
  * @PreAuthorize OWNER/ADMIN en los tres (BloqueoCanchaController:26, :38, :49): el empleado queda afuera
- * aunque tenga todos los permisos. BloqueoCanchaService autoriza con validarPropietarioOAdmin (:48, :154,
- * :163). Sólo se testean casos con ids coherentes (cancha y bloqueo del complejo del path): los cruces de
- * path validan antes de autorizar (pendiente 69, abierto) y no se congelan acá. El GET por fecha
- * (/establecimientos/{e}/bloqueos) está en BloqueoMotivoAutorizacionTest.
+ * aunque tenga todos los permisos. BloqueoCanchaService autoriza primero contra el establecimiento del path
+ * (pendiente 69): un establecimiento inexistente responde igual que uno ajeno (403), la cancha y el bloqueo se
+ * buscan acotados a ese establecimiento (inexistente o de otro complejo: el mismo 404) y el body se valida
+ * después de autorizar. El GET por fecha (/establecimientos/{e}/bloqueos) está en BloqueoMotivoAutorizacionTest.
  */
 @DisplayName("Bloqueos de cancha /api/v1/establecimientos/{e}/canchas/{c}/bloqueos")
 class BloqueoCanchaAutorizacionTest extends AbstractConfigOperativaSecurityTest {
@@ -59,6 +59,113 @@ class BloqueoCanchaAutorizacionTest extends AbstractConfigOperativaSecurityTest 
 
     private Usuario empleadoTodosLosPermisos() {
         return empleado(establecimientoA, EnumSet.allOf(PermisoEmpleado.class));
+    }
+
+    private static final long ID_INEXISTENTE = 987654321L;
+
+    private ResultActions crearEn(Long establecimientoId, Long canchaId, String cuerpo, Usuario quien) throws Exception {
+        return mockMvc.perform(post(base(establecimientoId, canchaId))
+                .header("Authorization", bearer(quien))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(cuerpo));
+    }
+
+    private String cuerpoValido() {
+        LocalDate dia = LocalDate.now().plusDays(3);
+        return "{\"fechaInicio\":\"" + dia.atTime(15, 0) + "\",\"fechaFin\":\"" + dia.atTime(16, 0)
+                + "\",\"motivo\":\"Riego\"}";
+    }
+
+    /** Fecha de inicio posterior a la de fin: el service lo rechaza con 400, pero sólo a quien está autorizado. */
+    private String cuerpoConRangoInvertido() {
+        LocalDate dia = LocalDate.now().plusDays(3);
+        return "{\"fechaInicio\":\"" + dia.atTime(16, 0) + "\",\"fechaFin\":\"" + dia.atTime(15, 0)
+                + "\",\"motivo\":\"Riego\"}";
+    }
+
+    private void assertCanchaNoEncontrada(ResultActions respuesta) throws Exception {
+        respuesta.andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Cancha no encontrada"));
+    }
+
+    private void assertBloqueoNoEncontrado(ResultActions respuesta) throws Exception {
+        respuesta.andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Bloqueo no encontrado"));
+    }
+
+    // ---- sin oráculo de existencia (pendiente 69) ----
+
+    @Test
+    @DisplayName("crear_establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void crear_establecimientoInexistente_Devuelve403IgualAlAjeno() throws Exception {
+        crearEn(ID_INEXISTENTE, canchaA.getId(), cuerpoValido(), duenoA).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("crear_establecimientoInexistenteComoAdmin_Devuelve404")
+    void crear_establecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+        crearEn(ID_INEXISTENTE, canchaA.getId(), cuerpoValido(), admin).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+    }
+
+    @Test
+    @DisplayName("crear_bodyInvalidoDeDuenoAjeno_Devuelve403No400")
+    void crear_bodyInvalidoDeDuenoAjeno_Devuelve403No400() throws Exception {
+        crearEn(establecimientoA.getId(), canchaA.getId(), cuerpoConRangoInvertido(), duenoB)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("crear_bodyInvalidoDeDuenoPropio_Devuelve400")
+    void crear_bodyInvalidoDeDuenoPropio_Devuelve400() throws Exception {
+        crearEn(establecimientoA.getId(), canchaA.getId(), cuerpoConRangoInvertido(), duenoA)
+                .andExpect(status().isBadRequest());
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("crear_canchaDeOtroComplejoPorElPathPropio_Devuelve404IgualAlInexistente")
+    void crear_canchaDeOtroComplejoPorElPathPropio_Devuelve404() throws Exception {
+        assertCanchaNoEncontrada(crearEn(establecimientoA.getId(), canchaB.getId(), cuerpoValido(), duenoA));
+        assertCanchaNoEncontrada(crearEn(establecimientoA.getId(), ID_INEXISTENTE, cuerpoValido(), duenoA));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("eliminar_establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void eliminar_establecimientoInexistente_Devuelve403() throws Exception {
+        mockMvc.perform(delete(base(ID_INEXISTENTE, canchaA.getId()) + "/" + bloqueoA.getId())
+                        .header("Authorization", bearer(duenoA)))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("eliminar_bloqueoDeOtroComplejoPorElPathPropio_Devuelve404IgualAlInexistenteSinBorrar")
+    void eliminar_bloqueoDeOtroComplejoPorElPathPropio_Devuelve404() throws Exception {
+        String propio = base(establecimientoA.getId(), canchaA.getId());
+        assertBloqueoNoEncontrado(mockMvc.perform(delete(propio + "/" + bloqueoB.getId())
+                .header("Authorization", bearer(duenoA))));
+        assertBloqueoNoEncontrado(mockMvc.perform(delete(base(establecimientoA.getId(), canchaB.getId())
+                + "/" + bloqueoB.getId()).header("Authorization", bearer(duenoA))));
+        assertBloqueoNoEncontrado(mockMvc.perform(delete(propio + "/" + ID_INEXISTENTE)
+                .header("Authorization", bearer(duenoA))));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("listar_establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void listar_establecimientoInexistente_Devuelve403() throws Exception {
+        listar(ID_INEXISTENTE, canchaA.getId(), duenoA).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+    }
+
+    @Test
+    @DisplayName("listar_canchaDeOtroComplejoPorElPathPropio_Devuelve404IgualAlInexistente")
+    void listar_canchaDeOtroComplejoPorElPathPropio_Devuelve404() throws Exception {
+        assertCanchaNoEncontrada(listar(establecimientoA.getId(), canchaB.getId(), duenoA));
+        assertCanchaNoEncontrada(listar(establecimientoA.getId(), ID_INEXISTENTE, duenoA));
     }
 
     // ---- POST ----

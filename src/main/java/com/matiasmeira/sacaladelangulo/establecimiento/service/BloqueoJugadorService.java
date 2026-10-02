@@ -43,8 +43,7 @@ public class BloqueoJugadorService {
 
     @Transactional
     public BloqueoJugadorResponse crearBloqueo(Long establecimientoId, BloqueoJugadorRequest request, String email) {
-        Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        Establecimiento establecimiento = autorizarSobreEstablecimiento(establecimientoId, email);
         establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
 
         // Criterio unico: jugador (PLAYER) con al menos una reserva en este establecimiento. Cualquier otro
@@ -73,8 +72,7 @@ public class BloqueoJugadorService {
 
     @Transactional
     public void eliminarBloqueo(Long establecimientoId, Long jugadorId, String email) {
-        Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        autorizarSobreEstablecimiento(establecimientoId, email);
 
         BloqueoJugador bloqueo = bloqueoJugadorRepository.findByEstablecimientoIdAndJugadorId(establecimientoId, jugadorId)
                 .orElseThrow(() -> new EntityNotFoundException("Este jugador no está bloqueado en este establecimiento"));
@@ -85,8 +83,7 @@ public class BloqueoJugadorService {
 
     @Transactional(readOnly = true)
     public List<BloqueoJugadorResponse> listarBloqueados(Long establecimientoId, String email) {
-        Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        autorizarSobreEstablecimiento(establecimientoId, email);
 
         return bloqueoJugadorRepository.findByEstablecimientoIdOrderByFechaBloqueoDesc(establecimientoId).stream()
                 .map(this::mapToResponse)
@@ -105,8 +102,12 @@ public class BloqueoJugadorService {
         );
     }
 
-    private Establecimiento buscarEstablecimiento(Long establecimientoId) {
-        return establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+    /**
+     * Autoriza contra el establecimiento del path antes de buscar o validar nada: un establecimiento
+     * inexistente responde igual que uno ajeno (ver EstablecimientoAutorizado).
+     */
+    private Establecimiento autorizarSobreEstablecimiento(Long establecimientoId, String email) {
+        return EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId),
+                establecimiento -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email));
     }
 }

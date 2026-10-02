@@ -59,6 +59,9 @@ class BloqueoCanchaServiceTest {
     private CanchaRepository canchaRepository;
 
     @Mock
+    private com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository establecimientoRepository;
+
+    @Mock
     private ReservaRepository reservaRepository;
 
     @Mock
@@ -174,6 +177,7 @@ class BloqueoCanchaServiceTest {
     @Test
     @DisplayName("crearBloqueo_Exito_SinReservasAfectadas")
     void crearBloqueo_Exito_SinReservasAfectadas() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         // Arrange
         LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
         LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 12, 0);
@@ -201,6 +205,7 @@ class BloqueoCanchaServiceTest {
     @Test
     @DisplayName("crearBloqueo_Fallo_CanchaEliminada")
     void crearBloqueo_Fallo_CanchaEliminada() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         Cancha canchaEliminada = com.matiasmeira.sacaladelangulo.support.Canchas.canchaEliminada(
                 establecimiento, b -> b.id(cancha5A.getId()).nombre(cancha5A.getNombre()));
         LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
@@ -219,6 +224,8 @@ class BloqueoCanchaServiceTest {
     @Test
     @DisplayName("crearBloqueo_Fallo_FechaInicioIgualFechaFin")
     void crearBloqueo_Fallo_FechaInicioIgualFechaFin() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(canchaRepository.findById(cancha5A.getId())).thenReturn(Optional.of(cancha5A));
         // Arrange: bloqueo de duración cero, antes se aceptaba y no bloqueaba nada realmente
         LocalDateTime fecha = LocalDateTime.of(2030, 1, 15, 10, 0);
         BloqueoCanchaRequest request = new BloqueoCanchaRequest(fecha, fecha, "Mantenimiento");
@@ -235,6 +242,7 @@ class BloqueoCanchaServiceTest {
     @Test
     @DisplayName("crearBloqueo_Fallo_UsuarioNoEsDuenoDelEstablecimiento")
     void crearBloqueo_Fallo_UsuarioNoEsDuenoDelEstablecimiento() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         // Arrange
         LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
         LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 12, 0);
@@ -251,7 +259,6 @@ class BloqueoCanchaServiceTest {
                 .telefonoVerificado(false)
                 .build();
 
-        when(canchaRepository.findById(cancha5A.getId())).thenReturn(Optional.of(cancha5A));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, otroDueno.getEmail()))
                 .thenThrow(new org.springframework.security.access.AccessDeniedException("No autorizado en este establecimiento"));
 
@@ -260,6 +267,7 @@ class BloqueoCanchaServiceTest {
                 org.springframework.security.access.AccessDeniedException.class,
                 () -> bloqueoCanchaService.crearBloqueo(establecimiento.getId(), cancha5A.getId(), request, otroDueno.getEmail())
         );
+        verify(canchaRepository, never()).findById(any());
         verify(bloqueoCanchaRepository, never()).save(any());
     }
 
@@ -272,6 +280,7 @@ class BloqueoCanchaServiceTest {
         LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 12, 0);
         BloqueoCanchaRequest request = new BloqueoCanchaRequest(fechaInicio, fechaFin, "Mantenimiento");
 
+        when(establecimientoRepository.findById(deshabilitado.getId())).thenReturn(Optional.of(deshabilitado));
         when(canchaRepository.findById(canchaDelDeshabilitado.getId())).thenReturn(Optional.of(canchaDelDeshabilitado));
         when(autorizacionEmpleadoService.validarPropietarioOAdmin(deshabilitado, dueno.getEmail())).thenReturn(dueno);
         org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("Este establecimiento está deshabilitado."))
@@ -285,6 +294,7 @@ class BloqueoCanchaServiceTest {
     @Test
     @DisplayName("crearBloqueo_ConReservaAfectada_EncuentraCanchaHermanaDisponible")
     void crearBloqueo_ConReservaAfectada_EncuentraCanchaHermanaDisponible() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         // Arrange
         LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
         LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 12, 0);
@@ -326,6 +336,7 @@ class BloqueoCanchaServiceTest {
     @Test
     @DisplayName("crearBloqueo_ConReservaAfectada_SinAlternativaSiLaHermanaTambienEstaOcupada")
     void crearBloqueo_ConReservaAfectada_SinAlternativaSiLaHermanaTambienEstaOcupada() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         // Arrange
         LocalDateTime fechaInicio = LocalDateTime.of(2030, 1, 15, 10, 0);
         LocalDateTime fechaFin = LocalDateTime.of(2030, 1, 15, 12, 0);
@@ -377,6 +388,7 @@ class BloqueoCanchaServiceTest {
     @Test
     @DisplayName("eliminarBloqueo_Fallo_BloqueoNoPerteneceACancha")
     void eliminarBloqueo_Fallo_BloqueoNoPerteneceACancha() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         // Arrange
         BloqueoCancha bloqueo = BloqueoCancha.builder()
                 .id(1L)
@@ -388,9 +400,10 @@ class BloqueoCanchaServiceTest {
 
         when(bloqueoCanchaRepository.findById(bloqueo.getId())).thenReturn(Optional.of(bloqueo));
 
-        // Act & Assert: se pide eliminar pasando el id de la cancha 5B, que no es la del bloqueo
+        // Act & Assert: se pide eliminar pasando el id de la cancha 5B, que no es la del bloqueo: mismo 404
+        // que un bloqueo inexistente
         assertThrows(
-                IllegalArgumentException.class,
+                com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException.class,
                 () -> bloqueoCanchaService.eliminarBloqueo(establecimiento.getId(), cancha5B.getId(), bloqueo.getId(), dueno.getEmail())
         );
         verify(bloqueoCanchaRepository, never()).delete(any());
@@ -399,6 +412,7 @@ class BloqueoCanchaServiceTest {
     @Test
     @DisplayName("eliminarBloqueo_Exito")
     void eliminarBloqueo_Exito() {
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
         // Arrange
         BloqueoCancha bloqueo = BloqueoCancha.builder()
                 .id(1L)

@@ -22,9 +22,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Días no laborables: POST / GET / DELETE /api/v1/establecimientos/{e}/dias-no-laborables[/{id}].
  * @PreAuthorize OWNER/ADMIN en los tres (DiaNoLaborableController:29, :39, :49): el empleado queda afuera
- * aunque tenga todos los permisos. DiaNoLaborableService autoriza con validarPropietarioOAdmin (:31, :59,
- * :68). El cruce "id de un día de otro complejo vía path propio" valida antes de autorizar en eliminar
- * (:52-:59, pendiente 69, abierto) y no se congela acá.
+ * aunque tenga todos los permisos. DiaNoLaborableService autoriza con validarPropietarioOAdmin contra el
+ * establecimiento del path antes de buscar nada (pendiente 69): un establecimiento inexistente responde
+ * igual que uno ajeno (403) y el día se busca acotado a ese establecimiento (inexistente o de otro
+ * complejo: el mismo 404).
  */
 @DisplayName("Días no laborables /api/v1/establecimientos/{e}/dias-no-laborables")
 class DiaNoLaborableAutorizacionTest extends AbstractConfigOperativaSecurityTest {
@@ -55,6 +56,49 @@ class DiaNoLaborableAutorizacionTest extends AbstractConfigOperativaSecurityTest
 
     private Usuario empleadoTodosLosPermisos() {
         return empleado(establecimientoA, EnumSet.allOf(PermisoEmpleado.class));
+    }
+
+    private static final long ID_INEXISTENTE = 987654321L;
+
+    @Test
+    @DisplayName("crear_establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void crear_establecimientoInexistente_Devuelve403() throws Exception {
+        crear(ID_INEXISTENTE, duenoA).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("crear_establecimientoInexistenteComoAdmin_Devuelve404")
+    void crear_establecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+        crear(ID_INEXISTENTE, admin).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+    }
+
+    @Test
+    @DisplayName("eliminar_establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void eliminar_establecimientoInexistente_Devuelve403() throws Exception {
+        eliminar(ID_INEXISTENTE, diaA.getId(), duenoA).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("eliminar_diaDeOtroComplejoPorElPathPropio_Devuelve404IgualAlInexistenteSinBorrar")
+    void eliminar_diaDeOtroComplejoPorElPathPropio_Devuelve404() throws Exception {
+        String mensaje = "Día no laborable no encontrado";
+        eliminar(establecimientoA.getId(), diaB.getId(), duenoA).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value(mensaje));
+        eliminar(establecimientoA.getId(), ID_INEXISTENTE, duenoA).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value(mensaje));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("listar_establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void listar_establecimientoInexistente_Devuelve403() throws Exception {
+        listar(ID_INEXISTENTE, duenoA).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
     }
 
     // ---- POST ----

@@ -56,9 +56,25 @@ class FotoBorrarAutorizacionTest extends AbstractFotoSecurityTest {
     }
 
     @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjenoSinBorrar")
+    void establecimientoInexistente_Devuelve403SinBorrar() throws Exception {
+        borrar(999_999L, "file_a1", duenoA)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertFotosIntactas();
+    }
+
+    @Test
+    @DisplayName("duenoAjenoConFileIdInexistente_Devuelve403IgualQueConFileIdExistente")
+    void duenoAjenoConFileIdInexistente_Devuelve403() throws Exception {
+        borrar(establecimientoA.getId(), "file_que_no_existe", duenoB)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertFotosIntactas();
+    }
+
+    @Test
     @DisplayName("duenoDeOtroEstablecimientoConPathAjeno_Devuelve403SinBorrar")
     void duenoDeOtroEstablecimientoConPathAjeno_Devuelve403SinBorrar() throws Exception {
-        // FotoEstablecimientoService:165 -> AutorizacionEmpleadoService:135, antes de ImageKit (:172)
+        // se autoriza antes de buscar la foto y antes de llamar a ImageKit
         borrar(establecimientoA.getId(), "file_a1", duenoB)
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
         assertFotosIntactas();

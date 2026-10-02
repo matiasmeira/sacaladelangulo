@@ -76,9 +76,17 @@ class FotoSubirAutorizacionTest extends AbstractFotoSecurityTest {
     }
 
     @Test
-    @DisplayName("idInexistente_Devuelve404SinSubir")
-    void idInexistente_Devuelve404SinSubir() throws Exception {
+    @DisplayName("idInexistente_Devuelve403IgualAlAjenoSinSubir")
+    void idInexistente_Devuelve403SinSubir() throws Exception {
         subir(999_999L, duenoA)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertFotosIntactas();
+    }
+
+    @Test
+    @DisplayName("idInexistenteComoAdmin_Devuelve404SinSubir")
+    void idInexistenteComoAdmin_Devuelve404SinSubir() throws Exception {
+        subir(999_999L, admin)
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
         assertFotosIntactas();
     }

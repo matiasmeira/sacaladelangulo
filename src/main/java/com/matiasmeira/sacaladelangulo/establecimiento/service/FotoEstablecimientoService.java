@@ -97,8 +97,9 @@ public class FotoEstablecimientoService {
 
     @Transactional(readOnly = true)
     public List<FotoEstablecimientoResponse> listar(Long establecimientoId, String email) {
-        Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
+        Establecimiento establecimiento = resolverParaAutorizar(establecimientoId);
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
         return mapear(establecimiento.getFotos());
     }
 
@@ -107,8 +108,9 @@ public class FotoEstablecimientoService {
         // sale de acá (el actor) puede quedar detached; no se vuelve a tocar el
         // establecimiento de esta fase.
         Autorizacion autorizacion = ejecutarLectura(status -> {
-            Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
+            Establecimiento establecimiento = resolverParaAutorizar(establecimientoId);
             Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+            EstablecimientoAutorizado.exigirExistente(establecimiento);
             establecimientoOperativoGuard.validarPuedeGenerarCompromisosNuevos(establecimiento);
             validadorFoto.validar(contenido, establecimiento.getFotos().size());
             return new Autorizacion(actor);
@@ -161,8 +163,9 @@ public class FotoEstablecimientoService {
         // existe (404 si no). Sin esto acá, un fileId inexistente terminaría llamando a
         // ImageKit igual.
         Autorizacion autorizacion = ejecutarLectura(status -> {
-            Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
+            Establecimiento establecimiento = resolverParaAutorizar(establecimientoId);
             Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+            EstablecimientoAutorizado.exigirExistente(establecimiento);
             buscarFoto(establecimiento, fileId);
             return new Autorizacion(actor);
         });
@@ -196,8 +199,9 @@ public class FotoEstablecimientoService {
 
     @Transactional
     public List<FotoEstablecimientoResponse> reordenar(Long establecimientoId, List<String> fileIds, String email) {
-        Establecimiento establecimiento = buscarEstablecimiento(establecimientoId);
+        Establecimiento establecimiento = resolverParaAutorizar(establecimientoId);
         Usuario actor = autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         List<FotoEstablecimiento> actuales = establecimiento.getFotos();
 
@@ -286,6 +290,15 @@ public class FotoEstablecimientoService {
 
     private String carpetaDe(Long establecimientoId) {
         return "/establecimientos/" + establecimientoId + "/";
+    }
+
+    /**
+     * Para los puntos donde se autoriza: devuelve el establecimiento o, si no existe, uno "fantasma" contra el
+     * cual la autorización falla igual que ante uno ajeno (ver EstablecimientoAutorizado). Siempre se llama
+     * exigirExistente después de autorizar.
+     */
+    private Establecimiento resolverParaAutorizar(Long establecimientoId) {
+        return EstablecimientoAutorizado.resolver(establecimientoRepository.findById(establecimientoId));
     }
 
     private Establecimiento buscarEstablecimiento(Long establecimientoId) {

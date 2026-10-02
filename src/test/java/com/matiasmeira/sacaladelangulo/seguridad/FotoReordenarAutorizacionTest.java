@@ -63,6 +63,14 @@ class FotoReordenarAutorizacionTest extends AbstractFotoSecurityTest {
     }
 
     @Test
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjenoSinReordenar")
+    void establecimientoInexistente_Devuelve403SinReordenar() throws Exception {
+        reordenar(999_999L, ORDEN_A_INVERTIDO, duenoA)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+        assertFotosIntactas();
+    }
+
+    @Test
     @DisplayName("duenoDeOtroEstablecimientoConPathAjeno_Devuelve403SinReordenar")
     void duenoDeOtroEstablecimientoConPathAjeno_Devuelve403SinReordenar() throws Exception {
         // FotoEstablecimientoService:200 -> AutorizacionEmpleadoService:135

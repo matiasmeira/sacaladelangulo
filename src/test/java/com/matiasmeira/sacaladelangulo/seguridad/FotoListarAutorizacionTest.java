@@ -57,9 +57,16 @@ class FotoListarAutorizacionTest extends AbstractFotoSecurityTest {
     }
 
     @Test
-    @DisplayName("idInexistente_Devuelve404")
-    void idInexistente_Devuelve404() throws Exception {
+    @DisplayName("idInexistente_Devuelve403IgualAlAjeno")
+    void idInexistente_Devuelve403() throws Exception {
         listar(999_999L, duenoA)
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(MENSAJE_403_SERVICE));
+    }
+
+    @Test
+    @DisplayName("idInexistenteComoAdmin_Devuelve404")
+    void idInexistenteComoAdmin_Devuelve404() throws Exception {
+        listar(999_999L, admin)
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
     }
 

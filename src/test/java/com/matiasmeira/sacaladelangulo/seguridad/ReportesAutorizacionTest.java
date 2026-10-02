@@ -22,6 +22,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ReporteFacturacionService:39, ReporteOcupacionService:55, ReporteHorariosService:41,
  * ReporteClientesService:39, ReporteGastosService:42 (gastos) y :78 (resultado), ReporteCierreCajaService:35.
  * El 401 sin token lo cubre SinTokenBarridoTest.
+ *
+ * <p>Sin oráculo de existencia (pendiente 69): los 7 services autorizan ANTES de validar el rango de fechas
+ * y un establecimiento inexistente responde el mismo 403 que uno ajeno (el admin recibe 404).
  */
 class ReportesAutorizacionTest extends AbstractSecurityWebTest {
 
@@ -85,6 +88,45 @@ class ReportesAutorizacionTest extends AbstractSecurityWebTest {
         pedir(endpoint, bearer(duenoB))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value(MENSAJE_DUENO_AJENO));
+    }
+
+    private ResultActions pedirConRango(Endpoint endpoint, long establecimientoId, LocalDate d, LocalDate h,
+                                        String authorization) throws Exception {
+        return mockMvc.perform(get("/api/v1/establecimientos/" + establecimientoId + "/reportes/" + endpoint.ruta())
+                .param("desde", d.toString())
+                .param("hasta", h.toString())
+                .header("Authorization", authorization));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("endpoints")
+    void establecimientoInexistente_Devuelve403IgualAlAjeno(Endpoint endpoint) throws Exception {
+        pedirConRango(endpoint, 987654321L, desde, hasta, bearer(duenoA))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_DUENO_AJENO));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("endpoints")
+    void establecimientoInexistenteComoAdmin_Devuelve404(Endpoint endpoint) throws Exception {
+        pedirConRango(endpoint, 987654321L, desde, hasta, bearer(admin))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("endpoints")
+    void rangoInvalidoDeDuenoAjeno_Devuelve403No400(Endpoint endpoint) throws Exception {
+        pedirConRango(endpoint, establecimientoA.getId(), hasta, desde, bearer(duenoB))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_DUENO_AJENO));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("endpoints")
+    void rangoInvalidoDeDuenoPropio_Devuelve400(Endpoint endpoint) throws Exception {
+        pedirConRango(endpoint, establecimientoA.getId(), hasta, desde, bearer(duenoA))
+                .andExpect(status().isBadRequest());
     }
 
     @ParameterizedTest(name = "{0}")

@@ -31,8 +31,8 @@ public class ReporteCierreCajaService {
 
     @Transactional(readOnly = true)
     public CierreCajaReporteResponse obtenerDiferenciasDeCaja(Long establecimientoId, LocalDate desde, LocalDate hasta, String email) {
-        validarRango(desde, hasta);
         reporteAutorizacionService.validarDuenoDelEstablecimiento(establecimientoId, email);
+        validarRango(desde, hasta);
 
         List<TurnoCaja> turnosCerrados = turnoCajaRepository.findByEstablecimientoIdAndEstadoAndFechaCierreBetween(
                 establecimientoId, EstadoTurnoCaja.CERRADO, PeriodoUtil.inicioDelDia(desde), PeriodoUtil.finDelDia(hasta));

@@ -1,9 +1,9 @@
 package com.matiasmeira.sacaladelangulo.reportes.service;
 
-import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +13,9 @@ import org.springframework.stereotype.Component;
  * chequeo "dueño o admin" en {@link AutorizacionEmpleadoService#validarPropietarioOAdmin}, el
  * componente central de autorización del proyecto. Antes reimplementaba la regla localmente;
  * quedó desincronizado un tiempo (ver historia del archivo) hasta que se unificó acá.
+ *
+ * <p>Los services de reportes lo llaman ANTES de validar el rango de fechas, y un establecimiento
+ * inexistente responde igual que uno ajeno (ver EstablecimientoAutorizado).
  */
 @Component
 @RequiredArgsConstructor
@@ -22,9 +25,7 @@ public class ReporteAutorizacionService {
     private final AutorizacionEmpleadoService autorizacionEmpleadoService;
 
     public Establecimiento validarDuenoDelEstablecimiento(Long establecimientoId, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(establecimientoId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
-        autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
-        return establecimiento;
+        return EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(establecimientoId),
+                establecimiento -> autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email));
     }
 }

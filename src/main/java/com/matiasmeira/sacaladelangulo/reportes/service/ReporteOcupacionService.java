@@ -49,10 +49,10 @@ public class ReporteOcupacionService {
 
     @Transactional(readOnly = true)
     public OcupacionReporteResponse obtenerOcupacion(Long establecimientoId, LocalDate desde, LocalDate hasta, String email) {
+        Establecimiento establecimiento = reporteAutorizacionService.validarDuenoDelEstablecimiento(establecimientoId, email);
         if (desde.isAfter(hasta)) {
             throw new IllegalArgumentException("La fecha 'desde' no puede ser posterior a 'hasta'");
         }
-        Establecimiento establecimiento = reporteAutorizacionService.validarDuenoDelEstablecimiento(establecimientoId, email);
 
         RangoFechas anterior = PeriodoUtil.periodoAnterior(desde, hasta);
 

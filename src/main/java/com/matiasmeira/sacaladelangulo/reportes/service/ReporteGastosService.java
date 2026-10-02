@@ -38,8 +38,8 @@ public class ReporteGastosService {
 
     @Transactional(readOnly = true)
     public GastosReporteResponse obtenerGastos(Long establecimientoId, LocalDate desde, LocalDate hasta, String email) {
-        validarRango(desde, hasta);
         reporteAutorizacionService.validarDuenoDelEstablecimiento(establecimientoId, email);
+        validarRango(desde, hasta);
 
         RangoFechas anterior = PeriodoUtil.periodoAnterior(desde, hasta);
 
@@ -74,8 +74,8 @@ public class ReporteGastosService {
 
     @Transactional(readOnly = true)
     public ResultadoReporteResponse obtenerResultado(Long establecimientoId, LocalDate desde, LocalDate hasta, String email) {
-        validarRango(desde, hasta);
         reporteAutorizacionService.validarDuenoDelEstablecimiento(establecimientoId, email);
+        validarRango(desde, hasta);
 
         RangoFechas anterior = PeriodoUtil.periodoAnterior(desde, hasta);
 

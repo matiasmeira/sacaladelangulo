@@ -33,10 +33,10 @@ public class ReporteFacturacionService {
 
     @Transactional(readOnly = true)
     public FacturacionReporteResponse obtenerFacturacion(Long establecimientoId, LocalDate desde, LocalDate hasta, String email) {
+        reporteAutorizacionService.validarDuenoDelEstablecimiento(establecimientoId, email);
         if (desde.isAfter(hasta)) {
             throw new IllegalArgumentException("La fecha 'desde' no puede ser posterior a 'hasta'");
         }
-        reporteAutorizacionService.validarDuenoDelEstablecimiento(establecimientoId, email);
 
         RangoFechas anterior = PeriodoUtil.periodoAnterior(desde, hasta);
 

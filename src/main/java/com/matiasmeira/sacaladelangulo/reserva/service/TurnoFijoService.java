@@ -13,6 +13,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoCanchaR
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoOperativoGuard;
 import com.matiasmeira.sacaladelangulo.reserva.dto.CancelacionTurnoFijoResponse;
 import com.matiasmeira.sacaladelangulo.reserva.dto.EditarClienteTurnoFijoRequest;
@@ -353,10 +354,10 @@ public class TurnoFijoService {
      */
     @Transactional(readOnly = true)
     public Page<TurnoFijoListadoResponse> listar(Long estId, EstadoTurnoFijo estado, Pageable pageable, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(estId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(estId));
         autorizacionEmpleadoService.validarLectura(establecimiento, email,
                 AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         EstadoTurnoFijo estadoBuscado = estado != null ? estado : EstadoTurnoFijo.ACTIVO;
         Page<TurnoFijo> pagina = turnoFijoRepository.findByCancha_Establecimiento_IdAndEstado(

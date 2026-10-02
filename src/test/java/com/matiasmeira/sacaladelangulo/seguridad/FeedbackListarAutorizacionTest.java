@@ -96,10 +96,17 @@ class FeedbackListarAutorizacionTest extends AbstractFeedbackSecurityTest {
     }
 
     @Test
-    @DisplayName("duenoConEstablecimientoInexistente_Devuelve404")
-    void duenoConEstablecimientoInexistente_Devuelve404() throws Exception {
-        // FeedbackService:150
-        listar(999_999L, duenoA).andExpect(status().isNotFound())
+    @DisplayName("duenoConEstablecimientoInexistente_Devuelve403IgualAlAjeno")
+    void duenoConEstablecimientoInexistente_Devuelve403() throws Exception {
+        // Sin oráculo de existencia (pendiente 69): mismo 403 y mismo mensaje que ante un complejo ajeno
+        listar(999_999L, duenoA).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_ACCION));
+    }
+
+    @Test
+    @DisplayName("adminConEstablecimientoInexistente_Devuelve404")
+    void adminConEstablecimientoInexistente_Devuelve404() throws Exception {
+        listar(999_999L, admin).andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
     }
 }

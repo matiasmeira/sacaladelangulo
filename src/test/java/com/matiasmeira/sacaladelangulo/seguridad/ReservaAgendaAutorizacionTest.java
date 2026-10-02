@@ -118,9 +118,17 @@ class ReservaAgendaAutorizacionTest extends AbstractReservaSecurityTest {
     }
 
     @Test
-    @DisplayName("establecimientoInexistente_Devuelve404")
-    void establecimientoInexistente_Devuelve404() throws Exception {
-        agenda(999999L, duenoA).andExpect(status().isNotFound())
+    @DisplayName("establecimientoInexistente_Devuelve403IgualAlAjeno")
+    void establecimientoInexistente_Devuelve403() throws Exception {
+        // Sin oráculo de existencia (pendiente 69): mismo 403 y mismo mensaje que ante un complejo ajeno
+        agenda(999999L, duenoA).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(MENSAJE_403_LECTURA));
+    }
+
+    @Test
+    @DisplayName("establecimientoInexistenteComoAdmin_Devuelve404")
+    void establecimientoInexistenteComoAdmin_Devuelve404() throws Exception {
+        agenda(999999L, admin).andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("Establecimiento no encontrado"));
     }
 }

@@ -28,6 +28,7 @@ import com.matiasmeira.sacaladelangulo.establecimiento.repository.BloqueoJugador
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.DiaNoLaborableRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaManualRequest;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaMapper;
 import com.matiasmeira.sacaladelangulo.reserva.dto.ReservaRequest;
@@ -975,10 +976,10 @@ public class ReservaService {
      */
     @Transactional(readOnly = true)
     public Page<ReservaResponse> obtenerReservasPorEstablecimientoYFecha(Long estId, LocalDate fecha, boolean incluirCanceladas, Pageable pageable, String email) {
-        Establecimiento establecimiento = establecimientoRepository.findById(estId)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
+        Establecimiento establecimiento = EstablecimientoAutorizado.resolver(establecimientoRepository.findById(estId));
         autorizacionEmpleadoService.validarLectura(establecimiento, email,
                 AutorizacionEmpleadoService.PERMISOS_OPERATIVOS_DE_RESERVA);
+        EstablecimientoAutorizado.exigirExistente(establecimiento);
 
         LocalDateTime inicioDia = fecha.atStartOfDay();
         LocalDateTime finDia = fecha.atTime(23, 59, 59);

@@ -7,6 +7,7 @@ import com.matiasmeira.sacaladelangulo.core.exception.EntityNotFoundException;
 import com.matiasmeira.sacaladelangulo.empleado.service.AutorizacionEmpleadoService;
 import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
+import com.matiasmeira.sacaladelangulo.establecimiento.service.EstablecimientoAutorizado;
 import com.matiasmeira.sacaladelangulo.feedback.dto.FeedbackMapper;
 import com.matiasmeira.sacaladelangulo.feedback.dto.FeedbackRequest;
 import com.matiasmeira.sacaladelangulo.feedback.dto.FeedbackResponse;
@@ -146,8 +147,9 @@ public class FeedbackService {
      */
     @Transactional(readOnly = true)
     public Page<FeedbackResponse> obtenerFeedbacksDeEstablecimiento(Long estId, Pageable pageable, String email) {
-        Establecimiento establecimiento = buscarEstablecimientoPorId(estId);
-        autorizacionEmpleadoService.validarAccion(establecimiento, email, PermisoEmpleado.FIJAR_COMENTARIO_DESTACADO);
+        EstablecimientoAutorizado.autorizar(establecimientoRepository.findById(estId),
+                establecimiento -> autorizacionEmpleadoService.validarAccion(
+                        establecimiento, email, PermisoEmpleado.FIJAR_COMENTARIO_DESTACADO));
 
         return feedbackRepository.findByEstablecimientoId(estId, pageable)
                 .map(feedbackMapper::mapToResponse);
@@ -221,11 +223,6 @@ public class FeedbackService {
     private Usuario buscarUsuarioPorEmail(String email) {
         return usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-    }
-
-    private Establecimiento buscarEstablecimientoPorId(Long id) {
-        return establecimientoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
     }
 
     private Feedback buscarFeedbackPorId(Long id) {

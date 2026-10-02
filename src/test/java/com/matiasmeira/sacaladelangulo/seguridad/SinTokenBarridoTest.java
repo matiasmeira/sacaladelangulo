@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
@@ -35,7 +34,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *
  * <p>Los path variables se completan con "1": el 401 lo corta la chain antes del controller. El único
  * filtro previo con límite que alcanza a endpoints no públicos es el de mails (RateLimitFilter, 5 por
- * minuto por IP sin sesión): el barrido pega una sola vez en /api/v1/admin/mails/oferta, desde una IP propia.
+ * minuto por IP sin sesión): el barrido pega una sola vez en /api/v1/admin/mails/oferta, y la base le da
+ * a cada test su propia IP (ver AbstractSecurityWebTest), así que ese cupo no se comparte con otras clases.
  *
  * <p>Se manda siempre Idempotency-Key: IdempotencyFilter corre antes de la autorización y en los 4 POST
  * de clave obligatoria (reservas, reservas/manual, turnos-fijos, buffet/ventas) responde 400 si falta
@@ -75,8 +75,7 @@ class SinTokenBarridoTest extends AbstractSecurityWebTest {
             HttpMethod metodo = "ANY".equals(verbo) ? HttpMethod.GET : HttpMethod.valueOf(verbo);
 
             MockHttpServletResponse respuesta = mockMvc.perform(request(metodo, ruta)
-                    .header("Idempotency-Key", "barrido-sin-token")
-                    .with(desdeIpPropia()))
+                    .header("Idempotency-Key", "barrido-sin-token"))
                     .andReturn().getResponse();
             probados++;
             String cuerpo = respuesta.getContentAsString();
@@ -87,18 +86,6 @@ class SinTokenBarridoTest extends AbstractSecurityWebTest {
 
         assertTrue(probados > 0, "El barrido no encontró endpoints no públicos");
         assertTrue(problemas.isEmpty(), () -> "Endpoints no públicos que no exigen token:\n" + String.join("\n", problemas));
-    }
-
-    /**
-     * IP propia del barrido (rango de documentación, no la 127.0.0.1 por defecto de MockMvc): el bucket
-     * de mails del RateLimitFilter es por IP y vive en el contexto compartido, así que otras clases que
-     * también pegan sin token desde 127.0.0.1 lo dejan vacío y el barrido recibiría 429 en vez de 401.
-     */
-    private static RequestPostProcessor desdeIpPropia() {
-        return req -> {
-            req.setRemoteAddr("203.0.113.46");
-            return req;
-        };
     }
 
     private static boolean esPublico(String clave) {

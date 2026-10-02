@@ -12,11 +12,21 @@ import com.matiasmeira.sacaladelangulo.establecimiento.model.Establecimiento;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.CanchaRepository;
 import com.matiasmeira.sacaladelangulo.establecimiento.repository.EstablecimientoRepository;
 import com.matiasmeira.sacaladelangulo.mails.service.OfertaMarketingBatchSender;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.core.Ordered;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
@@ -24,6 +34,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
 
 import java.util.List;
 import java.util.Map;
@@ -56,9 +69,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>El escenario (dos dueños con un establecimiento cada uno, admin, jugador y dos
  * empleados del establecimiento A) usa emails con sufijo único por siembra, para que los
  * buckets del rate limiter (que viven en el contexto compartido) no se arrastren entre tests.
+ *
+ * <p><b>Rate limit por IP (pendiente 55):</b> los buckets de RateLimitFilter se indexan por
+ * {@code getRemoteAddr()} y no se resetean entre tests (RateLimiterService no expone un reset). Para
+ * que un test no deje sin cupo a otro (p. ej. el bucket {@code mail:ip:<ip>}, 5 por minuto, en
+ * /api/v1/mails y /api/v1/admin/mails sin token), esta base le asigna a CADA TEST una IP propia
+ * ({@link #ipUnica()}) que se aplica sola a todos los requests de {@link #mockMvc}: los tests nuevos
+ * no tienen que hacer nada. Reglas para tests nuevos:
+ * <ul>
+ *   <li>Pegar normalmente con {@code mockMvc}: ya sale de la IP del test, con cupo completo.</li>
+ *   <li>Todos los requests de un mismo test comparten esa IP (se acumulan contra el mismo bucket,
+ *       como en producción): un test que manda más de 5 mails sin token verá el 429 a propósito.</li>
+ *   <li>Para fijar otra IP (p. ej. probar buckets de IPs distintas) usar {@code .with(desdeIp(...))},
+ *       que tiene prioridad sobre la IP del test (salvo que sea 127.0.0.1, la de MockMvc); con
+ *       {@link #ipUnica()} se obtiene una libre.</li>
+ *   <li>Los buckets por usuario ({@code mail:user:<email>}) ya quedan aislados porque el escenario
+ *       siembra emails con sufijo único.</li>
+ * </ul>
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(AbstractSecurityWebTest.IpPorTestConfig.class)
 @TestPropertySource(properties = {
         "spring.datasource.url=jdbc:h2:mem:testdb-seguridad-http;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
@@ -133,8 +164,43 @@ public abstract class AbstractSecurityWebTest {
     protected Establecimiento establecimientoB;
     protected Cancha canchaA;
 
+    /** Remote address que MockMvc pone por defecto en los requests. */
+    private static final String IP_POR_DEFECTO_MOCKMVC = "127.0.0.1";
+
+    /** IP de origen del test en curso: la aplica {@link IpPorTestConfig} a cada request de mockMvc. */
+    private static volatile String ipDelTest = IP_POR_DEFECTO_MOCKMVC;
+
+    /**
+     * Registra, como primer filtro del mockMvc autoconfigurado (antes de la chain de seguridad y de
+     * RateLimitFilter), uno que reemplaza la IP por defecto de MockMvc por la IP del test en curso.
+     * Si el test fijó otra IP con {@link #desdeIp}, se respeta. Se usa un filtro y no
+     * {@code defaultRequest} porque Spring Boot ya registra su propio defaultRequest (contexto de
+     * seguridad de test) y un segundo lo pisaría.
+     */
+    @TestConfiguration(proxyBeanMethods = false)
+    static class IpPorTestConfig {
+        @Bean
+        FilterRegistrationBean<OncePerRequestFilter> ipPorTestFilter() {
+            OncePerRequestFilter filtro = new OncePerRequestFilter() {
+                @Override
+                protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                                FilterChain chain) throws ServletException, IOException {
+                    if (request instanceof MockHttpServletRequest mock
+                            && IP_POR_DEFECTO_MOCKMVC.equals(mock.getRemoteAddr())) {
+                        mock.setRemoteAddr(ipDelTest);
+                    }
+                    chain.doFilter(request, response);
+                }
+            };
+            FilterRegistrationBean<OncePerRequestFilter> registro = new FilterRegistrationBean<>(filtro);
+            registro.setOrder(Ordered.HIGHEST_PRECEDENCE);
+            return registro;
+        }
+    }
+
     @BeforeEach
     void limpiarYSembrarEscenario() {
+        ipDelTest = ipUnica();
         vaciarTodasLasTablas();
 
         int n = SECUENCIA.incrementAndGet();

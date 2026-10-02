@@ -24,11 +24,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
@@ -397,5 +399,38 @@ class GastoServiceTest {
 
         assertEquals(1, page.getTotalElements());
         assertEquals("ALQUILER", page.getContent().get(0).categoria());
+    }
+
+    @Test
+    @DisplayName("listarGastos_PageSizeMayorAlTope_LoCapaA100ConservandoPaginaYOrden")
+    void listarGastos_PageSizeMayorAlTope_LoCapaA100ConservandoPaginaYOrden() {
+        Sort orden = Sort.by(Sort.Direction.DESC, "fecha");
+        Pageable pedido = PageRequest.of(3, 5000, orden);
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(gastoRepository.buscar(any(), any(), any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+
+        gastoService.listarGastos(establecimiento.getId(), dueno.getEmail(), null, null, null, pedido);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(gastoRepository).buscar(eq(establecimiento.getId()), eq(null), eq(null), eq(null), captor.capture());
+        assertEquals(100, captor.getValue().getPageSize());
+        assertEquals(3, captor.getValue().getPageNumber());
+        assertEquals(orden, captor.getValue().getSort());
+    }
+
+    @Test
+    @DisplayName("listarGastos_PageSizeDentroDelTope_NoLoModifica")
+    void listarGastos_PageSizeDentroDelTope_NoLoModifica() {
+        Pageable pedido = PageRequest.of(0, 100);
+
+        when(establecimientoRepository.findById(establecimiento.getId())).thenReturn(Optional.of(establecimiento));
+        when(autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, dueno.getEmail())).thenReturn(dueno);
+        when(gastoRepository.buscar(any(), any(), any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+
+        gastoService.listarGastos(establecimiento.getId(), dueno.getEmail(), null, null, null, pedido);
+
+        verify(gastoRepository).buscar(eq(establecimiento.getId()), eq(null), eq(null), eq(null), eq(pedido));
     }
 }

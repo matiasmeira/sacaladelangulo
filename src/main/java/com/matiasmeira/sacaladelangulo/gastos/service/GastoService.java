@@ -21,6 +21,7 @@ import com.matiasmeira.sacaladelangulo.gastos.repository.GastoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,8 @@ import java.time.LocalDate;
 @RequiredArgsConstructor
 @Slf4j
 public class GastoService {
+
+    private static final int TAMANIO_PAGINA_MAXIMO = 100;
 
     private final GastoRepository gastoRepository;
     private final EstablecimientoRepository establecimientoRepository;
@@ -182,8 +185,20 @@ public class GastoService {
                 .orElseThrow(() -> new EntityNotFoundException("Establecimiento no encontrado"));
         autorizacionEmpleadoService.validarPropietarioOAdmin(establecimiento, email);
 
-        return gastoRepository.buscar(establecimientoId, desde, hasta, categoria, pageable)
+        return gastoRepository.buscar(establecimientoId, desde, hasta, categoria, capPageSize(pageable))
                 .map(gastoMapper::mapToResponse);
+    }
+
+    /**
+     * Techo del tamaño de página, igual que en ReservaService y ClienteService (100): un
+     * ?size=100000 no debe traer todos los gastos de una vez. Copia local en vez de
+     * inyectar ReservaService para no acoplar gastos a reserva.
+     */
+    private Pageable capPageSize(Pageable pageable) {
+        if (pageable.getPageSize() <= TAMANIO_PAGINA_MAXIMO) {
+            return pageable;
+        }
+        return PageRequest.of(pageable.getPageNumber(), TAMANIO_PAGINA_MAXIMO, pageable.getSort());
     }
 
     private void validarMonto(BigDecimal monto) {
